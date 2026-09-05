@@ -97,8 +97,17 @@ describe('no test evasions', () => {
   })
 })
 
+/**
+ * Budget for a test that launches a whole vitest collection as a subprocess.
+ *
+ * Collecting 1,000+ tests takes a few seconds locally and over ten on a
+ * two-core CI runner, which is beyond the default; the bound is still finite,
+ * so a hung collection fails rather than waits forever.
+ */
+const COLLECTION_TIMEOUT_MS = 120_000
+
 describe('every test is uniquely addressable', () => {
-  it('gives no two tests the same full name, which per-test mutation filtering selects by', () => {
+  it('gives no two tests the same full name, which per-test mutation filtering selects by', { timeout: COLLECTION_TIMEOUT_MS }, () => {
     // Asked of vitest itself rather than parsed from source, so `it.each`
     // expansions and nested describes are seen exactly as the runner sees them.
     // A duplicate name has twice made a mutant that tests kill report as
