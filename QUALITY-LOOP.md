@@ -84,6 +84,20 @@ sent as a bulk delete, and an empty settlement posted; the refusal tests
 replace them. The `toLogFilters` unit tests went in the previous restart with
 the code they kept alive.
 
+The mutation run on the tree with the harness contracts alone scored 99.81%:
+3,134 mutants, six surviving, all in the new code. Three were the adapter's
+empty-completion judgement inspecting the closing chunks, where every predicate
+on them was always true; it now asks the transducer for the reason it closed
+with. One was a `?? []` fallback for a catalogue record without properties,
+which no fallback value could distinguish; the map is built from the optional
+chain instead. Two were an explicit empty provider id, now pinned. The run on
+the tree at `1bb75b7`, with the dead surface gone as well, scored 99.93%:
+3,071 mutants, two surviving. `EmptyBatchError`'s name was asserted nowhere; it
+is now. In `classifyFailure`, the `?? []` fallback for a missing envelope fed
+nothing but the unauthorized-code check, so any array classified the same; the
+flag is computed from the envelope directly, and a mixed envelope with the
+unauthorized code among other entries is pinned.
+
 </details>
 
 <details>

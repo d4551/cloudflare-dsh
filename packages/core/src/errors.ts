@@ -124,12 +124,13 @@ export type FailureInput = FailureContext &
  * `200`-shaped envelope carrying code 10000 is still an auth failure.
  */
 export function classifyFailure(input: FailureInput): CloudflareError {
-  const entries = input.envelope?.errors ?? []
-  const codes = entries.map((e) => e.code)
+  const envelope = input.envelope
   const message =
-    input.envelope === undefined ? describeBody(input.status, input.body) : formatErrorEntries(entries)
+    envelope === undefined ? describeBody(input.status, input.body) : formatErrorEntries(envelope.errors)
+  const unauthorized =
+    envelope !== undefined && envelope.errors.some((entry) => entry.code === CF_CODE_UNAUTHORIZED)
 
-  if (codes.includes(CF_CODE_UNAUTHORIZED) || input.status === 401 || input.status === 403) {
+  if (unauthorized || input.status === 401 || input.status === 403) {
     return new CloudflareAuthError(input.credentialRef, message, input.status)
   }
   if (input.status === 429) {

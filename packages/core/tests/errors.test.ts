@@ -91,6 +91,21 @@ describe('classifyFailure', () => {
     expect(err.message).toBe('[10000] bad token')
   })
 
+  it('finds the unauthorized code among other entries', () => {
+    const err = classifyFailure({
+      status: 200,
+      credentialRef: REF,
+      envelope: {
+        errors: [
+          { code: 1004, message: 'bad request' },
+          { code: CF_CODE_UNAUTHORIZED, message: 'bad token' },
+        ],
+      },
+    })
+    expect(err).toBeInstanceOf(CloudflareAuthError)
+    expect(err.message).toBe('[1004] bad request; [10000] bad token')
+  })
+
   it.each([401, 403])('maps status %i to an auth error', (status) => {
     expect(classifyFailure({ status, credentialRef: REF, body: '' })).toBeInstanceOf(CloudflareAuthError)
   })

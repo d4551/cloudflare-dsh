@@ -171,6 +171,15 @@ describe('cloudflare_kv_get, when the edge answers instead of the API', () => {
   })
 })
 
+describe('EmptyBatchError', () => {
+  it('names itself and the field, so the refusal is identifiable in a log', () => {
+    expect(new dataTools.EmptyBatchError('keys')).toMatchObject({
+      name: 'EmptyBatchError',
+      message: 'keys must name at least one item; an empty request would do nothing',
+    })
+  })
+})
+
 describe('cloudflare_kv_put', () => {
   it('refuses an empty batch rather than issuing a request that does nothing', async () => {
     const h = makeHarness(dataTools, async () => envelope(null))
