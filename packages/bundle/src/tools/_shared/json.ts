@@ -24,3 +24,16 @@ export function isObject(value: unknown): value is Record<string, unknown> {
 export function isFiniteNumber(value: unknown): value is number {
   return Number.isFinite(value)
 }
+
+/**
+ * Whether a value is an integer. `Number.isInteger` does not coerce, so every
+ * non-number fails along with fractions, NaN and the infinities.
+ */
+export function isInteger(value: unknown): value is number {
+  return Number.isInteger(value)
+}
+
+/** Whether a value is an array whose every item is a string; an empty array is one. */
+export function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}

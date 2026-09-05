@@ -99,20 +99,22 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
       type: 'object',
       additionalProperties: false,
       properties: {
-        deleted: {
+        requested: {
           type: 'integer',
-          description: 'Keys the API deleted.',
+          description: 'Keys in the request.',
+        },
+        deleted: {
+          oneOf: [{ type: 'integer' }, { type: 'null' }],
+          description: 'Keys Cloudflare reports deleted; null when it reported no count.',
         },
         failed: {
-          type: 'array',
-          description: 'Keys the API reported as not deleted.',
-          items: {
-            type: 'string',
-          },
+          oneOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }],
+          description:
+            'Keys Cloudflare reports as not deleted, to be retried; null when the response carried no such list.',
         },
       },
-      required: ['deleted', 'failed'],
-      description: 'How many keys were deleted, and which were not.',
+      required: ['requested', 'deleted', 'failed'],
+      description: 'What Cloudflare reported about the deletion.',
     },
   },
   cloudflare_kv_get: {
@@ -256,20 +258,22 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
       type: 'object',
       additionalProperties: false,
       properties: {
-        written: {
+        requested: {
           type: 'integer',
-          description: 'Key/value pairs the API wrote.',
+          description: 'Key/value pairs in the request.',
+        },
+        written: {
+          oneOf: [{ type: 'integer' }, { type: 'null' }],
+          description: 'Pairs Cloudflare reports written; null when it reported no count.',
         },
         failed: {
-          type: 'array',
-          description: 'Keys the API reported as not written.',
-          items: {
-            type: 'string',
-          },
+          oneOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }],
+          description:
+            'Keys Cloudflare reports as not written, to be retried; null when the response carried no such list.',
         },
       },
-      required: ['written', 'failed'],
-      description: 'How many pairs were written, and which were not.',
+      required: ['requested', 'written', 'failed'],
+      description: 'What Cloudflare reported about the write.',
     },
   },
   cloudflare_queue_ack: {

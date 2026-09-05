@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isFiniteNumber, isObject } from '../src/tools/_shared/json.ts'
+import { isFiniteNumber, isInteger, isObject, isStringArray } from '../src/tools/_shared/json.ts'
 
 describe('isObject', () => {
   it.each([
@@ -35,5 +35,43 @@ describe('isFiniteNumber', () => {
     ['null', null],
   ])('refuses %s', (_label, value) => {
     expect(isFiniteNumber(value)).toBe(false)
+  })
+})
+
+describe('isInteger', () => {
+  it.each([
+    ['zero', 0],
+    ['a negative integer', -3],
+    ['a large integer', 10_000],
+  ])('accepts %s', (_label, value) => {
+    expect(isInteger(value)).toBe(true)
+  })
+
+  it.each([
+    ['a fraction', 1.5],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['a numeric string', '1'],
+    ['null', null],
+  ])('refuses %s', (_label, value) => {
+    expect(isInteger(value)).toBe(false)
+  })
+})
+
+describe('isStringArray', () => {
+  it.each([
+    ['an empty array', []],
+    ['an array of strings', ['a', 'b']],
+  ])('accepts %s', (_label, value) => {
+    expect(isStringArray(value)).toBe(true)
+  })
+
+  it.each([
+    ['a string', 'a'],
+    ['an array holding a number', ['a', 1]],
+    ['null', null],
+    ['an object', {}],
+  ])('refuses %s', (_label, value) => {
+    expect(isStringArray(value)).toBe(false)
   })
 })

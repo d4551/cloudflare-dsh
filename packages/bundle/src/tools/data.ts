@@ -24,7 +24,7 @@ import {
   r2BucketCreateSpec,
   r2BucketListSpec,
 } from '../specs/data.ts'
-import type { JsonValue } from './_shared/json.ts'
+import { isInteger, isObject, isStringArray, type JsonValue } from './_shared/json.ts'
 import { json, listing, plural, text, truncate } from './_shared/render.ts'
 
 /** Context shape these tools require. */
@@ -50,15 +50,60 @@ export interface DataToolsConfig {
   queueVisibilityTimeoutMs: number
 }
 
-/** What the KV bulk endpoints report back: the count they accepted and the keys they did not. */
+/**
+ * The per-key outcome a KV bulk endpoint may report. Cloudflare's result
+ * schema (`workers-kv_bulk-result`) declares both fields optional and its SDK
+ * types the whole result as nullable, so an acknowledgement can arrive with a
+ * count, with a count and the failed keys, or with nothing at all. A field is
+ * `null` here exactly when the API did not send it.
+ */
 interface KvBulkOutcome {
-  readonly successful_key_count: number
-  readonly unsuccessful_keys: string[]
+  readonly count: number | null
+  readonly failed: string[] | null
 }
 
-/** The keys a bulk operation could not apply, for the rendered summary. */
-function failedNote(keys: readonly string[]): string {
-  return keys.length === 0 ? '' : ` ${plural(keys.length, 'key')} failed: ${keys.join(', ')}.`
+/** Raised when a KV bulk result is not the shape Cloudflare declares for it. */
+export class KvBulkResultShapeError extends TypeError {
+  override readonly name = 'KvBulkResultShapeError'
+  constructor(problem: string) {
+    super(`the KV bulk result is not the shape Cloudflare declares: ${problem}`)
+  }
+}
+
+/**
+ * Project a KV bulk result field by field. A `null` result is a bare
+ * acknowledgement; a present field of the wrong type is a malformed response
+ * and fails loudly. Neither becomes a count taken from the request, which is
+ * the lie this projection exists to avoid.
+ */
+function kvBulkOutcome(result: JsonValue): KvBulkOutcome {
+  if (result === null) return { count: null, failed: null }
+  if (!isObject(result) || Array.isArray(result)) {
+    throw new KvBulkResultShapeError('the result is neither an object nor null')
+  }
+  const count = result.successful_key_count
+  const failed = result.unsuccessful_keys
+  if (count !== undefined && !isInteger(count)) {
+    throw new KvBulkResultShapeError('successful_key_count is not an integer')
+  }
+  if (failed !== undefined && !isStringArray(failed)) {
+    throw new KvBulkResultShapeError('unsuccessful_keys is not an array of strings')
+  }
+  return { count: count === undefined ? null : count, failed: failed === undefined ? null : failed }
+}
+
+/** The count line of a bulk summary: what Cloudflare reported, or that it reported nothing. */
+function countLine(verb: 'Wrote' | 'Deleted', requested: number, noun: string, count: number | null): string {
+  if (count === null) {
+    return `Cloudflare accepted ${plural(requested, noun)} without reporting how many it ${verb.toLowerCase()}.`
+  }
+  return `${verb} ${count} of ${plural(requested, noun)}.`
+}
+
+/** The failed-keys note of a bulk summary; nothing when Cloudflare named none. */
+function failedNote(keys: readonly string[] | null): string {
+  if (keys === null || keys.length === 0) return ''
+  return ` ${plural(keys.length, 'key')} failed and should be retried: ${keys.join(', ')}.`
 }
 
 /** Raised when a bulk operation names nothing: the request would do nothing and report success. */
@@ -229,30 +274,39 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'How many pairs were written, and which were not.',
+          description: 'What Cloudflare reported about the write.',
           properties: {
-            written: { type: 'integer', required: true, description: 'Key/value pairs the API wrote.' },
-            failed: {
-              type: 'array',
+            requested: { type: 'integer', required: true, description: 'Key/value pairs in the request.' },
+            written: {
+              oneOf: [{ type: 'integer' }, { type: 'null' }],
               required: true,
-              description: 'Keys the API reported as not written.',
-              items: { type: 'string' },
+              description: 'Pairs Cloudflare reports written; null when it reported no count.',
+            },
+            failed: {
+              oneOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }],
+              required: true,
+              description:
+                'Keys Cloudflare reports as not written, to be retried; null when the response carried no such list.',
             },
           },
         },
         render: (_args, value) =>
-          text(`Wrote ${plural(value.written, 'key/value pair')}.${failedNote(value.failed)}`),
+          text(
+            `${countLine('Wrote', value.requested, 'key/value pair', value.written)}${failedNote(value.failed)}`,
+          ),
       },
       async execute(args, exec) {
         const entries = args.entries
         if (entries.length === 0) throw new EmptyBatchError('entries')
-        // The count comes from the API, which reports the keys it did not
-        // write, rather than from the size of the request.
-        const outcome = await cf.accountRequest<KvBulkOutcome>({
-          ...kvBulkPutSpec(args.namespaceId, entries),
-          signal: exec.signal,
-        })
-        return { written: outcome.successful_key_count, failed: outcome.unsuccessful_keys }
+        // What was written comes from the API's answer, never from the size
+        // of the request.
+        const outcome = kvBulkOutcome(
+          await cf.accountRequest<JsonValue>({
+            ...kvBulkPutSpec(args.namespaceId, entries),
+            signal: exec.signal,
+          }),
+        )
+        return { requested: entries.length, written: outcome.count, failed: outcome.failed }
       },
     }),
   )
@@ -274,29 +328,37 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'How many keys were deleted, and which were not.',
+          description: 'What Cloudflare reported about the deletion.',
           properties: {
-            deleted: { type: 'integer', required: true, description: 'Keys the API deleted.' },
-            failed: {
-              type: 'array',
+            requested: { type: 'integer', required: true, description: 'Keys in the request.' },
+            deleted: {
+              oneOf: [{ type: 'integer' }, { type: 'null' }],
               required: true,
-              description: 'Keys the API reported as not deleted.',
-              items: { type: 'string' },
+              description: 'Keys Cloudflare reports deleted; null when it reported no count.',
+            },
+            failed: {
+              oneOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }],
+              required: true,
+              description:
+                'Keys Cloudflare reports as not deleted, to be retried; null when the response carried no such list.',
             },
           },
         },
-        render: (_args, value) => text(`Deleted ${plural(value.deleted, 'key')}.${failedNote(value.failed)}`),
+        render: (_args, value) =>
+          text(`${countLine('Deleted', value.requested, 'key', value.deleted)}${failedNote(value.failed)}`),
       },
       async execute(args, exec) {
         const keys = args.keys
         if (keys.length === 0) throw new EmptyBatchError('keys')
-        // Always the bulk endpoint, even for one key: it is the one that reports
-        // which keys it did and did not delete.
-        const outcome = await cf.accountRequest<KvBulkOutcome>({
-          ...kvBulkDeleteSpec(args.namespaceId, keys),
-          signal: exec.signal,
-        })
-        return { deleted: outcome.successful_key_count, failed: outcome.unsuccessful_keys }
+        // Always the bulk endpoint, even for one key: it is the one whose answer
+        // can carry the outcome.
+        const outcome = kvBulkOutcome(
+          await cf.accountRequest<JsonValue>({
+            ...kvBulkDeleteSpec(args.namespaceId, keys),
+            signal: exec.signal,
+          }),
+        )
+        return { requested: keys.length, deleted: outcome.count, failed: outcome.failed }
       },
     }),
   )
