@@ -111,6 +111,17 @@ of a streamed response; it now refuses `stream: true` by name and says where
 streaming lives. The run on that tree scored 100.00%: 3,102 mutants, 3,089
 killed, 13 timing out, none surviving.
 
+That KV repair was itself not the whole truth. It read `successful_key_count`
+and `unsuccessful_keys` straight off the result, and Cloudflare's result schema
+(`workers-kv_bulk-result`) declares both fields optional while its SDK types the
+whole result as nullable, so a bare acknowledgement — a legitimate success — would
+have crashed the tool. At `c868b15` the result is projected field by field:
+`requested` is the size of the request, `written`/`deleted` and `failed` are what
+Cloudflare answered or `null` when it did not answer, a present field of the
+wrong type fails loudly as `KvBulkResultShapeError`, and the rendered summary
+says which of those it is. The run on that tree scored 100.00%: 3,187 mutants,
+3,174 killed, 13 timing out, none surviving.
+
 </details>
 
 <details>
