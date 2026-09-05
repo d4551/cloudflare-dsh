@@ -11,8 +11,7 @@ import { CloudflareError, classifyFailure } from './errors.ts'
 import { paginate, type NextPageQuery, type PageWalk } from './paginate.ts'
 import { DEFAULT_BASE_URL, assertSafeBaseUrl, buildRequest } from './request.ts'
 import { type RetryPolicy, runWithRetry } from './retry.ts'
-import { makeScope } from './scope.ts'
-import type { CloudflareEnvelope, QueryValue, RequestSpec, Scope } from './types.ts'
+import type { CloudflareEnvelope, QueryValue, RequestSpec } from './types.ts'
 
 /** The `fetch` shape the client needs. */
 export type FetchLike = (request: Request) => Promise<Response>
@@ -257,7 +256,3 @@ export class CloudflareClient {
 
 }
 
-/** Convenience: build an account scope from a resolved account id. */
-export function accountScope(accountId: string): Scope {
-  return makeScope('account', accountId)
-}

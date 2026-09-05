@@ -83,7 +83,3 @@ export function mcpPatchRows(names: readonly string[]): McpPatchRow[] {
   })
 }
 
-/** The tool-name prefix bridged tools from one server will carry. */
-export function bridgedToolPrefix(serverName: string): string {
-  return `mcp__${serverName}__`
-}

@@ -1,5 +1,6 @@
 import { CloudflareConfig, CloudflareService } from '@d4551/dsh-cloudflare-core'
 import { Context } from '@deepseek-ai/cordis'
+import { LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it, vi } from 'vitest'
 import { CloudflareAiAdapter } from '../src/ai/adapter.ts'
 import * as aiPlugin from '../src/ai/index.ts'
@@ -39,8 +40,8 @@ function harness(
     },
   )
   expect(service.name).toBe('cloudflare')
-  const dispose = aiPlugin.apply(ctx, aiPlugin.Config(config))
-  return { ctx, requests, registered, dispose }
+  aiPlugin.apply(ctx, aiPlugin.Config(config))
+  return { ctx, requests, registered }
 }
 
 describe('plugin shape', () => {
@@ -78,10 +79,30 @@ describe('plugin shape', () => {
     expect(registered[0]!.adapter).toBeInstanceOf(CloudflareAiAdapter)
   })
 
-  it('returns the registration disposer', () => {
-    const { dispose, registered } = harness()
-    dispose()
-    expect(registered).toHaveLength(0)
+
+})
+
+describe('lifecycle', () => {
+  it('registers both routes with the real llm runtime and releases them when the fiber unloads', async () => {
+    // Against the real runtime rather than the recording fake: the runtime
+    // scopes a registration to the calling plugin's fiber, which is the
+    // guarantee that makes unloading the plugin remove its adapter.
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const credentials = { resolve: () => 'tok' }
+    ctx.provide('credentials', credentials)
+    const service = new CloudflareService(ctx, CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }), {
+      credentials,
+      fetch: async () => envelope(null),
+    })
+    expect(service.name).toBe('cloudflare')
+    const providers = () => (ctx as unknown as { llm: LlmRuntime }).llm.listProviders().map((info) => info.id)
+
+    const fiber = await ctx.plugin(aiPlugin, {})
+    expect(providers()).toEqual(expect.arrayContaining(['cloudflare-workers-ai', 'cloudflare-ai-gateway']))
+    await fiber.dispose()
+    expect(providers()).not.toEqual(expect.arrayContaining(['cloudflare-workers-ai']))
+    expect(providers()).not.toEqual(expect.arrayContaining(['cloudflare-ai-gateway']))
   })
 })
 

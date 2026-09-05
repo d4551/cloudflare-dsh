@@ -10,6 +10,13 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
  * it is a different runner, so it sits outside the Stryker run by construction
  * rather than by exclusion.
  */
+/**
+ * Each test launches a real Chromium page and runs the whole axe rule set in
+ * it, which takes seconds rather than milliseconds; the budget is finite so a
+ * hung browser still fails.
+ */
+const BROWSER_TEST_TIMEOUT_MS = 60_000
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -21,7 +28,7 @@ export default defineConfig({
     environment: 'node',
     include: ['packages/*/tests/**/*.browser.test.tsx'],
     exclude: ['**/node_modules/**'],
-    testTimeout: 60_000,
-    hookTimeout: 60_000,
+    testTimeout: BROWSER_TEST_TIMEOUT_MS,
+    hookTimeout: BROWSER_TEST_TIMEOUT_MS,
   },
 })

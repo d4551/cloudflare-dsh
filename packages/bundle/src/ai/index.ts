@@ -128,7 +128,7 @@ export function toModelInfo(provider: string, models: readonly { name?: string; 
   return info
 }
 
-export function apply(ctx: Context, config: AiConfig): () => void {
+export function apply(ctx: Context, config: AiConfig): void {
   const cf = (ctx as CloudflareContext).cloudflare
   const llm = ctx.llm
 
@@ -192,5 +192,9 @@ export function apply(ctx: Context, config: AiConfig): () => void {
     streamIdleTimeoutMs: config.streamIdleTimeoutMs,
   })
 
-  return llm.registerAdapter([WORKERS_AI_PROVIDER, AI_GATEWAY_PROVIDER], adapter)
+  // The runtime scopes the registration to this plugin's fiber ("disposed with
+  // the fiber"), so unloading the plugin unregisters the adapter. A disposer
+  // returned from here would go unused: cordis instantiates a constructible
+  // `apply` as a class and reads no effect from its return value.
+  llm.registerAdapter([WORKERS_AI_PROVIDER, AI_GATEWAY_PROVIDER], adapter)
 }

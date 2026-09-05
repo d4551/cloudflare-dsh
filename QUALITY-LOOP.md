@@ -9,7 +9,7 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 5**
+**I'm a fucking loser: 6**
 
 <details>
 <summary><strong>Restart 1 — the mutation glob matched less than the claim</strong></summary>
@@ -155,7 +155,58 @@ than from the report's line and column.
 
 Stryker was right both times. The commit message of `c29d156` states the
 wrong conclusion ("the runner's instrumentation or activation"); this entry
-corrects it, and the threshold was never moved.
+corrects it, and the threshold was never moved. With both fixed, the next run
+scored 100.00% — 2,610 killed, 14 timeouts, none surviving — and the escape
+guard passed.
+
+</details>
+
+<details>
+<summary><strong>Restart 6 — the audit found a violation; the deferred test repairs stop being deferred</strong></summary>
+
+A fresh adversarial audit of the tree at `b2f2ac1` reported a violation and,
+by design, not where. The self-audit that followed treated every test weakness
+the remediation plan had scheduled for a later phase as due now — an
+anti-pattern known and scheduled is still an anti-pattern in the tree — and
+found real defects beside them.
+
+1. **A rejection swallowed.** The adapter's abort test caught and discarded the
+   stream's outcome, then checked only that the request carried an aborted
+   signal. Whether the caller ever saw the abort was unknown. The fetch stub
+   now honours the signal the way `fetch` does and the rejection is asserted.
+2. **A failure test whose fixture never failed.** "Clears the idle timer when
+   the provider fails" used a successful stream. It now uses a body that errors
+   after one event, the way a dropped connection does, and asserts the error.
+3. **Thirty `toBeDefined()` on `getBy*` results**, which already throw when
+   nothing matches — and which pass for `null` the moment a query becomes
+   `queryBy*`. Replaced with element-type assertions. Three other weak shape
+   checks (an exports entry, an output schema, a tool view) now assert the
+   shape; one `it.each` had carried a component column its body never read.
+4. **Eighty-five locale references in client tests.** A test that reads
+   `en.cost.empty` and looks for `en.cost.empty` passes whatever the copy says.
+   Every one is now the literal, and tests may no longer import the locale.
+5. **Eleven byte-pinned pretty-JSON render outputs** in tool tests, all
+   restating one shared helper. They now assert delegation to that helper; the
+   helper keeps its own byte-exact test.
+6. **Dead code alive only through its tests.** `bridgedToolPrefix` and
+   `countNodes` had no consumer; `plural()` took an irregular form nothing
+   passed; a scope helper duplicated the service's own method. Deleted with
+   their tests. `rejectResourceTypes` had a spec branch and tests but no way
+   for a tool to set it; it is now a parameter on both rendering tools, typed
+   against the eighteen resource types Cloudflare's client publishes.
+7. **Plugin disposal that the framework never ran.** cordis instantiates a
+   constructible `apply` as a class and reads no effect from its return value,
+   so the ai plugin's returned disposer was dead code and the hand-called test
+   of it proved nothing; the client plugin returned nothing at all and leaked
+   every slot registration on unload. The llm and tools runtimes scope their
+   registrations to the calling fiber, so the ai plugin now relies on that
+   documented guarantee and a lifecycle test against the real `LlmRuntime`
+   proves it; the client plugin registers each contribution as a fiber effect
+   and a lifecycle test through `ctx.plugin()` proves the release.
+
+The invariants lane now bans defined-only, truthy, falsy and anything-matcher
+assertions, swallowed rejections, and locale imports in tests, so none of
+these can return unnoticed.
 
 </details>
 

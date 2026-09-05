@@ -30,9 +30,6 @@ describe('plural', () => {
     expect(plural(3, 'key')).toBe('3 keys')
   })
 
-  it('accepts an irregular plural', () => {
-    expect(plural(2, 'entry', 'entries')).toBe('2 entries')
-  })
 })
 
 describe('listing', () => {

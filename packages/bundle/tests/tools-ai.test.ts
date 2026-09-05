@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { json } from '../src/tools/_shared/render.ts'
 import * as aiTools from '../src/tools/ai.ts'
 import { sessionOf, summariseSessionLogs, toLogFilters } from '../src/tools/ai.ts'
 import { envelope, failure, makeHarness } from './harness.ts'
@@ -96,7 +97,7 @@ describe('cloudflare_ai_run', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
       h.tool('cloudflare_ai_run').output.render({ model: 'm', input: {} }, { model: 'm', output: { a: 1 } }),
-    ).toEqual([{ type: 'text', text: '{\n  "a": 1\n}' }])
+    ).toEqual(json({ a: 1 }))
   })
 
   it('surfaces a model error', async () => {
@@ -147,7 +148,7 @@ describe('model catalogue tools', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
       h.tool('cloudflare_ai_model_schema').output.render({ model: 'm' }, { model: 'm', schema: { a: 1 } }),
-    ).toEqual([{ type: 'text', text: '{\n  "a": 1\n}' }])
+    ).toEqual(json({ a: 1 }))
   })
 })
 
@@ -176,9 +177,7 @@ describe('gateway tools', () => {
 
   it('renders a gateway config as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
-    expect(h.tool('cloudflare_aigateway_get').output.render({ gatewayId: 'g' }, { gateway: { id: 'g' } })).toEqual([
-      { type: 'text', text: '{\n  "id": "g"\n}' },
-    ])
+    expect(h.tool('cloudflare_aigateway_get').output.render({ gatewayId: 'g' }, { gateway: { id: 'g' } })).toEqual(json({ id: 'g' }))
   })
 
   it('queries logs by page, reporting which page it read', async () => {
@@ -252,7 +251,7 @@ describe('gateway tools', () => {
         { gatewayId: 'g', logId: 'l', part: 'request' },
         { body: { a: 1 } },
       ),
-    ).toEqual([{ type: 'text', text: '{\n  "a": 1\n}' }])
+    ).toEqual(json({ a: 1 }))
   })
 
   it('lists dynamic routes', async () => {
@@ -290,7 +289,7 @@ describe('gateway tools', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
       h.tool('cloudflare_aigateway_cost').output.render({ view: 'credit-balance' }, { view: 'credit-balance', billing: { a: 1 } }),
-    ).toEqual([{ type: 'text', text: '{\n  "a": 1\n}' }])
+    ).toEqual(json({ a: 1 }))
   })
 })
 
@@ -494,7 +493,7 @@ describe('AI Search and Vectorize tools', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
       h.tool('cloudflare_aisearch_search').output.render({ instanceId: 'i', query: 'q' }, { results: { a: 1 } }),
-    ).toEqual([{ type: 'text', text: '{\n  "a": 1\n}' }])
+    ).toEqual(json({ a: 1 }))
   })
 
   it('asks for a grounded answer', async () => {
@@ -518,7 +517,7 @@ describe('AI Search and Vectorize tools', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
       h.tool('cloudflare_aisearch_chat').output.render({ instanceId: 'i', query: 'q' }, { answer: { a: 1 } }),
-    ).toEqual([{ type: 'text', text: '{\n  "a": 1\n}' }])
+    ).toEqual(json({ a: 1 }))
   })
 
   it('triggers a sync job', async () => {
@@ -531,9 +530,7 @@ describe('AI Search and Vectorize tools', () => {
 
   it('renders the sync job as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
-    expect(h.tool('cloudflare_aisearch_sync').output.render({ instanceId: 'i' }, { job: { id: 'j' } })).toEqual([
-      { type: 'text', text: '{\n  "id": "j"\n}' },
-    ])
+    expect(h.tool('cloudflare_aisearch_sync').output.render({ instanceId: 'i' }, { job: { id: 'j' } })).toEqual(json({ id: 'j' }))
   })
 
   it('lists vectorize indexes', async () => {

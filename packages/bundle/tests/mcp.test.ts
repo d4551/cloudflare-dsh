@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLOUDFLARE_MCP_SERVERS,
-  bridgedToolPrefix,
   mcpPatchRow,
   mcpPatchRows,
 } from '../src/mcp/index.ts'
@@ -83,8 +82,3 @@ describe('mcpPatchRows', () => {
   })
 })
 
-describe('bridgedToolPrefix', () => {
-  it('matches the naming the MCP client applies to bridged tools', () => {
-    expect(bridgedToolPrefix('cloudflare-docs')).toBe('mcp__cloudflare-docs__')
-  })
-})

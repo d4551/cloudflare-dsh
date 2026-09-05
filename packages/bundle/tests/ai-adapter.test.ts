@@ -148,10 +148,19 @@ describe('stream', () => {
   })
 
   it('forwards the caller abort signal to the provider request', async () => {
-    const { adapter, requests } = makeAdapter(async () => sse(STOP))
+    // The stub honours the signal the way fetch does: a request that arrives
+    // already aborted is rejected with the signal's reason. Swallowing the
+    // outcome here would leave it unknown whether the caller ever sees the
+    // abort.
+    const { adapter, requests } = makeAdapter(async (request) => {
+      if (request.signal.aborted) throw request.signal.reason
+      return sse(STOP)
+    })
     const controller = new AbortController()
     controller.abort()
-    await collect(adapter.stream(options({ signal: controller.signal }))).catch(() => undefined)
+    await expect(collect(adapter.stream(options({ signal: controller.signal })))).rejects.toMatchObject({
+      name: 'AbortError',
+    })
     expect(requests[0]!.signal.aborted).toBe(true)
   })
 
@@ -330,11 +339,21 @@ describe('stream', () => {
     }
   })
 
-  it('clears the idle timer when the provider fails', async () => {
+  it('clears the idle timer when the provider fails mid-stream', async () => {
     vi.useFakeTimers()
     try {
-      const { adapter } = makeAdapter(async () => sse(TEXT))
-      await collect(adapter.stream(options()))
+      // The body errors after one event, the way a dropped connection does;
+      // a stream that merely completed would prove nothing about failure.
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`data: ${TEXT}\n\n`))
+          controller.error(new Error('connection reset'))
+        },
+      })
+      const { adapter } = makeAdapter(
+        async () => new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+      )
+      await expect(collect(adapter.stream(options()))).rejects.toThrow('connection reset')
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()

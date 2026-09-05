@@ -8,12 +8,7 @@
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import {
-  type RenderFormat,
-  type RenderOptions,
-  accessibilityTreeSpec,
-  browserRenderSpec,
-} from '../specs/web.ts'
+import { RESOURCE_TYPES, type RenderFormat, type RenderOptions, accessibilityTreeSpec, browserRenderSpec } from '../specs/web.ts'
 import type { JsonValue } from './_shared/json.ts'
 import { json, text, truncate } from './_shared/render.ts'
 
@@ -35,13 +30,16 @@ export function renderOptionsFrom(args: {
   url: string
   gotoTimeoutMs?: number | undefined
   waitForSelector?: string | undefined
+  rejectResourceTypes?: readonly string[] | undefined
 }): RenderOptions {
   return {
     url: args.url,
     gotoTimeoutMs: args.gotoTimeoutMs,
     waitForSelector: args.waitForSelector,
+    rejectResourceTypes: args.rejectResourceTypes,
   }
 }
+
 
 export function apply(ctx: Context): void {
   const cf = (ctx as CloudflareContext).cloudflare
@@ -61,6 +59,11 @@ export function apply(ctx: Context): void {
         },
         gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
         waitForSelector: { type: 'string', description: 'Wait for this CSS selector before capturing.' },
+        rejectResourceTypes: {
+          type: 'array',
+          description: 'Resource types to block while the page loads, for example image or script.',
+          items: { type: 'string', enum: RESOURCE_TYPES },
+        },
       },
       output: {
         schema: {
@@ -94,6 +97,11 @@ export function apply(ctx: Context): void {
         url: { type: 'string', required: true, description: 'Absolute URL to inspect.' },
         gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
         waitForSelector: { type: 'string', description: 'Wait for this CSS selector before inspecting.' },
+        rejectResourceTypes: {
+          type: 'array',
+          description: 'Resource types to block while the page loads, for example image or script.',
+          items: { type: 'string', enum: RESOURCE_TYPES },
+        },
       },
       output: {
         schema: {

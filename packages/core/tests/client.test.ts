@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CloudflareClient,
   TRANSPORT_FAILURE_STATUS,
-  accountScope,
   readEnvelope,
   realSleep,
   statusOfError,
@@ -217,15 +216,6 @@ describe('realSleep', () => {
   })
 })
 
-describe('accountScope', () => {
-  it('builds an account scope', () => {
-    expect(accountScope('a1')).toEqual({ kind: 'account', id: 'a1' })
-  })
-
-  it('rejects an empty account id', () => {
-    expect(() => accountScope('')).toThrow(TypeError)
-  })
-})
 
 describe('CloudflareClient.request', () => {
   it('exposes the credential reference it authenticates with', () => {

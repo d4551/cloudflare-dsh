@@ -1,3 +1,6 @@
+import { CloudflareConfig, CloudflareService } from '@d4551/dsh-cloudflare-core'
+import { Context } from '@deepseek-ai/cordis'
+import { ToolRuntime } from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
 import * as webTools from '../src/tools/web.ts'
 import { envelope, makeHarness } from './harness.ts'
@@ -35,13 +38,24 @@ describe('renderOptionsFrom', () => {
       url: 'https://x.test',
       gotoTimeoutMs: undefined,
       waitForSelector: undefined,
+      rejectResourceTypes: undefined,
     })
   })
 
   it('carries the timeout and selector when given', () => {
     expect(
-      webTools.renderOptionsFrom({ url: 'https://x.test', gotoTimeoutMs: 10, waitForSelector: 'main' }),
-    ).toStrictEqual({ url: 'https://x.test', gotoTimeoutMs: 10, waitForSelector: 'main' })
+      webTools.renderOptionsFrom({
+        url: 'https://x.test',
+        gotoTimeoutMs: 10,
+        waitForSelector: 'main',
+        rejectResourceTypes: ['image'],
+      }),
+    ).toStrictEqual({
+      url: 'https://x.test',
+      gotoTimeoutMs: 10,
+      waitForSelector: 'main',
+      rejectResourceTypes: ['image'],
+    })
   })
 })
 
@@ -58,6 +72,28 @@ describe('cloudflare_browser_render', () => {
     await h.run('cloudflare_browser_render', { url: 'https://x.test', format: 'markdown' })
     expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/browser-rendering/markdown')
     expect(h.requests[0]!.method).toBe('POST')
+  })
+
+  it('forwards the resource types to block', async () => {
+    const h = makeHarness(webTools, async () => envelope(''))
+    await h.run('cloudflare_browser_render', {
+      url: 'https://x.test',
+      format: 'content',
+      rejectResourceTypes: ['image', 'script'],
+    })
+    await expect(h.requests[0]!.text()).resolves.toBe(
+      '{"url":"https://x.test","rejectResourceTypes":["image","script"]}',
+    )
+  })
+
+  it('rejects a resource type outside the documented set before any request', async () => {
+    const h = makeHarness(webTools, async () => envelope(''))
+    await expect(
+      h.run('cloudflare_browser_render', { url: 'https://x.test', format: 'content', rejectResourceTypes: ['video'] }),
+    ).rejects.toThrow(
+      'invalid arguments: "rejectResourceTypes[0]" must be one of ["document","stylesheet","image","media","font","script","texttrack","xhr","fetch","prefetch","eventsource","websocket","manifest","signedexchange","ping","cspviolationreport","preflight","other"]',
+    )
+    expect(h.requests).toHaveLength(0)
   })
 
   it('forwards navigation options', async () => {
@@ -138,5 +174,35 @@ describe('cloudflare_browser_accessibility_tree', () => {
       .tool('cloudflare_browser_accessibility_tree')
       .output.render({ url: 'u' }, { url: 'u', tree: big })
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated') }])
+  })
+})
+
+describe('lifecycle', () => {
+  it('registers with the real tool runtime and is released when the fiber unloads', async () => {
+    // The registry records each registration as an effect on the calling
+    // plugin's fiber; this proves that guarantee end to end for a tool plugin
+    // rather than trusting the recording fake.
+    const ctx = new Context()
+    ctx.provide('systemPrompt', {
+      section: () => () => {},
+      getSectionOrder: () => 0,
+      tools: () => () => {},
+    })
+    await ctx.plugin(ToolRuntime)
+    const credentials = { resolve: () => 'tok' }
+    ctx.provide('credentials', credentials)
+    const service = new CloudflareService(ctx, CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }), {
+      credentials,
+      fetch: async () => envelope(''),
+    })
+    expect(service.name).toBe('cloudflare')
+    const tools = (ctx as unknown as { tools: ToolRuntime }).tools
+
+    const fiber = await ctx.plugin(webTools)
+    expect(tools.get('cloudflare_browser_render')?.name).toBe('cloudflare_browser_render')
+    expect(tools.get('cloudflare_browser_accessibility_tree')?.name).toBe('cloudflare_browser_accessibility_tree')
+    await fiber.dispose()
+    expect(tools.get('cloudflare_browser_render')).toBeUndefined()
+    expect(tools.get('cloudflare_browser_accessibility_tree')).toBeUndefined()
   })
 })

@@ -92,8 +92,26 @@ describe('no test evasions', () => {
     // failure, a typo in a fixture — so it proves only that something went wrong.
     ['bare throw assertion', `toThrow${'()'}`],
     ['bare throw-error assertion', `toThrowError${'()'}`],
+    // `getBy*` already throws when nothing matches, so a defined-only check on
+    // its result asserts nothing — and passes for `null` the moment the query
+    // becomes `queryBy*`.
+    ['defined-only assertion', `.toBeDefi${'ned()'}`],
+    ['truthy assertion', `.toBeTru${'thy()'}`],
+    ['falsy assertion', `.toBeFal${'sy()'}`],
+    ['anything matcher', `expect.anyt${'hing()'}`],
+    // A rejection caught and discarded leaves the outcome the test exists to
+    // observe unobserved.
+    ['swallowed rejection', `.cat${'ch(() =>'}`],
   ])('no %s appears in a test file', (_label, needle) => {
     expect(containing(tests, needle)).toEqual([])
+  })
+})
+
+describe('tests speak in user-visible copy', () => {
+  it('never imports the locale, so an assertion cannot compare a string with itself', () => {
+    // A test that reads `en.cost.empty` and looks for `en.cost.empty` passes
+    // whatever the copy says. Pinning the literal is what makes copy a contract.
+    expect(containing(tests, `locales/${'en'}`)).toEqual([])
   })
 })
 

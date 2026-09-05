@@ -62,16 +62,23 @@ export const inject = ['slots']
 
 export function apply(ctx: Context): void {
   const slots = (ctx as SlotsContext).slots
+  // Every contribution is an effect on this plugin's fiber, so unloading the
+  // plugin removes it. Registrations made inside an `inject` callback happen
+  // whenever the host declares that slot; the effect is created at that moment,
+  // which the fiber accepts for as long as the plugin is loaded.
+  const register = (registration: SlotRegistration, component: unknown): void => {
+    ctx.effect(() => slots.register(registration, component), `slots.register(${registration.name})`)
+  }
 
   slots.inject(SESSION_HEADER_SLOT, () => {
-    slots.register({ name: SESSION_HEADER_SLOT, id: 'cloudflare-cost', order: 100 }, SessionCostChip)
+    register({ name: SESSION_HEADER_SLOT, id: 'cloudflare-cost', order: 100 }, SessionCostChip)
   })
 
   slots.inject(TOOL_VIEW_SLOT, () => {
     for (const view of TOOL_VIEWS) {
-      slots.register({ name: TOOL_VIEW_SLOT, id: view.tool }, view.component)
+      register({ name: TOOL_VIEW_SLOT, id: view.tool }, view.component)
     }
   })
 
-  slots.register({ name: 'settings.plugin.cloudflare', id: 'cloudflare-settings' }, SettingsCard)
+  register({ name: 'settings.plugin.cloudflare', id: 'cloudflare-settings' }, SettingsCard)
 }

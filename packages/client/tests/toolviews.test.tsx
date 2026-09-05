@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AccessibilityTree, countNodes, describeNode } from '../src/toolviews/AccessibilityTree.tsx'
+import { AccessibilityTree, describeNode } from '../src/toolviews/AccessibilityTree.tsx'
 import { BrowserRender, isImageFormat } from '../src/toolviews/BrowserRender.tsx'
 import { D1Result, cellText, columnsOf } from '../src/toolviews/D1Result.tsx'
-import { en } from '../src/locales/en.ts'
 import { expectNoViolations } from './axe.ts'
 
 afterEach(cleanup)
@@ -49,7 +48,7 @@ describe('D1Result', () => {
 
   it('captions the table with the query that produced it', () => {
     render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
-    expect(screen.getByRole('table', { name: 'Results for query: SELECT 1' })).toBeDefined()
+    expect(screen.getByRole('table', { name: 'Results for query: SELECT 1' })).toBeInstanceOf(HTMLTableElement)
   })
 
   it('renders one row per result', () => {
@@ -75,22 +74,22 @@ describe('D1Result', () => {
 
   it('tolerates a result set with no rows field', () => {
     render(<D1Result sql="s" resultSets={[{}]} />)
-    expect(screen.getByText(en.toolView.emptyResult)).toBeDefined()
+    expect(screen.getByText('The query returned no rows.')).toBeInstanceOf(HTMLElement)
   })
 
   it('reports an empty result rather than an empty table', () => {
     render(<D1Result sql="s" resultSets={[{ results: [] }]} />)
-    expect(screen.getByText(en.toolView.emptyResult)).toBeDefined()
+    expect(screen.getByText('The query returned no rows.')).toBeInstanceOf(HTMLElement)
   })
 
   it('reports an empty result when rows carry no columns', () => {
     render(<D1Result sql="s" resultSets={[{ results: [{}] }]} />)
-    expect(screen.getByText(en.toolView.emptyResult)).toBeDefined()
+    expect(screen.getByText('The query returned no rows.')).toBeInstanceOf(HTMLElement)
   })
 
   it('makes the scroll container reachable by keyboard and gives it a name', () => {
     render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
-    const group = screen.getByRole('group', { name: en.toolView.queryCaption('SELECT 1') })
+    const group = screen.getByRole('group', { name: 'Results for query: SELECT 1' })
     expect(group.getAttribute('tabindex')).toBe('0')
   })
 
@@ -118,19 +117,19 @@ describe('isImageFormat', () => {
 describe('BrowserRender', () => {
   it('captions the output with the page it came from', () => {
     render(<BrowserRender url="https://x.test" format="markdown" body="# Title" />)
-    expect(screen.getByText(en.toolView.renderHeading('https://x.test'))).toBeDefined()
+    expect(screen.getByText('Rendered https://x.test')).toBeInstanceOf(HTMLElement)
   })
 
   it('renders text output in a keyboard-reachable region', () => {
     render(<BrowserRender url="https://x.test" format="markdown" body="# Title" />)
-    const body = screen.getByLabelText(en.toolView.renderHeading('https://x.test'))
+    const body = screen.getByLabelText('Rendered https://x.test')
     expect(body.tagName).toBe('PRE')
     expect(body.getAttribute('tabindex')).toBe('0')
   })
 
   it('gives a screenshot a meaningful alternative text', () => {
     render(<BrowserRender url="https://x.test" format="screenshot" body="data:image/png;base64,AAA" />)
-    expect(screen.getByAltText('Screenshot of https://x.test')).toBeDefined()
+    expect(screen.getByAltText('Screenshot of https://x.test')).toBeInstanceOf(HTMLImageElement)
   })
 
   it('has no accessibility violations for text output', async () => {
@@ -164,26 +163,13 @@ describe('describeNode', () => {
   })
 })
 
-describe('countNodes', () => {
-  it('counts a single node', () => {
-    expect(countNodes({ role: 'a' })).toBe(1)
-  })
-
-  it('counts nested children', () => {
-    expect(countNodes({ role: 'a', children: [{ role: 'b' }, { role: 'c', children: [{ role: 'd' }] }] })).toBe(4)
-  })
-
-  it('treats an empty children list as a leaf', () => {
-    expect(countNodes({ role: 'a', children: [] })).toBe(1)
-  })
-})
 
 describe('AccessibilityTree', () => {
   const tree = { role: 'document', name: 'Page', children: [{ role: 'heading', name: 'Title' }] }
 
   it('names the region by the page it describes', () => {
     render(<AccessibilityTree url="https://x.test" tree={tree} />)
-    expect(screen.getByRole('region', { name: en.toolView.treeHeading('https://x.test') })).toBeDefined()
+    expect(screen.getByRole('region', { name: 'Accessibility tree for https://x.test' })).toBeInstanceOf(HTMLElement)
   })
 
   it('renders the hierarchy as nested lists, not a flat dump', () => {

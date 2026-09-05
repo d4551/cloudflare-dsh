@@ -27,10 +27,6 @@ export function describeNode(node: AxNode): string {
   return name === undefined || name === '' ? role : `${role}: ${name}`
 }
 
-/** Count every node in the tree, including the root. */
-export function countNodes(node: AxNode): number {
-  return 1 + (node.children ?? []).reduce((total, child) => total + countNodes(child), 0)
-}
 
 function TreeNode({ node }: { readonly node: AxNode }): React.JSX.Element {
   const children = node.children ?? []

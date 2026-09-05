@@ -17,8 +17,8 @@ export function json(value: unknown): ContentBlock[] {
 }
 
 /** English pluralisation for count summaries. */
-export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : pluralForm}`
+export function plural(count: number, singular: string): string {
+  return `${count} ${count === 1 ? singular : `${singular}s`}`
 }
 
 /**

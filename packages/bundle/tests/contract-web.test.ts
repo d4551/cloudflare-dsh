@@ -27,6 +27,33 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           "waitForSelector": {
             "type": "string",
             "description": "Wait for this CSS selector before inspecting."
+          },
+          "rejectResourceTypes": {
+            "type": "array",
+            "description": "Resource types to block while the page loads, for example image or script.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "document",
+                "stylesheet",
+                "image",
+                "media",
+                "font",
+                "script",
+                "texttrack",
+                "xhr",
+                "fetch",
+                "prefetch",
+                "eventsource",
+                "websocket",
+                "manifest",
+                "signedexchange",
+                "ping",
+                "cspviolationreport",
+                "preflight",
+                "other"
+              ]
+            }
           }
         },
         "required": [
@@ -68,6 +95,33 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           "waitForSelector": {
             "type": "string",
             "description": "Wait for this CSS selector before capturing."
+          },
+          "rejectResourceTypes": {
+            "type": "array",
+            "description": "Resource types to block while the page loads, for example image or script.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "document",
+                "stylesheet",
+                "image",
+                "media",
+                "font",
+                "script",
+                "texttrack",
+                "xhr",
+                "fetch",
+                "prefetch",
+                "eventsource",
+                "websocket",
+                "manifest",
+                "signedexchange",
+                "ping",
+                "cspviolationreport",
+                "preflight",
+                "other"
+              ]
+            }
           }
         },
         "required": [

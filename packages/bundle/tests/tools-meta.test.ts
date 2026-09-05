@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { json } from '../src/tools/_shared/render.ts'
 import * as metaTools from '../src/tools/meta.ts'
 import { envelope, makeHarness } from './harness.ts'
 
@@ -175,9 +176,7 @@ describe('cloudflare_api', () => {
 
   it('renders the result as JSON', () => {
     const h = harness({})
-    expect(h.tool('cloudflare_api').output.render({ method: 'GET', path: '/x' }, { result: { a: 1 } })).toEqual([
-      { type: 'text', text: '{\n  "a": 1\n}' },
-    ])
+    expect(h.tool('cloudflare_api').output.render({ method: 'GET', path: '/x' }, { result: { a: 1 } })).toEqual(json({ a: 1 }))
   })
 
   it('is not marked concurrency safe, since it can be configured to write', () => {

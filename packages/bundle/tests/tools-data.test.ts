@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { json } from '../src/tools/_shared/render.ts'
 import { CloudflareNotFoundError } from '@d4551/dsh-cloudflare-core'
 import * as dataTools from '../src/tools/data.ts'
 import { envelope, failure, makeHarness } from './harness.ts'
@@ -38,7 +39,7 @@ describe('plugin shape', () => {
     for (const name of EXPECTED_TOOLS) {
       const tool = h.tool(name)
       expect(tool.description.length).toBeGreaterThan(0)
-      expect(tool.output.schema).toBeDefined()
+      expect(tool.output.schema).toMatchObject({ type: 'object' })
     }
   })
 
@@ -251,7 +252,7 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
   it('renders the result as JSON', () => {
     const h = makeHarness(dataTools, async () => envelope([]))
     const blocks = h.tool('cloudflare_d1_query').output.render({ databaseId: 'd', sql: 's' }, { results: [] })
-    expect(blocks).toEqual([{ type: 'text', text: '{\n  "results": []\n}' }])
+    expect(blocks).toEqual(json({ results: [] }))
   })
 
   it('surfaces a SQL error from Cloudflare', async () => {

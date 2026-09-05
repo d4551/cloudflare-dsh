@@ -9,6 +9,55 @@ import type { RequestSpec } from '@d4551/dsh-cloudflare-core'
 /** Endpoints that turn a URL into content. */
 export type RenderFormat = 'markdown' | 'content' | 'links' | 'screenshot' | 'pdf' | 'scrape' | 'json'
 
+/**
+ * Resource types Browser Rendering can be told to block.
+ *
+ * The set Cloudflare's API accepts for `rejectResourceTypes`, from its
+ * published client types; the enum in the tool schema is built from it so a
+ * misspelling fails compilation rather than a request.
+ */
+type ResourceType =
+  | 'document'
+  | 'stylesheet'
+  | 'image'
+  | 'media'
+  | 'font'
+  | 'script'
+  | 'texttrack'
+  | 'xhr'
+  | 'fetch'
+  | 'prefetch'
+  | 'eventsource'
+  | 'websocket'
+  | 'manifest'
+  | 'signedexchange'
+  | 'ping'
+  | 'cspviolationreport'
+  | 'preflight'
+  | 'other'
+
+/** Every {@link ResourceType}, in the order the API documents them. */
+export const RESOURCE_TYPES: readonly ResourceType[] = [
+  'document',
+  'stylesheet',
+  'image',
+  'media',
+  'font',
+  'script',
+  'texttrack',
+  'xhr',
+  'fetch',
+  'prefetch',
+  'eventsource',
+  'websocket',
+  'manifest',
+  'signedexchange',
+  'ping',
+  'cspviolationreport',
+  'preflight',
+  'other',
+]
+
 /** Options shared by every rendering call. */
 export interface RenderOptions {
   readonly url: string

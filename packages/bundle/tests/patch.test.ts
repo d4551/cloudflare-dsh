@@ -45,7 +45,10 @@ describe('bundle manifest', () => {
 
   it('exports a subpath for every tool group the patch references', () => {
     for (const subpath of ['./tools/ai', './tools/data', './tools/web', './tools/meta']) {
-      expect(manifest.exports[subpath]).toBeDefined()
+      expect(manifest.exports[subpath]).toEqual({
+        types: `./lib${subpath.slice(1)}.d.mts`,
+        default: `./lib${subpath.slice(1)}.mjs`,
+      })
     }
   })
 })
