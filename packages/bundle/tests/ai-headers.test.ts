@@ -116,17 +116,6 @@ describe('buildGatewayHeaders', () => {
     expect(buildGatewayHeaders({}, { gatewayId })['cf-aig-gateway-id']).toBeUndefined()
   })
 
-  it('sets a custom cache key when configured', () => {
-    expect(buildGatewayHeaders({}, { cacheKey: 'k1' })['cf-aig-cache-key']).toBe('k1')
-  })
-
-  it.each([
-    ['unset', undefined],
-    ['empty', ''],
-  ])('omits the cache key when %s', (_label, cacheKey) => {
-    expect(buildGatewayHeaders({}, { cacheKey })['cf-aig-cache-key']).toBeUndefined()
-  })
-
   it('sets a gateway-side request timeout when configured', () => {
     expect(buildGatewayHeaders({}, { requestTimeoutMs: 5000 })['cf-aig-request-timeout']).toBe('5000')
   })

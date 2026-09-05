@@ -53,5 +53,8 @@ interface HarnessContext extends Context {
  */
 export function apply(ctx: Context, config: CloudflareConfig): CloudflareService {
   const harness = ctx as HarnessContext
-  return new CloudflareService(ctx, config, { credentials: harness.credentials })
+  return new CloudflareService(ctx, config, {
+    credentials: harness.credentials,
+    fetch: (request) => fetch(request),
+  })
 }

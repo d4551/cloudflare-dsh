@@ -140,8 +140,10 @@ Minimum permission groups for the shipped tools:
 > The Cloudflare dashboard labels these groups **Edit** where the API calls them
 > **Write**. Use `Write` when minting a token through the API.
 
-The account id is optional. Leave `accountId` empty and the first account the
-token can reach is discovered once and reused.
+The account id is optional when the token can reach exactly one account: it is
+discovered once and reused. A token that can reach several makes discovery
+ambiguous, so the plugin refuses to guess and asks for `accountId`, naming the
+accounts it saw.
 
 ---
 
@@ -267,6 +269,12 @@ it, and a presenter reads typed fields rather than casting.
 **Presenters are pure.** `output.render` runs during session-log replay, so it
 performs no I/O, reads no clock and uses no randomness.
 
+**Cancellation reaches Cloudflare.** `timeoutMs` on a tool is declarative — the
+registry does not interrupt a body — so every tool forwards `exec.signal` into
+its request, and a tool with a budget of its own (`inferenceTimeoutMs`,
+`renderTimeoutMs`) makes that budget the request deadline as well, so a 120 s
+inference is not cut off by the 30 s client default.
+
 ---
 
 ## How a model call flows
@@ -282,13 +290,14 @@ sequenceDiagram
     participant GW as AI Gateway / Workers AI
     participant TR as StreamTransducer
 
-    L->>AD: stream(GenerateOptions)
-    AD->>AD: buildWireRequest — reject unsupported options loudly
-    AD->>EP: resolveEndpoint(provider, model)
-    EP->>GW: GET ai-gateway gateways URL endpoint
-    Note over EP: Base URL comes from the API.<br/>Nothing hardcodes an endpoint.
-    EP-->>AD: { url, token }
-    AD->>AD: buildGatewayHeaders — cf-aig-metadata carries sessionId + purpose
+    L->>AD: prepareCall(provider, model)
+    AD->>EP: resolveEndpoint + resolveModel, once per generation
+    EP->>GW: GET ai-gateway gateways URL endpoint (first call only)
+    Note over EP: Base URL comes from the API and is<br/>remembered per plugin instance; the token never is.
+    EP-->>AD: { url, token } + model facts (context window, modalities)
+    L->>AD: prepared.stream(GenerateOptions)
+    AD->>AD: buildWireRequest — images projected to text, reasoning left out, unsupported options rejected
+    AD->>AD: attributionHeaders() first, then buildGatewayHeaders — cf-aig-metadata carries sessionId + purpose
     AD->>GW: POST chat/completions (stream, caller AbortSignal forwarded)
     loop while the stream is alive
         GW-->>AD: SSE frames
@@ -297,6 +306,7 @@ sequenceDiagram
         AD-->>L: yield chunks
     end
     GW-->>AD: data: [DONE]
+    AD->>AD: no content block opened? → EMPTY_RESPONSE
     AD->>TR: end()
     TR-->>AD: block-end… usage… finish
     AD-->>L: final chunks
@@ -330,6 +340,11 @@ stateDiagram-v2
 | `options.signal` is honoured                           | Forwarded to `fetch` unconditionally (`null` is the documented "no signal")                                                                                                                                                           |
 | A quiet stream fails as a timeout                      | Every read races the configurable idle budget                                                                                                                                                                                         |
 | Unsupported options fail loudly                        | Rejected before any request is issued                                                                                                                                                                                                 |
+| Every provider request carries attribution             | `attributionHeaders()` is the first thing set on the request; nothing after it can replace the header                                                                                                                                 |
+| A completion with no content is a failure              | `EMPTY_RESPONSE`, whether it ended with a finish reason, the `[DONE]` sentinel, or the socket; usage alone is not content                                                                                                             |
+| Every finish reason has a meaning                      | `stop`, `tool_calls` and `length` map to the harness kinds; `content_filter` and anything unknown are an `error` finish naming the reason                                                                                             |
+| Every content block has a stated fate                  | Text is sent; tool calls and results round-trip, text beside results included; images become the harness's text through its own helper; reasoning is left out, as OpenAI-compatible reasoning APIs refuse it in input                 |
+| A tool call always has an id                           | The provider's when it sends one; a deterministic `call_<index>` when it never does, since an empty id cannot be correlated with its result                                                                                           |
 
 ---
 
@@ -438,9 +453,15 @@ surfaced raw:
 | Quota exhausted                           | `QUOTA_EXCEEDED`          |
 | HTTP 429                                  | `RATE_LIMIT`              |
 | Idle beyond `streamIdleTimeoutMs`         | `TIMEOUT`                 |
-| A stream that carries no chunks at all    | `EMPTY_RESPONSE`          |
+| A completion with no content block at all | `EMPTY_RESPONSE`          |
+| A completion withheld by content policy   | `CONTENT_FILTER` (finish) |
 | Any option the wire format cannot express | `UNSUPPORTED_OPTION`      |
 | Anything else from the provider           | `PROVIDER_ERROR`          |
+
+Two adapter hooks keep the harness defaults, deliberately: `providerRetryPolicy`,
+because Cloudflare publishes no route-owned retry policy beyond the
+`retry-after` a rate-limit failure already carries, and `imageRequestPricing`,
+because Cloudflare prices vision input per token, not per image.
 
 ---
 
@@ -456,16 +477,16 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 
 ### `cloudflare` — the seam (`@d4551/dsh-cloudflare-core`)
 
-| Field              | Default                                | Meaning                                                                                                                                      |
-| ------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apiTokenRef`      | `CLOUDFLARE_API_TOKEN`                 | Credential reference — a POSIX env-var **name**, never a value                                                                               |
-| `accountId`        | `''`                                   | Account to operate on; discovered at first use when empty                                                                                    |
-| `baseUrl`          | `https://api.cloudflare.com/client/v4` | REST root; overridable for API-compatible proxies                                                                                            |
-| `requestTimeoutMs` | `30000`                                | Deadline for one attempt, aborting the request. A retry gets a fresh budget, so this caps an attempt rather than the whole retried operation |
-| `maxRetries`       | `3`                                    | Retry budget for transient failures                                                                                                          |
-| `retryBaseDelayMs` | `250`                                  | First backoff step                                                                                                                           |
-| `retryMaxDelayMs`  | `10000`                                | Backoff ceiling, and the cap applied to a server `Retry-After`                                                                               |
-| `maxPages`         | `100`                                  | Hard ceiling on pages walked by one list call                                                                                                |
+| Field              | Default                                | Meaning                                                                                                                                                                                                    |
+| ------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiTokenRef`      | `CLOUDFLARE_API_TOKEN`                 | Credential reference — a POSIX env-var **name**, never a value                                                                                                                                             |
+| `accountId`        | `''`                                   | Account to operate on; discovered at first use when empty                                                                                                                                                  |
+| `baseUrl`          | `https://api.cloudflare.com/client/v4` | REST root; overridable for API-compatible proxies                                                                                                                                                          |
+| `requestTimeoutMs` | `30000`                                | Deadline for one attempt, aborting the request. A retry gets a fresh budget, so this caps an attempt rather than the whole retried operation; a tool with a longer budget of its own passes it per request |
+| `maxRetries`       | `3`                                    | Retry budget for transient failures                                                                                                                                                                        |
+| `retryBaseDelayMs` | `250`                                  | First backoff step                                                                                                                                                                                         |
+| `retryMaxDelayMs`  | `10000`                                | Backoff ceiling, and the cap applied to a server `Retry-After`                                                                                                                                             |
+| `maxPages`         | `100`                                  | Hard ceiling on pages walked by one list call                                                                                                                                                              |
 
 ### `cloudflare-llm` — the model provider (`cloudflare-dsh/ai`)
 
@@ -484,12 +505,12 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 
 ### `cloudflare-tools-ai` (`cloudflare-dsh/tools/ai`)
 
-| Field                | Default  | Meaning                                                        |
-| -------------------- | -------- | -------------------------------------------------------------- |
-| `pageSize`           | `50`     | Default page size for the model catalogue and gateway listings |
-| `searchMaxResults`   | `10`     | Default number of chunks `cloudflare_aisearch_search` returns  |
-| `vectorTopK`         | `5`      | Default number of matches `cloudflare_vectorize_query` returns |
-| `inferenceTimeoutMs` | `120000` | Cooperative budget for tools that wait on model inference      |
+| Field                | Default  | Meaning                                                                                 |
+| -------------------- | -------- | --------------------------------------------------------------------------------------- |
+| `pageSize`           | `50`     | Default page size for the model catalogue and gateway listings                          |
+| `searchMaxResults`   | `10`     | Default number of chunks `cloudflare_aisearch_search` returns                           |
+| `vectorTopK`         | `5`      | Default number of matches `cloudflare_vectorize_query` returns                          |
+| `inferenceTimeoutMs` | `120000` | Budget for tools that wait on model inference: the tool's own, and its request deadline |
 
 ### `cloudflare-tools-data` (`cloudflare-dsh/tools/data`)
 
@@ -506,7 +527,7 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 | Field             | Default  | Meaning                                                                     |
 | ----------------- | -------- | --------------------------------------------------------------------------- |
 | `renderLimit`     | `8000`   | Characters of a rendered page or accessibility tree shown before truncation |
-| `renderTimeoutMs` | `120000` | Cooperative budget for a real browser render                                |
+| `renderTimeoutMs` | `120000` | Budget for a real browser render: the tool's own, and its request deadline  |
 
 ### `cloudflare-tools-meta` — the escape hatch (`cloudflare-dsh/tools/meta`)
 
@@ -619,9 +640,6 @@ Logpush.
 agent sandbox, so turning one on is a deliberate act by whoever owns the
 profile. Authentication is browser OAuth, which makes these useful in an
 interactive profile and unsuitable for headless runs.
-
-Only tools are bridged — MCP resources and prompts are not. Bridged tools appear
-as `mcp__<serverName>__<toolName>`.
 
 A profile opts in by adding the rows it wants to its own patch layer. The
 module builds them, so a server name is validated against the MCP client's

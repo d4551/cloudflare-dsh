@@ -12,10 +12,9 @@ describe('CLOUDFLARE_MCP_SERVERS', () => {
     }
   })
 
-  it('gives every server an https endpoint and a summary', () => {
+  it('gives every server an https endpoint', () => {
     for (const s of CLOUDFLARE_MCP_SERVERS) {
       expect(s.url.startsWith('https://')).toBe(true)
-      expect(s.summary.length).toBeGreaterThan(0)
     }
   })
 
@@ -27,7 +26,7 @@ describe('CLOUDFLARE_MCP_SERVERS', () => {
 
 describe('mcpPatchRow', () => {
   it('mounts a server through the harness MCP client', () => {
-    expect(mcpPatchRow({ serverName: 'cf-docs', url: 'https://x.test/mcp', summary: 's' })).toStrictEqual({
+    expect(mcpPatchRow({ serverName: 'cf-docs', url: 'https://x.test/mcp' })).toStrictEqual({
       id: 'mcp-cf-docs',
       name: '@deepseek-ai/dsh-mcp-client',
       config: { serverName: 'cf-docs', transport: 'streamable-http', url: 'https://x.test/mcp' },
@@ -35,23 +34,19 @@ describe('mcpPatchRow', () => {
   })
 
   it('rejects an empty server name', () => {
-    expect(() => mcpPatchRow({ serverName: '', url: 'https://x.test', summary: '' })).toThrow(TypeError)
+    expect(() => mcpPatchRow({ serverName: '', url: 'https://x.test' })).toThrow(TypeError)
   })
 
   it('rejects a server name with characters the MCP client forbids', () => {
-    expect(() => mcpPatchRow({ serverName: 'bad name', url: 'https://x.test', summary: '' })).toThrow(
-      /must match/,
-    )
+    expect(() => mcpPatchRow({ serverName: 'bad name', url: 'https://x.test' })).toThrow(/must match/)
   })
 
   it('rejects a server name longer than 32 characters', () => {
-    expect(() => mcpPatchRow({ serverName: 'a'.repeat(33), url: 'https://x.test', summary: '' })).toThrow(
-      TypeError,
-    )
+    expect(() => mcpPatchRow({ serverName: 'a'.repeat(33), url: 'https://x.test' })).toThrow(TypeError)
   })
 
   it('accepts a server name of exactly 32 characters', () => {
-    expect(mcpPatchRow({ serverName: 'a'.repeat(32), url: 'https://x.test', summary: '' }).id).toBe(
+    expect(mcpPatchRow({ serverName: 'a'.repeat(32), url: 'https://x.test' }).id).toBe(
       `mcp-${'a'.repeat(32)}`,
     )
   })

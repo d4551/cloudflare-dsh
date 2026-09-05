@@ -117,10 +117,12 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
       },
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,
-      async execute(args) {
-        const body = await cf.accountRequest<JsonValue>(
-          browserRenderSpec(args.format, renderOptionsFrom(args)),
-        )
+      async execute(args, exec) {
+        const body = await cf.accountRequest<JsonValue>({
+          ...browserRenderSpec(args.format, renderOptionsFrom(args)),
+          signal: exec.signal,
+          timeoutMs: config.renderTimeoutMs,
+        })
         return { url: args.url, format: args.format, body }
       },
     }),
@@ -163,8 +165,12 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
       },
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,
-      async execute(args) {
-        const tree = await cf.accountRequest<JsonValue>(accessibilityTreeSpec(renderOptionsFrom(args)))
+      async execute(args, exec) {
+        const tree = await cf.accountRequest<JsonValue>({
+          ...accessibilityTreeSpec(renderOptionsFrom(args)),
+          signal: exec.signal,
+          timeoutMs: config.renderTimeoutMs,
+        })
         return { url: args.url, tree }
       },
     }),

@@ -51,6 +51,14 @@ export interface DataToolsConfig {
   queueVisibilityTimeoutMs: number
 }
 
+/** Raised when a bulk operation names nothing: the request would do nothing and report success. */
+export class EmptyBatchError extends RangeError {
+  override readonly name = 'EmptyBatchError'
+  constructor(field: string) {
+    super(`${field} must name at least one item; an empty request would do nothing`)
+  }
+}
+
 export const Config: Schema<Partial<DataToolsConfig>, DataToolsConfig> = Schema.object({
   pageSize: Schema.natural().min(1).default(50),
   keyListLimit: Schema.natural().min(1).default(1000),
@@ -86,10 +94,11 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         render: (_args, value) => listing(value.namespaces.length, 'namespace', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const namespaces = await cf.accountRequest<Record<string, JsonValue>[]>(
-          kvNamespaceListSpec(args.perPage ?? config.pageSize),
-        )
+      async execute(args, exec) {
+        const namespaces = await cf.accountRequest<Record<string, JsonValue>[]>({
+          ...kvNamespaceListSpec(args.perPage ?? config.pageSize),
+          signal: exec.signal,
+        })
         return { namespaces }
       },
     }),
@@ -136,13 +145,14 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         render: (_args, value) => listing(value.keys.length, 'key', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
+      async execute(args, exec) {
         // The envelope, not just its result: `result_info.cursor` is the paging
         // state this tool exists to hand back. The API ends a listing by
         // omitting the cursor (or sending an empty one).
-        const page = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>(
-          kvListKeysSpec(args.namespaceId, args.prefix, args.limit ?? config.keyListLimit, args.cursor),
-        )
+        const page = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+          ...kvListKeysSpec(args.namespaceId, args.prefix, args.limit ?? config.keyListLimit, args.cursor),
+          signal: exec.signal,
+        })
         const raw = page.result_info?.cursor
         if (raw !== undefined && typeof raw !== 'string') {
           throw new TypeError(`KV result_info.cursor must be a string, got ${typeof raw}`)
@@ -174,8 +184,9 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         render: (args, value) => text(`${args.key}\n${truncate(value.value, config.renderLimit)}`),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
+      async execute(args, exec) {
         const value = await cf.accountRequestText({
+          signal: exec.signal,
           method: 'GET',
           path: kvValuePath(args.namespaceId, args.key),
         })
@@ -215,9 +226,13 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
         render: (_args, value) => text(`Wrote ${value.written} key/value pairs.`),
       },
-      async execute(args) {
+      async execute(args, exec) {
         const entries = args.entries
-        await cf.accountRequest<JsonValue>(kvBulkPutSpec(args.namespaceId, entries))
+        if (entries.length === 0) throw new EmptyBatchError('entries')
+        await cf.accountRequest<JsonValue>({
+          ...kvBulkPutSpec(args.namespaceId, entries),
+          signal: exec.signal,
+        })
         return { written: entries.length }
       },
     }),
@@ -245,13 +260,14 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
         render: (_args, value) => text(`Deleted ${value.deleted} keys.`),
       },
-      async execute(args) {
+      async execute(args, exec) {
         const keys = args.keys
+        if (keys.length === 0) throw new EmptyBatchError('keys')
         const spec =
           keys.length === 1
             ? kvDeleteSpec(args.namespaceId, keys[0]!)
             : kvBulkDeleteSpec(args.namespaceId, keys)
-        await cf.accountRequest<JsonValue>(spec)
+        await cf.accountRequest<JsonValue>({ ...spec, signal: exec.signal })
         return { deleted: keys.length }
       },
     }),
@@ -281,10 +297,11 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         render: (_args, value) => listing(value.databases.length, 'database', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const databases = await cf.accountRequest<Record<string, JsonValue>[]>(
-          d1ListSpec(args.perPage ?? config.pageSize),
-        )
+      async execute(args, exec) {
+        const databases = await cf.accountRequest<Record<string, JsonValue>[]>({
+          ...d1ListSpec(args.perPage ?? config.pageSize),
+          signal: exec.signal,
+        })
         return { databases }
       },
     }),
@@ -315,10 +332,11 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
         render: (_args, value) => json(value),
       },
-      async execute(args) {
-        const results = await cf.accountRequest<JsonValue>(
-          d1QuerySpec(args.databaseId, args.sql, args.params ?? []),
-        )
+      async execute(args, exec) {
+        const results = await cf.accountRequest<JsonValue>({
+          ...d1QuerySpec(args.databaseId, args.sql, args.params ?? []),
+          signal: exec.signal,
+        })
         return { results }
       },
     }),
@@ -348,10 +366,11 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         render: (_args, value) => listing(value.queues.length, 'queue', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const queues = await cf.accountRequest<Record<string, JsonValue>[]>(
-          queueListSpec(args.perPage ?? config.pageSize),
-        )
+      async execute(args, exec) {
+        const queues = await cf.accountRequest<Record<string, JsonValue>[]>({
+          ...queueListSpec(args.perPage ?? config.pageSize),
+          signal: exec.signal,
+        })
         return { queues }
       },
     }),
@@ -380,8 +399,8 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
         render: () => text('Message queued.'),
       },
-      async execute(args) {
-        await cf.accountRequest<JsonValue>(queueSendSpec(args.queueId, args.body))
+      async execute(args, exec) {
+        await cf.accountRequest<JsonValue>({ ...queueSendSpec(args.queueId, args.body), signal: exec.signal })
         return { queued: true }
       },
     }),
@@ -416,14 +435,15 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
         render: (_args, value) => listing(value.messages.length, 'message', value),
       },
-      async execute(args) {
-        const result = await cf.accountRequest<{ messages?: Record<string, JsonValue>[] }>(
-          queuePullSpec(
+      async execute(args, exec) {
+        const result = await cf.accountRequest<{ messages?: Record<string, JsonValue>[] }>({
+          ...queuePullSpec(
             args.queueId,
             args.batchSize ?? config.queueBatchSize,
             args.visibilityTimeoutMs ?? config.queueVisibilityTimeoutMs,
           ),
-        )
+          signal: exec.signal,
+        })
         return { messages: result.messages ?? [] }
       },
     }),
@@ -453,10 +473,14 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
           return text(`Acknowledged ${value.acked}, retried ${value.retried}.`)
         },
       },
-      async execute(args) {
+      async execute(args, exec) {
         const acks = args.acks ?? []
         const retries = args.retries ?? []
-        await cf.accountRequest<JsonValue>(queueAckSpec(args.queueId, acks, retries))
+        if (acks.length + retries.length === 0) throw new EmptyBatchError('acks or retries')
+        await cf.accountRequest<JsonValue>({
+          ...queueAckSpec(args.queueId, acks, retries),
+          signal: exec.signal,
+        })
         return { acked: acks.length, retried: retries.length }
       },
     }),
@@ -486,10 +510,11 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         render: (_args, value) => listing(value.buckets.length, 'bucket', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const result = await cf.accountRequest<{ buckets?: Record<string, JsonValue>[] }>(
-          r2BucketListSpec(args.perPage ?? config.pageSize),
-        )
+      async execute(args, exec) {
+        const result = await cf.accountRequest<{ buckets?: Record<string, JsonValue>[] }>({
+          ...r2BucketListSpec(args.perPage ?? config.pageSize),
+          signal: exec.signal,
+        })
         return { buckets: result.buckets ?? [] }
       },
     }),
@@ -517,8 +542,11 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
         render: (args) => text(`Created R2 bucket ${args.name}.`),
       },
-      async execute(args) {
-        const bucket = await cf.accountRequest<JsonValue>(r2BucketCreateSpec(args.name, args.locationHint))
+      async execute(args, exec) {
+        const bucket = await cf.accountRequest<JsonValue>({
+          ...r2BucketCreateSpec(args.name, args.locationHint),
+          signal: exec.signal,
+        })
         return { bucket }
       },
     }),

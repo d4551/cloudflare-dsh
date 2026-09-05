@@ -172,6 +172,14 @@ describe('cloudflare_kv_get, when the edge answers instead of the API', () => {
 })
 
 describe('cloudflare_kv_put', () => {
+  it('refuses an empty batch rather than issuing a request that does nothing', async () => {
+    const h = makeHarness(dataTools, async () => envelope(null))
+    await expect(h.run('cloudflare_kv_put', { namespaceId: 'n', entries: [] })).rejects.toThrow(
+      'entries must name at least one item; an empty request would do nothing',
+    )
+    expect(h.requests).toHaveLength(0)
+  })
+
   it('writes pairs through the bulk endpoint and reports the count', async () => {
     const h = makeHarness(dataTools, async () => envelope(null))
     await expect(
@@ -195,6 +203,14 @@ describe('cloudflare_kv_put', () => {
 })
 
 describe('cloudflare_kv_delete', () => {
+  it('refuses an empty batch rather than issuing a request that does nothing', async () => {
+    const h = makeHarness(dataTools, async () => envelope(null))
+    await expect(h.run('cloudflare_kv_delete', { namespaceId: 'n', keys: [] })).rejects.toThrow(
+      'keys must name at least one item; an empty request would do nothing',
+    )
+    expect(h.requests).toHaveLength(0)
+  })
+
   it('uses the single-key endpoint for one key', async () => {
     const h = makeHarness(dataTools, async () => envelope(null))
     await expect(h.run('cloudflare_kv_delete', { namespaceId: 'n1', keys: ['a'] })).resolves.toEqual({
@@ -211,14 +227,6 @@ describe('cloudflare_kv_delete', () => {
     })
     expect(h.requests[0]!.method).toBe('POST')
     expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/storage/kv/namespaces/n1/bulk/delete')
-  })
-
-  it('uses the bulk endpoint for an empty list rather than a malformed single delete', async () => {
-    const h = makeHarness(dataTools, async () => envelope(null))
-    await expect(h.run('cloudflare_kv_delete', { namespaceId: 'n1', keys: [] })).resolves.toEqual({
-      deleted: 0,
-    })
-    expect(h.requests[0]!.url).toContain('/bulk/delete')
   })
 
   it('renders how many keys were deleted', () => {
@@ -341,6 +349,14 @@ describe('queue tools', () => {
     ])
   })
 
+  it('refuses a settlement that names no lease, rather than posting an empty one', async () => {
+    const h = makeHarness(dataTools, async () => envelope(null))
+    await expect(h.run('cloudflare_queue_ack', { queueId: 'q' })).rejects.toThrow(
+      'acks or retries must name at least one item; an empty request would do nothing',
+    )
+    expect(h.requests).toHaveLength(0)
+  })
+
   it('acknowledges and retries by lease id', async () => {
     const h = makeHarness(dataTools, async () => envelope(null))
     await expect(
@@ -349,11 +365,6 @@ describe('queue tools', () => {
     await expect(h.requests[0]!.text()).resolves.toBe(
       '{"acks":[{"lease_id":"l1"}],"retries":[{"lease_id":"l2"}]}',
     )
-  })
-
-  it('defaults both lease lists to empty', async () => {
-    const h = makeHarness(dataTools, async () => envelope(null))
-    await expect(h.run('cloudflare_queue_ack', { queueId: 'q1' })).resolves.toEqual({ acked: 0, retried: 0 })
   })
 
   it('renders acknowledgement counts', () => {

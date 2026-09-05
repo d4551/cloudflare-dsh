@@ -111,10 +111,22 @@ describe('cloudflare_api', () => {
     expect(h.requests[0]!.url).toBe('https://api.test/v4/zones?per_page=5')
   })
 
-  it('refuses a mutating method while read-only, without issuing a request', async () => {
+  it('offers the model only GET and HEAD while read-only', () => {
+    expect(harness({}).tool('cloudflare_api').parameters).toMatchObject({
+      properties: { method: { enum: ['GET', 'HEAD'] } },
+    })
+  })
+
+  it('offers every method once mutations are permitted', () => {
+    expect(harness({ allowMutations: true }).tool('cloudflare_api').parameters).toMatchObject({
+      properties: { method: { enum: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] } },
+    })
+  })
+
+  it('refuses a mutating method while read-only at the schema, without issuing a request', async () => {
     const h = harness({}, async () => envelope(null))
     await expect(h.run('cloudflare_api', { method: 'DELETE', path: '/zones/z1' })).rejects.toThrow(
-      /configured read-only/,
+      'invalid arguments: "method" must be one of ["GET","HEAD"]',
     )
     expect(h.requests).toHaveLength(0)
   })

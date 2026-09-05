@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { nextCursorQuery, nextPageQuery, paginate } from '../src/paginate.ts'
+import { type NextPageQuery, nextPageQuery, paginate } from '../src/paginate.ts'
 import type { CloudflareEnvelope } from '../src/types.ts'
 
 function page<T>(
@@ -7,29 +7,15 @@ function page<T>(
   info?: CloudflareEnvelope['result_info'],
 ): CloudflareEnvelope<readonly T[]> {
   return info === undefined
-    ? { success: true, errors: [], messages: [], result }
-    : { success: true, errors: [], messages: [], result, result_info: info }
+    ? { success: true, errors: [], result }
+    : { success: true, errors: [], result, result_info: info }
 }
 
-describe('nextCursorQuery', () => {
-  it('returns the cursor overlay when one is present', () => {
-    expect(nextCursorQuery({ result_info: { cursor: 'abc' } })).toEqual({
-      cursor: 'abc',
-    })
-  })
-
-  it('stops on an empty cursor', () => {
-    expect(nextCursorQuery({ result_info: { cursor: '' } })).toBeNull()
-  })
-
-  it('stops when the cursor key is absent', () => {
-    expect(nextCursorQuery({ result_info: { page: 1 } })).toBeNull()
-  })
-
-  it('stops when result_info is absent', () => {
-    expect(nextCursorQuery({})).toBeNull()
-  })
-})
+/** A cursor stepper for the walk tests: the walk is under test here, not any production stepper. */
+const byCursor = (envelope: Pick<CloudflareEnvelope, 'result_info'>): NextPageQuery => {
+  const cursor = envelope.result_info?.cursor
+  return cursor === undefined || cursor === '' ? null : { cursor }
+}
 
 describe('nextPageQuery', () => {
   it('advances to the next page', () => {
@@ -91,7 +77,7 @@ describe('paginate', () => {
     const pages = [page(['a'], { cursor: 'c1' }), page(['b'], { cursor: '' })]
     let i = 0
     const fetchPage = vi.fn(async () => pages[i++]!)
-    await expect(paginate(fetchPage, nextCursorQuery, 10)).resolves.toMatchObject({ items: ['a', 'b'] })
+    await expect(paginate(fetchPage, byCursor, 10)).resolves.toMatchObject({ items: ['a', 'b'] })
     expect(fetchPage).toHaveBeenNthCalledWith(2, { cursor: 'c1' })
   })
 
@@ -103,7 +89,7 @@ describe('paginate', () => {
 
   it('reports truncation when the ceiling stops a walk the server would continue', async () => {
     const fetchPage = vi.fn(async () => page(['x'], { cursor: 'always' }))
-    await expect(paginate(fetchPage, nextCursorQuery, 3)).resolves.toEqual({
+    await expect(paginate(fetchPage, byCursor, 3)).resolves.toEqual({
       items: ['x', 'x', 'x'],
       pages: 3,
       truncated: true,
@@ -113,7 +99,7 @@ describe('paginate', () => {
   it('reports no truncation when the data simply ran out', async () => {
     const pages = [page(['a'], { cursor: 'c1' }), page(['b'], { cursor: '' })]
     let i = 0
-    await expect(paginate(async () => pages[i++]!, nextCursorQuery, 10)).resolves.toEqual({
+    await expect(paginate(async () => pages[i++]!, byCursor, 10)).resolves.toEqual({
       items: ['a', 'b'],
       pages: 2,
       truncated: false,
@@ -125,7 +111,7 @@ describe('paginate', () => {
     // offered a further page for the result to be partial.
     const pages = [page(['a'], { cursor: 'c1' }), page(['b'], { cursor: '' })]
     let i = 0
-    await expect(paginate(async () => pages[i++]!, nextCursorQuery, 2)).resolves.toMatchObject({
+    await expect(paginate(async () => pages[i++]!, byCursor, 2)).resolves.toMatchObject({
       pages: 2,
       truncated: false,
     })
@@ -137,7 +123,7 @@ describe('paginate', () => {
     let i = 0
     const stepper = (env: CloudflareEnvelope<readonly unknown[]>, count: number) => {
       seen.push(count)
-      return nextCursorQuery(env)
+      return byCursor(env)
     }
     await paginate(async () => pages[i++]!, stepper, 10)
     expect(seen).toEqual([2, 3])

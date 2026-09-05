@@ -98,8 +98,12 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => json(value.output),
       },
       timeoutMs: config.inferenceTimeoutMs,
-      async execute(args) {
-        const output = await cf.accountRequest<JsonValue>(aiRunSpec(args.model, args.input))
+      async execute(args, exec) {
+        const output = await cf.accountRequest<JsonValue>({
+          ...aiRunSpec(args.model, args.input),
+          signal: exec.signal,
+          timeoutMs: config.inferenceTimeoutMs,
+        })
         return { model: args.model, output }
       },
     }),
@@ -131,10 +135,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => listing(value.models.length, 'model', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const models = await cf.accountRequest<Record<string, JsonValue>[]>(
-          aiModelsSearchSpec(args.search, args.task, args.perPage ?? config.pageSize),
-        )
+      async execute(args, exec) {
+        const models = await cf.accountRequest<Record<string, JsonValue>[]>({
+          ...aiModelsSearchSpec(args.search, args.task, args.perPage ?? config.pageSize),
+          signal: exec.signal,
+        })
         return { models }
       },
     }),
@@ -163,8 +168,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => json(value.schema),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const schema = await cf.accountRequest<JsonValue>(aiModelSchemaSpec(args.model))
+      async execute(args, exec) {
+        const schema = await cf.accountRequest<JsonValue>({
+          ...aiModelSchemaSpec(args.model),
+          signal: exec.signal,
+        })
         return { model: args.model, schema }
       },
     }),
@@ -194,10 +202,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => listing(value.gateways.length, 'gateway', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const gateways = await cf.accountRequest<Record<string, JsonValue>[]>(
-          gatewayListSpec(args.perPage ?? config.pageSize),
-        )
+      async execute(args, exec) {
+        const gateways = await cf.accountRequest<Record<string, JsonValue>[]>({
+          ...gatewayListSpec(args.perPage ?? config.pageSize),
+          signal: exec.signal,
+        })
         return { gateways }
       },
     }),
@@ -225,8 +234,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => json(value.gateway),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const gateway = await cf.accountRequest<Record<string, JsonValue>>(gatewayGetSpec(args.gatewayId))
+      async execute(args, exec) {
+        const gateway = await cf.accountRequest<Record<string, JsonValue>>({
+          ...gatewayGetSpec(args.gatewayId),
+          signal: exec.signal,
+        })
         return { gateway }
       },
     }),
@@ -283,12 +295,13 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => listing(value.logs.length, 'log entry', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
+      async execute(args, exec) {
         const page = args.page ?? 1
         const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
-        const logs = await cf.accountRequest<Record<string, JsonValue>[]>(
-          gatewayLogsSpec(args.gatewayId, page, perPage, args.filters ?? []),
-        )
+        const logs = await cf.accountRequest<Record<string, JsonValue>[]>({
+          ...gatewayLogsSpec(args.gatewayId, page, perPage, args.filters ?? []),
+          signal: exec.signal,
+        })
         return { logs, page, perPage, complete: logs.length < perPage }
       },
     }),
@@ -324,10 +337,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => json(value.body),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const body = await cf.accountRequest<JsonValue>(
-          gatewayLogBodySpec(args.gatewayId, args.logId, args.part as 'request' | 'response'),
-        )
+      async execute(args, exec) {
+        const body = await cf.accountRequest<JsonValue>({
+          ...gatewayLogBodySpec(args.gatewayId, args.logId, args.part),
+          signal: exec.signal,
+        })
         return { body }
       },
     }),
@@ -355,10 +369,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => listing(value.routes.length, 'route', value),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const routes = await cf.accountRequest<Record<string, JsonValue>[]>(
-          gatewayRouteListSpec(args.gatewayId),
-        )
+      async execute(args, exec) {
+        const routes = await cf.accountRequest<Record<string, JsonValue>[]>({
+          ...gatewayRouteListSpec(args.gatewayId),
+          signal: exec.signal,
+        })
         return { routes }
       },
     }),
@@ -399,8 +414,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => json(value.billing),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const billing = await cf.accountRequest<JsonValue>(gatewayBillingSpec(args.view))
+      async execute(args, exec) {
+        const billing = await cf.accountRequest<JsonValue>({
+          ...gatewayBillingSpec(args.view),
+          signal: exec.signal,
+        })
         return { view: args.view, billing }
       },
     }),
@@ -431,10 +449,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => json(value.results),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const results = await cf.accountRequest<JsonValue>(
-          aiSearchSearchSpec(args.instanceId, args.query, args.maxResults ?? config.searchMaxResults),
-        )
+      async execute(args, exec) {
+        const results = await cf.accountRequest<JsonValue>({
+          ...aiSearchSearchSpec(args.instanceId, args.query, args.maxResults ?? config.searchMaxResults),
+          signal: exec.signal,
+        })
         return { results }
       },
     }),
@@ -465,10 +484,12 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => json(value.answer),
       },
       timeoutMs: config.inferenceTimeoutMs,
-      async execute(args) {
-        const answer = await cf.accountRequest<JsonValue>(
-          aiSearchChatSpec(args.instanceId, args.query, args.model),
-        )
+      async execute(args, exec) {
+        const answer = await cf.accountRequest<JsonValue>({
+          ...aiSearchChatSpec(args.instanceId, args.query, args.model),
+          signal: exec.signal,
+          timeoutMs: config.inferenceTimeoutMs,
+        })
         return { answer }
       },
     }),
@@ -492,8 +513,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         },
         render: (_args, value) => json(value.job),
       },
-      async execute(args) {
-        const job = await cf.accountRequest<JsonValue>(aiSearchSyncSpec(args.instanceId))
+      async execute(args, exec) {
+        const job = await cf.accountRequest<JsonValue>({
+          ...aiSearchSyncSpec(args.instanceId),
+          signal: exec.signal,
+        })
         return { job }
       },
     }),
@@ -521,8 +545,11 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => listing(value.indexes.length, 'index', value),
       },
       isConcurrencySafe: () => true,
-      async execute() {
-        const indexes = await cf.accountRequest<Record<string, JsonValue>[]>(vectorizeIndexListSpec())
+      async execute(_args, exec) {
+        const indexes = await cf.accountRequest<Record<string, JsonValue>[]>({
+          ...vectorizeIndexListSpec(),
+          signal: exec.signal,
+        })
         return { indexes }
       },
     }),
@@ -556,16 +583,17 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         render: (_args, value) => json(value.matches),
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        const matches = await cf.accountRequest<JsonValue>(
-          vectorizeQuerySpec(
+      async execute(args, exec) {
+        const matches = await cf.accountRequest<JsonValue>({
+          ...vectorizeQuerySpec(
             args.indexName,
             args.vector,
             args.topK ?? config.vectorTopK,
             args.returnValues ?? false,
             args.returnMetadata ?? true,
           ),
-        )
+          signal: exec.signal,
+        })
         return { matches }
       },
     }),
@@ -633,15 +661,18 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         },
       },
       isConcurrencySafe: () => true,
-      async execute(args) {
+      async execute(args, exec) {
         const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
         const walk = await cf.accountListAll<Record<string, JsonValue>>(
-          gatewayLogsSpec(
-            args.gatewayId,
-            1,
-            perPage,
-            sessionLogFilters(args.sessionId, SESSION_METADATA_KEY),
-          ),
+          {
+            ...gatewayLogsSpec(
+              args.gatewayId,
+              1,
+              perPage,
+              sessionLogFilters(args.sessionId, SESSION_METADATA_KEY),
+            ),
+            signal: exec.signal,
+          },
           nextPageQuery,
         )
         // The server filter is sent, and every row is re-checked here against

@@ -7,13 +7,13 @@
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import { CloudflareClient, type FetchLike } from './client.ts'
+import { CloudflareClient, type FetchLike, realSleep } from './client.ts'
 import type { CloudflareConfig } from './config.ts'
 import type { CredentialResolver } from './credentials.ts'
 import { CloudflareError } from './errors.ts'
 import { nextPageQuery, type PageStepper, type PageWalk } from './paginate.ts'
 import { makeScope, scopedPath } from './scope.ts'
-import type { CloudflareEnvelope, RequestSpec, Scope, ScopeKind } from './types.ts'
+import type { CloudflareEnvelope, RequestSpec, Scope } from './types.ts'
 
 /** One account as returned by `GET /accounts`. */
 export interface CloudflareAccount {
@@ -24,7 +24,7 @@ export interface CloudflareAccount {
 /** Collaborators the service needs beyond its config. */
 export interface CloudflareServiceDeps {
   readonly credentials: CredentialResolver
-  readonly fetch?: FetchLike
+  readonly fetch: FetchLike
 }
 
 /**
@@ -88,17 +88,23 @@ export class CloudflareService extends Service {
       },
       maxPages: config.maxPages,
       requestTimeoutMs: config.requestTimeoutMs,
-      fetch: deps.fetch ?? ((request) => fetch(request)),
+      fetch: deps.fetch,
+      sleep: realSleep,
+      random: Math.random,
     })
   }
 
-  /** Every account the token can see, up to the page ceiling; `truncated` says whether the ceiling cut the list. */
-  async listAccounts(): Promise<{ accounts: CloudflareAccount[]; truncated: boolean }> {
+  /**
+   * Every account the token can see, up to the page ceiling; `truncated` says
+   * whether the ceiling cut the list. The caller's signal, when given, cancels
+   * the walk.
+   */
+  async listAccounts(signal?: AbortSignal): Promise<{ accounts: CloudflareAccount[]; truncated: boolean }> {
     // `/accounts` is page-numbered, not cursor-paginated. Walking it with the
     // cursor stepper stopped after the first page, and the walk was reported as
     // "every account the token can see".
     const walk = await this.client.listAll<CloudflareAccount>(
-      { method: 'GET', path: '/accounts', query: { per_page: ACCOUNTS_MAX_PAGE_SIZE } },
+      { method: 'GET', path: '/accounts', query: { per_page: ACCOUNTS_MAX_PAGE_SIZE }, signal },
       nextPageQuery,
     )
     return { accounts: walk.items, truncated: walk.truncated }
@@ -111,10 +117,10 @@ export class CloudflareService extends Service {
    * and remembered for the life of the plugin instance — this is discovery,
    * not a credential, so caching it is safe.
    */
-  async accountId(): Promise<string> {
+  async accountId(signal?: AbortSignal): Promise<string> {
     const known = this.resolvedAccountId
     if (known !== undefined) return known
-    const { accounts, truncated } = await this.listAccounts()
+    const { accounts, truncated } = await this.listAccounts(signal)
     const first = accounts[0]
     if (first === undefined) throw new CloudflareNoAccountError()
     // Adopting one of several accounts silently would point every later request
@@ -124,19 +130,14 @@ export class CloudflareService extends Service {
     return first.id
   }
 
-  /** The account scope, resolving the account id if needed. */
-  async accountScope(): Promise<Scope> {
-    return makeScope('account', await this.accountId())
-  }
-
-  /** Build a scope of the given kind. */
-  scope(kind: ScopeKind, id: string): Scope {
-    return makeScope(kind, id)
+  /** The account scope, resolving the account id if needed, under the caller's signal. */
+  async accountScope(signal?: AbortSignal): Promise<Scope> {
+    return makeScope(await this.accountId(signal))
   }
 
   /** Issue an account-scoped request, resolving the account id first. */
   async accountRequest<T>(spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<T> {
-    const scope = await this.accountScope()
+    const scope = await this.accountScope(spec.signal)
     return this.client.request<T>({ ...spec, path: scopedPath(scope, spec.path) })
   }
 
@@ -149,7 +150,7 @@ export class CloudflareService extends Service {
   async accountRequestEnvelope<T>(
     spec: Omit<RequestSpec, 'path'> & { path: string },
   ): Promise<CloudflareEnvelope<T>> {
-    const scope = await this.accountScope()
+    const scope = await this.accountScope(spec.signal)
     return this.client.requestEnvelope<T>({ ...spec, path: scopedPath(scope, spec.path) })
   }
 
@@ -159,11 +160,10 @@ export class CloudflareService extends Service {
    * See `CloudflareClient.requestText` for why a few endpoints need this.
    */
   async accountRequestText(spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<string> {
-    const scope = await this.accountScope()
+    const scope = await this.accountScope(spec.signal)
     return this.client.requestText({ ...spec, path: scopedPath(scope, spec.path) })
   }
 
-  /** Issue a request against an explicit scope. */
   /**
    * Walk every page of an account-scoped list endpoint.
    *
@@ -174,11 +174,7 @@ export class CloudflareService extends Service {
     spec: Omit<RequestSpec, 'path'> & { path: string },
     step: PageStepper,
   ): Promise<PageWalk<T>> {
-    const scope = await this.accountScope()
+    const scope = await this.accountScope(spec.signal)
     return this.client.listAll<T>({ ...spec, path: scopedPath(scope, spec.path) }, step)
-  }
-
-  async scopedRequest<T>(scope: Scope, spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<T> {
-    return this.client.request<T>({ ...spec, path: scopedPath(scope, spec.path) })
   }
 }

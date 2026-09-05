@@ -20,8 +20,8 @@ function json(body: unknown, status = 200): Response {
 
 function ok<T>(result: T, info?: CloudflareEnvelope['result_info']): CloudflareEnvelope<T> {
   return info === undefined
-    ? { success: true, errors: [], messages: [], result }
-    : { success: true, errors: [], messages: [], result, result_info: info }
+    ? { success: true, errors: [], result }
+    : { success: true, errors: [], result, result_info: info }
 }
 
 function build(
@@ -82,6 +82,32 @@ describe('CloudflareService.listAccounts', () => {
     await expect(service.listAccounts()).resolves.toMatchObject({
       truncated: true,
     })
+  })
+})
+
+describe('CloudflareService, under a caller signal', () => {
+  /** A fetch that behaves as the platform's does for a request that is already cancelled. */
+  const honouring = async (request: Request): Promise<Response> => {
+    if (request.signal.aborted) throw request.signal.reason
+    return json(ok([{ id: 'a1', name: 'One' }]))
+  }
+
+  it('cancels the accounts walk', async () => {
+    const { service } = build({}, honouring)
+    const controller = new AbortController()
+    controller.abort()
+    await expect(service.listAccounts(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('carries the request signal into account discovery', async () => {
+    const { service, requests } = build({}, honouring)
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      service.accountRequest({ method: 'GET', path: '/x', signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.url).toBe('https://api.test/v4/accounts?per_page=50')
   })
 })
 
@@ -190,24 +216,7 @@ describe('CloudflareService.accountId', () => {
 describe('CloudflareService scoping', () => {
   it('builds an account scope from the resolved id', async () => {
     const { service } = build({ accountId: 'a9' })
-    await expect(service.accountScope()).resolves.toEqual({
-      kind: 'account',
-      id: 'a9',
-    })
-  })
-
-  it('builds an explicit scope of either kind', () => {
-    const { service } = build({ accountId: 'a9' })
-    expect(service.scope('zone', 'z1')).toEqual({ kind: 'zone', id: 'z1' })
-    expect(service.scope('account', 'a1')).toEqual({
-      kind: 'account',
-      id: 'a1',
-    })
-  })
-
-  it('rejects an empty scope id', () => {
-    const { service } = build({ accountId: 'a9' })
-    expect(() => service.scope('zone', '')).toThrow(TypeError)
+    await expect(service.accountScope()).resolves.toEqual({ id: 'a9' })
   })
 })
 
@@ -232,12 +241,6 @@ describe('CloudflareService requests', () => {
       }),
     ).resolves.toBe('raw')
     expect(requests[0]!.url).toBe('https://api.test/v4/accounts/a9/storage/kv/namespaces/n/values/k')
-  })
-
-  it('prefixes an explicitly scoped path', async () => {
-    const { service, requests } = build({ accountId: 'a9' }, async () => json(ok(null)))
-    await service.scopedRequest({ kind: 'zone', id: 'z2' }, { method: 'GET', path: '/dns_records' })
-    expect(requests[0]!.url).toBe('https://api.test/v4/zones/z2/dns_records')
   })
 
   it('carries method and body through to the request', async () => {
@@ -315,20 +318,8 @@ describe('CloudflareService lifecycle', () => {
     const ctx = new Context()
     const service = new CloudflareService(ctx, CloudflareConfig({}), {
       credentials,
+      fetch: async () => json(ok(null)),
     })
     expect(service.name).toBe('cloudflare')
-  })
-
-  it('falls back to the global fetch when none is injected', async () => {
-    const globalFetch = vi.fn(async () => json(ok({ via: 'global' })))
-    vi.stubGlobal('fetch', globalFetch)
-    try {
-      const ctx = new Context()
-      const service = new CloudflareService(ctx, CloudflareConfig({ accountId: 'a1' }), { credentials })
-      await expect(service.accountRequest({ method: 'GET', path: '/x' })).resolves.toEqual({ via: 'global' })
-      expect(globalFetch).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.unstubAllGlobals()
-    }
   })
 })

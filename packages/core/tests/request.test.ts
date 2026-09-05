@@ -121,25 +121,6 @@ describe('buildHeaders', () => {
     expect(buildHeaders({ token: 't', hasBody: true }).get('content-type')).toBe('application/json')
     expect(buildHeaders({ token: 't', hasBody: false }).get('content-type')).toBeNull()
   })
-
-  it('includes extra headers', () => {
-    expect(buildHeaders({ token: 't', hasBody: false, extra: { 'cf-x': '1' } }).get('cf-x')).toBe('1')
-  })
-
-  it('never lets an extra header displace the resolved credential', () => {
-    const h = buildHeaders({
-      token: 'real',
-      hasBody: false,
-      extra: { authorization: 'Bearer spoofed' },
-    })
-    expect(h.get('authorization')).toBe('Bearer real')
-  })
-
-  it('tolerates an undefined extra map', () => {
-    expect(buildHeaders({ token: 't', hasBody: false, extra: undefined }).get('accept')).toBe(
-      'application/json',
-    )
-  })
 })
 
 describe('buildRequest', () => {
@@ -193,15 +174,6 @@ describe('buildRequest', () => {
       token: 't',
     })
     expect(req.url).toBe(`${base}/x?per_page=50`)
-  })
-
-  it('applies spec headers', () => {
-    const req = buildRequest({
-      baseUrl: base,
-      spec: { method: 'GET', path: '/x', headers: { 'cf-aig-metadata': '{}' } },
-      token: 't',
-    })
-    expect(req.headers.get('cf-aig-metadata')).toBe('{}')
   })
 })
 

@@ -1,7 +1,8 @@
+import { attributionHeaders } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it, vi } from 'vitest'
 import { CloudflareAiAdapter, readErrorDetail } from '../src/ai/adapter.ts'
-import { PROVIDER_ERROR_CODE, RATE_LIMIT_CODE, TIMEOUT_CODE } from '../src/ai/errors.ts'
+import { CONTENT_FILTER_CODE, PROVIDER_ERROR_CODE, RATE_LIMIT_CODE, TIMEOUT_CODE } from '../src/ai/errors.ts'
 
 /** Build an SSE response body from wire chunk payloads. */
 function sse(...payloads: string[]): Response {
@@ -18,6 +19,7 @@ function makeAdapter(
   const requests: Request[] = []
   const adapter = new CloudflareAiAdapter({
     resolveEndpoint: async () => ({ url: 'https://gw.test/v1/chat/completions', token: 'tok' }),
+    resolveModel: async (provider, model) => ({ provider, id: model, name: model }),
     listModels: async () => [{ provider: 'cloudflare-workers-ai', id: '@cf/m', name: '@cf/m' }],
     fetch: async (request) => {
       requests.push(request)
@@ -42,6 +44,8 @@ async function collect(iterable: AsyncIterable<StreamChunk>): Promise<StreamChun
 
 const TEXT = JSON.stringify({ choices: [{ delta: { content: 'hi' } }] })
 const STOP = JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })
+const FILTERED = JSON.stringify({ choices: [{ delta: {}, finish_reason: 'content_filter' }] })
+const USAGE_ONLY = JSON.stringify({ usage: { prompt_tokens: 3, completion_tokens: 0 } })
 
 describe('readErrorDetail', () => {
   it('reads a Cloudflare envelope error', () => {
@@ -70,7 +74,7 @@ describe('readErrorDetail', () => {
 
 describe('providerInfo', () => {
   it('labels the known routes', () => {
-    const { adapter } = makeAdapter(async () => sse(STOP))
+    const { adapter } = makeAdapter(async () => sse(TEXT, STOP))
     expect(adapter.providerInfo('cloudflare-workers-ai')).toEqual({
       id: 'cloudflare-workers-ai',
       name: 'Cloudflare Workers AI',
@@ -79,14 +83,75 @@ describe('providerInfo', () => {
   })
 
   it('falls back to the route id for an unknown route', () => {
-    const { adapter } = makeAdapter(async () => sse(STOP))
+    const { adapter } = makeAdapter(async () => sse(TEXT, STOP))
     expect(adapter.providerInfo('other')).toEqual({ id: 'other', name: 'other' })
+  })
+})
+
+describe('resolveModel', () => {
+  it('delegates to the injected resolver, with the caller signal', async () => {
+    const seen: (AbortSignal | undefined)[] = []
+    const { adapter } = makeAdapter(async () => sse(TEXT, STOP), {
+      resolveModel: async (provider, model, signal) => {
+        seen.push(signal)
+        return { provider, id: model, name: model, context: { contextWindow: 8 } }
+      },
+    })
+    const signal = new AbortController().signal
+    await expect(adapter.resolveModel('cloudflare-workers-ai', '@cf/m', signal)).resolves.toEqual({
+      provider: 'cloudflare-workers-ai',
+      id: '@cf/m',
+      name: '@cf/m',
+      context: { contextWindow: 8 },
+    })
+    expect(seen).toEqual([signal])
+  })
+})
+
+describe('prepareCall', () => {
+  // The harness documents prepareCall for dynamic adapters: the endpoint of
+  // one generation is bound to the stream it hands back, so a later change
+  // cannot pair this generation's model facts with another's endpoint.
+  it('resolves the endpoint and the model once, and binds the endpoint to the returned stream', async () => {
+    let resolutions = 0
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP), {
+      resolveEndpoint: async () => {
+        resolutions += 1
+        return { url: `https://gw.test/generation-${resolutions}`, token: 'tok' }
+      },
+    })
+    const prepared = await adapter.prepareCall('cloudflare-workers-ai', '@cf/m')
+    expect(prepared.model).toEqual({ provider: 'cloudflare-workers-ai', id: '@cf/m', name: '@cf/m' })
+    await collect(prepared.stream(options()))
+    await collect(prepared.stream(options()))
+    expect(resolutions).toBe(1)
+    expect(requests.map((request) => request.url)).toEqual([
+      'https://gw.test/generation-1',
+      'https://gw.test/generation-1',
+    ])
+  })
+
+  it('passes the caller signal to both resolutions', async () => {
+    const seen: (AbortSignal | undefined)[] = []
+    const { adapter } = makeAdapter(async () => sse(TEXT, STOP), {
+      resolveEndpoint: async (_provider, _model, signal) => {
+        seen.push(signal)
+        return { url: 'https://gw.test/v1/chat/completions', token: 'tok' }
+      },
+      resolveModel: async (provider, model, signal) => {
+        seen.push(signal)
+        return { provider, id: model, name: model }
+      },
+    })
+    const signal = new AbortController().signal
+    await adapter.prepareCall('cloudflare-workers-ai', '@cf/m', signal)
+    expect(seen).toEqual([signal, signal])
   })
 })
 
 describe('listModels', () => {
   it('delegates to the injected lister', async () => {
-    const { adapter } = makeAdapter(async () => sse(STOP))
+    const { adapter } = makeAdapter(async () => sse(TEXT, STOP))
     await expect(adapter.listModels('cloudflare-workers-ai')).resolves.toEqual([
       { provider: 'cloudflare-workers-ai', id: '@cf/m', name: '@cf/m' },
     ])
@@ -105,7 +170,7 @@ describe('stream', () => {
   })
 
   it('posts to the resolved endpoint with the resolved token', async () => {
-    const { adapter, requests } = makeAdapter(async () => sse(STOP))
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP))
     await collect(adapter.stream(options()))
     expect(requests[0]!.url).toBe('https://gw.test/v1/chat/completions')
     expect(requests[0]!.method).toBe('POST')
@@ -113,14 +178,25 @@ describe('stream', () => {
     expect(requests[0]!.headers.get('accept')).toBe('text/event-stream')
   })
 
+  // The adapter contract: every provider HTTP request carries the harness's
+  // attribution headers, read from the harness rather than copied, so a new
+  // harness version changes what is sent without a change here.
+  it('sends the harness attribution headers on every provider request', async () => {
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP))
+    await collect(adapter.stream(options()))
+    const expected = attributionHeaders()['user-agent']
+    expect(expected).toMatch(/\S/)
+    expect(requests[0]!.headers.get('user-agent')).toBe(expected)
+  })
+
   it('declares a JSON request body', async () => {
-    const { adapter, requests } = makeAdapter(async () => sse(STOP))
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP))
     await collect(adapter.stream(options()))
     expect(requests[0]!.headers.get('content-type')).toBe('application/json')
   })
 
   it('sends the mapped request body', async () => {
-    const { adapter, requests } = makeAdapter(async () => sse(STOP))
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP))
     await collect(adapter.stream(options({ temperature: 0.5 })))
     const body = JSON.parse(await requests[0]!.text()) as Record<string, unknown>
     expect(body).toMatchObject({ model: '@cf/m', stream: true, temperature: 0.5 })
@@ -129,19 +205,19 @@ describe('stream', () => {
   // The whole point of the gateway route: gateway logs become filterable by
   // harness session, which is what makes per-session cost real.
   it('stamps the harness session id into cf-aig-metadata', async () => {
-    const { adapter, requests } = makeAdapter(async () => sse(STOP))
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP))
     await collect(adapter.stream(options({ sessionId: 's1' })))
     expect(requests[0]!.headers.get('cf-aig-metadata')).toBe('{"sessionId":"s1"}')
   })
 
   it('stamps the auxiliary purpose so housekeeping is attributable separately', async () => {
-    const { adapter, requests } = makeAdapter(async () => sse(STOP))
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP))
     await collect(adapter.stream(options({ sessionId: 's1', purpose: 'compaction' })))
     expect(requests[0]!.headers.get('cf-aig-metadata')).toBe('{"sessionId":"s1","purpose":"compaction"}')
   })
 
   it('applies configured gateway header options', async () => {
-    const { adapter, requests } = makeAdapter(async () => sse(STOP), {
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP), {
       headerOptions: { cacheTtlSeconds: 60, skipCache: true, collectLog: false },
     })
     await collect(adapter.stream(options()))
@@ -157,7 +233,7 @@ describe('stream', () => {
     // abort.
     const { adapter, requests } = makeAdapter(async (request) => {
       if (request.signal.aborted) throw request.signal.reason
-      return sse(STOP)
+      return sse(TEXT, STOP)
     })
     const controller = new AbortController()
     controller.abort()
@@ -168,7 +244,7 @@ describe('stream', () => {
   })
 
   it('sends an unaborted request when the caller supplies no signal', async () => {
-    const { adapter, requests } = makeAdapter(async () => sse(STOP))
+    const { adapter, requests } = makeAdapter(async () => sse(TEXT, STOP))
     await collect(adapter.stream(options()))
     expect(requests[0]!.signal.aborted).toBe(false)
   })
@@ -264,6 +340,56 @@ describe('stream', () => {
   it('classifies a rate-limited response', async () => {
     const { adapter } = makeAdapter(async () => new Response('{}', { status: 429 }))
     await expect(collect(adapter.stream(options()))).rejects.toMatchObject({ code: RATE_LIMIT_CODE })
+  })
+
+  // The harness classifies a terminal stop with zero output as EMPTY_RESPONSE
+  // instead of yielding an empty assistant message, which would end the turn
+  // with nothing for the user or the loop to act on.
+  it('classifies a completion that finished with no content as an empty response', async () => {
+    const { adapter } = makeAdapter(async () => sse(STOP))
+    await expect(collect(adapter.stream(options()))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+  })
+
+  it('classifies a [DONE] with no content before it the same way', async () => {
+    const { adapter } = makeAdapter(async () => new Response('data: [DONE]\n\n', { status: 200 }))
+    await expect(collect(adapter.stream(options()))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+  })
+
+  it('does not count token usage as content', async () => {
+    const { adapter } = makeAdapter(async () => sse(USAGE_ONLY, STOP))
+    await expect(collect(adapter.stream(options()))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+  })
+
+  it('yields an error finish for a content filter, after the content that arrived', async () => {
+    const { adapter } = makeAdapter(async () => sse(TEXT, FILTERED))
+    const chunks = await collect(adapter.stream(options()))
+    expect(chunks.at(-1)).toEqual({
+      type: 'finish',
+      reason: {
+        kind: 'error',
+        failure: {
+          message: 'the provider withheld the completion under its content policy',
+          code: CONTENT_FILTER_CODE,
+        },
+      },
+    })
+  })
+
+  it('yields the error finish for a content filter even with no content, since it explains itself', async () => {
+    const { adapter } = makeAdapter(async () => sse(FILTERED))
+    const chunks = await collect(adapter.stream(options()))
+    expect(chunks).toEqual([
+      {
+        type: 'finish',
+        reason: {
+          kind: 'error',
+          failure: {
+            message: 'the provider withheld the completion under its content policy',
+            code: CONTENT_FILTER_CODE,
+          },
+        },
+      },
+    ])
   })
 
   it('raises an empty-response error when the provider sends no body', async () => {
@@ -375,7 +501,7 @@ describe('stream', () => {
   })
 
   it('rejects an unsupported option before issuing any request', async () => {
-    const fetchImpl = vi.fn(async () => sse(STOP))
+    const fetchImpl = vi.fn(async () => sse(TEXT, STOP))
     const { adapter } = makeAdapter(fetchImpl)
     await expect(collect(adapter.stream(options({ reasoningEffort: 'high' })))).rejects.toMatchObject({
       code: 'UNSUPPORTED_OPTION',

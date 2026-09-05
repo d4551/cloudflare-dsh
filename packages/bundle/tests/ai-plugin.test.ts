@@ -163,6 +163,134 @@ describe('toModelInfo', () => {
   })
 })
 
+describe('toResolvedModelInfo', () => {
+  it('reads the context window and the vision property from the catalogue record', () => {
+    expect(
+      aiPlugin.toResolvedModelInfo('p', '@cf/m', {
+        name: '@cf/m',
+        description: 'd',
+        properties: [
+          { property_id: 'context_window', value: '128000' },
+          { property_id: 'vision', value: 'true' },
+        ],
+      }),
+    ).toStrictEqual({
+      provider: 'p',
+      id: '@cf/m',
+      name: '@cf/m',
+      description: 'd',
+      inputModalities: ['text', 'image'],
+      context: { contextWindow: 128_000 },
+    })
+  })
+
+  it('reports text as the only modality when the record claims no vision', () => {
+    expect(aiPlugin.toResolvedModelInfo('p', 'm', { name: 'm', properties: [] })).toStrictEqual({
+      provider: 'p',
+      id: 'm',
+      name: 'm',
+      inputModalities: ['text'],
+    })
+  })
+
+  it.each([
+    ['a non-numeric value', 'unknown'],
+    ['zero', '0'],
+    ['a fraction', '1.5'],
+    ['a negative', '-8'],
+  ])('omits the context when context_window is %s', (_label, value) => {
+    expect(
+      aiPlugin.toResolvedModelInfo('p', 'm', { properties: [{ property_id: 'context_window', value }] }),
+    ).not.toHaveProperty('context')
+  })
+
+  it('accepts a context window the catalogue sends as a number', () => {
+    expect(
+      aiPlugin.toResolvedModelInfo('p', 'm', { properties: [{ property_id: 'context_window', value: 7968 }] })
+        .context,
+    ).toEqual({ contextWindow: 7968 })
+  })
+
+  it('keeps the bare identity for a model the catalogue does not list', () => {
+    expect(aiPlugin.toResolvedModelInfo('p', 'm', undefined)).toStrictEqual({
+      provider: 'p',
+      id: 'm',
+      name: 'm',
+    })
+  })
+
+  it('treats a record without properties as a text model with no known context', () => {
+    // Metadata is advisory: a record the catalogue publishes without facts must
+    // not fail the model call it describes.
+    expect(aiPlugin.toResolvedModelInfo('p', 'm', { name: 'm' })).toStrictEqual({
+      provider: 'p',
+      id: 'm',
+      name: 'm',
+      inputModalities: ['text'],
+    })
+  })
+})
+
+describe('resolveModel', () => {
+  const record = {
+    name: '@cf/m',
+    properties: [{ property_id: 'context_window', value: '7968' }],
+  }
+
+  it('asks the catalogue for the model by name and reads its facts', async () => {
+    const { registered, requests } = harness({}, async () => envelope([{ name: '@cf/other' }, record]))
+    await expect(
+      registered[0]!.adapter.resolveModel('cloudflare-workers-ai', '@cf/m'),
+    ).resolves.toStrictEqual({
+      provider: 'cloudflare-workers-ai',
+      id: '@cf/m',
+      name: '@cf/m',
+      inputModalities: ['text'],
+      context: { contextWindow: 7968 },
+    })
+    expect(requests[0]!.url).toBe(
+      'https://api.test/v4/accounts/a1/ai/models/search?per_page=100&search=%40cf%2Fm',
+    )
+  })
+
+  it('keeps the bare identity when the catalogue has no such model', async () => {
+    const { registered } = harness({}, async () => envelope([]))
+    await expect(
+      registered[0]!.adapter.resolveModel('cloudflare-workers-ai', '@cf/m'),
+    ).resolves.toStrictEqual({
+      provider: 'cloudflare-workers-ai',
+      id: '@cf/m',
+      name: '@cf/m',
+    })
+  })
+
+  it('looks a model up once per plugin instance', async () => {
+    const { registered, requests } = harness({}, async () => envelope([record]))
+    await registered[0]!.adapter.resolveModel('cloudflare-workers-ai', '@cf/m')
+    await registered[0]!.adapter.resolveModel('cloudflare-workers-ai', '@cf/m')
+    expect(requests).toHaveLength(1)
+  })
+
+  it('looks each model up on its own', async () => {
+    const { registered, requests } = harness({}, async () => envelope([]))
+    await registered[0]!.adapter.resolveModel('cloudflare-workers-ai', '@cf/a')
+    await registered[0]!.adapter.resolveModel('cloudflare-workers-ai', '@cf/b')
+    expect(requests).toHaveLength(2)
+  })
+
+  it('passes the caller signal to the catalogue lookup', async () => {
+    const { registered } = harness({}, async (request) => {
+      if (request.signal.aborted) throw request.signal.reason
+      return envelope([])
+    })
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      registered[0]!.adapter.resolveModel('cloudflare-workers-ai', '@cf/m', controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+  })
+})
+
 describe('listModels', () => {
   it('queries the catalogue when no models are configured', async () => {
     const { registered, requests } = harness({}, async () => envelope([{ name: '@cf/a' }]))
@@ -186,8 +314,14 @@ describe('listModels', () => {
   })
 })
 
+/** Consume a stream to its end, for tests that observe the request rather than the chunks. */
+async function drain(iterable: AsyncIterable<unknown>): Promise<void> {
+  for await (const chunk of iterable) void chunk
+}
+
 describe('endpoint resolution', () => {
-  const stop = `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`
+  // A minimal completion with content: a finish alone is EMPTY_RESPONSE.
+  const stop = `data: ${JSON.stringify({ choices: [{ delta: { content: 'hi' } }] })}\n\ndata: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`
 
   /** Drive one stream so the adapter resolves an endpoint and issues a call. */
   async function stream(
@@ -238,6 +372,67 @@ describe('endpoint resolution', () => {
       envelope({ url: 'https://gateway.example/v1/acct/gw1/workers-ai' }),
     )
     expect(outbound[0]!.url).toBe('https://gateway.example/v1/acct/gw1/workers-ai/chat/completions')
+  })
+
+  // One configuration has one gateway URL; reading it on every model call was
+  // a REST round trip per call for a fact that does not change.
+  it('reads the gateway url once per plugin instance', async () => {
+    const apiRequests: Request[] = []
+    const globalFetch = vi.fn(async () => new Response(stop, { status: 200 }))
+    vi.stubGlobal('fetch', globalFetch)
+    try {
+      const { registered } = harness({ gatewayId: 'gw1' }, async (r) => {
+        apiRequests.push(r)
+        return envelope({ url: 'https://gateway.example/base' })
+      })
+      const call = () =>
+        drain(
+          registered[0]!.adapter.stream({ provider: 'cloudflare-ai-gateway', model: '@cf/m', messages: [] }),
+        )
+      await call()
+      await call()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+    expect(apiRequests.filter((r) => r.url.includes('/url/'))).toHaveLength(1)
+    expect(globalFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves the token afresh for every call even though the url is remembered', async () => {
+    let resolutions = 0
+    const credentials = {
+      resolve: () => {
+        resolutions += 1
+        return 'tok'
+      },
+    }
+    const ctx = new Context()
+    ctx.provide('credentials', credentials)
+    const registered: CloudflareAiAdapter[] = []
+    ctx.provide('llm', {
+      registerAdapter(_providers: string[], adapter: CloudflareAiAdapter) {
+        registered.push(adapter)
+        return () => registered.pop()
+      },
+    })
+    const service = new CloudflareService(
+      ctx,
+      CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }),
+      { credentials, fetch: async () => envelope(null) },
+    )
+    expect(service.name).toBe('cloudflare')
+    aiPlugin.apply(ctx, aiPlugin.Config({}))
+    const globalFetch = vi.fn(async () => new Response(stop, { status: 200 }))
+    vi.stubGlobal('fetch', globalFetch)
+    try {
+      const call = () =>
+        drain(registered[0]!.stream({ provider: 'cloudflare-workers-ai', model: '@cf/m', messages: [] }))
+      await call()
+      await call()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+    expect(resolutions).toBe(2)
   })
 
   it('honours a configured completions path', async () => {

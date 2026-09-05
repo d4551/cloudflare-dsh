@@ -153,20 +153,16 @@ export function buildUrl(
 export interface HeaderInput {
   readonly token: string
   readonly hasBody: boolean
-  readonly extra?: Readonly<Record<string, string>> | undefined
 }
 
 /**
  * Assemble request headers.
  *
- * The bearer token is applied last so a caller-supplied `authorization` header
- * can never displace the resolved credential.
+ * Only the client sets headers: the accepted type, a content type when a body
+ * is sent, and the bearer token.
  */
 export function buildHeaders(input: HeaderInput): Headers {
   const headers = new Headers()
-  for (const [key, value] of Object.entries(input.extra ?? {})) {
-    headers.set(key, value)
-  }
   headers.set('accept', 'application/json')
   if (input.hasBody) headers.set('content-type', 'application/json')
   headers.set('authorization', `Bearer ${input.token}`)
@@ -193,7 +189,6 @@ export function buildRequest(input: BuildRequestInput): Request {
   const headers = buildHeaders({
     token: input.token,
     hasBody: sendsBody,
-    extra: spec.headers,
   })
   const init: RequestInit = { method: spec.method, headers }
   if (sendsBody) init.body = JSON.stringify(spec.body)

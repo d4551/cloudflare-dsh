@@ -51,8 +51,6 @@ export interface GatewayHeaderOptions {
   readonly tags?: Readonly<Record<string, string>> | undefined
   /** Gateway to route through; Workers AI models require it. */
   readonly gatewayId?: string | undefined
-  /** Custom cache key for this request. */
-  readonly cacheKey?: string | undefined
   /** Gateway-side request timeout, in milliseconds. */
   readonly requestTimeoutMs?: number | undefined
 }
@@ -136,9 +134,6 @@ export function buildGatewayHeaders(
   // goes on as a raw header.
   if (options.gatewayId !== undefined && options.gatewayId !== '') {
     headers['cf-aig-gateway-id'] = options.gatewayId
-  }
-  if (options.cacheKey !== undefined && options.cacheKey !== '') {
-    headers['cf-aig-cache-key'] = options.cacheKey
   }
   const gatewayTimeout = options.requestTimeoutMs ?? 0
   if (gatewayTimeout > 0) {

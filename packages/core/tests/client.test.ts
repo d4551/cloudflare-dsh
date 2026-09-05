@@ -12,10 +12,16 @@ import {
   CloudflareNotFoundError,
   isRetryableStatus,
 } from '../src/errors.ts'
-import { nextCursorQuery } from '../src/paginate.ts'
+import type { NextPageQuery } from '../src/paginate.ts'
 import type { CloudflareEnvelope } from '../src/types.ts'
 
 const REF = 'CLOUDFLARE_API_TOKEN'
+
+/** A cursor stepper for the walk tests: the walk is under test here, not any production stepper. */
+const byCursor = (envelope: Pick<CloudflareEnvelope, 'result_info'>): NextPageQuery => {
+  const cursor = envelope.result_info?.cursor
+  return cursor === undefined || cursor === '' ? null : { cursor }
+}
 const retry = { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 10 }
 
 function json(body: unknown, init: ResponseInit = {}): Response {
@@ -28,8 +34,8 @@ function json(body: unknown, init: ResponseInit = {}): Response {
 
 function ok<T>(result: T, info?: CloudflareEnvelope['result_info']): CloudflareEnvelope<T> {
   return info === undefined
-    ? { success: true, errors: [], messages: [], result }
-    : { success: true, errors: [], messages: [], result, result_info: info }
+    ? { success: true, errors: [], result }
+    : { success: true, errors: [], result, result_info: info }
 }
 
 function makeClient(
@@ -126,7 +132,7 @@ describe('requestText failure classification', () => {
     )
     await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toMatchObject({
       credentialRef: REF,
-      codes: [10000],
+      message: '[10000] nope',
     })
   })
 
@@ -257,6 +263,8 @@ describe('CloudflareClient.request', () => {
   it('defaults the base URL when none is configured', async () => {
     const requests: Request[] = []
     const client = new CloudflareClient({
+      sleep: async () => {},
+      random: () => 1,
       credentials: { resolve: () => 'tok' },
       apiTokenRef: REF,
       retry,
@@ -296,6 +304,24 @@ describe('CloudflareClient.request', () => {
       json({ success: false, errors: [], messages: [], result: null }, { status: 404 }),
     )
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareNotFoundError)
+  })
+
+  it('a per-request budget replaces the client default for that attempt', async () => {
+    const { client } = makeClient(hang, { requestTimeoutMs: 30_000 })
+    await expect(client.request({ method: 'GET', path: '/x', timeoutMs: 10 })).rejects.toMatchObject({
+      name: 'TimeoutError',
+    })
+  })
+
+  it('a per-request budget may exceed the client default, which is what a long-running tool needs', async () => {
+    const slow = async (): Promise<Response> => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 40)
+      })
+      return json({ success: true, errors: [], messages: [], result: 'late' })
+    }
+    const { client } = makeClient(slow, { requestTimeoutMs: 10 })
+    await expect(client.request({ method: 'GET', path: '/x', timeoutMs: 500 })).resolves.toBe('late')
   })
 
   it('classifies a non-JSON error body by status and carries the body', async () => {
@@ -410,6 +436,8 @@ describe('CloudflareClient.request', () => {
 
   it('fails loud when the credential is missing', async () => {
     const client = new CloudflareClient({
+      sleep: async () => {},
+      random: () => 1,
       credentials: { resolve: () => undefined },
       apiTokenRef: REF,
       retry,
@@ -423,6 +451,8 @@ describe('CloudflareClient.request', () => {
   it('uses real timers by default without hanging', async () => {
     let calls = 0
     const client = new CloudflareClient({
+      sleep: async () => {},
+      random: () => 1,
       credentials: { resolve: () => 'tok' },
       apiTokenRef: REF,
       retry: { maxRetries: 1, baseDelayMs: 0, maxDelayMs: 0 },
@@ -450,6 +480,8 @@ describe('CloudflareClient.resolveToken', () => {
     const values = ['first', 'second']
     let i = 0
     const client = new CloudflareClient({
+      sleep: async () => {},
+      random: () => 1,
       credentials: { resolve: () => values[i++] },
       apiTokenRef: REF,
       retry,
@@ -463,6 +495,8 @@ describe('CloudflareClient.resolveToken', () => {
 
   it('fails loud when the credential is missing', async () => {
     const client = new CloudflareClient({
+      sleep: async () => {},
+      random: () => 1,
       credentials: { resolve: () => undefined },
       apiTokenRef: REF,
       retry,
@@ -507,6 +541,8 @@ describe('CloudflareClient.requestText', () => {
 
   it('fails loud when the credential is missing', async () => {
     const client = new CloudflareClient({
+      sleep: async () => {},
+      random: () => 1,
       credentials: { resolve: () => undefined },
       apiTokenRef: REF,
       retry,
@@ -547,6 +583,8 @@ describe('CloudflareClient.requestEnvelope', () => {
 
   it('fails loud when the credential is missing', async () => {
     const client = new CloudflareClient({
+      sleep: async () => {},
+      random: () => 1,
       credentials: { resolve: () => undefined },
       apiTokenRef: REF,
       retry,
@@ -563,7 +601,7 @@ describe('CloudflareClient.list', () => {
     const pages = [json(ok(['a'], { cursor: 'c1' })), json(ok(['b'], { cursor: '' }))]
     let i = 0
     const { client, requests } = makeClient(async () => pages[i++]!)
-    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toEqual({
+    await expect(client.listAll({ method: 'GET', path: '/x' }, byCursor)).resolves.toEqual({
       items: ['a', 'b'],
       truncated: false,
       pages: 2,
@@ -575,7 +613,7 @@ describe('CloudflareClient.list', () => {
     const pages = [json(ok(['a'], { cursor: 'c1' })), json(ok(['b'], { cursor: '' }))]
     let i = 0
     const { client, requests } = makeClient(async () => pages[i++]!)
-    await client.listAll({ method: 'GET', path: '/x', query: { per_page: 2 } }, nextCursorQuery)
+    await client.listAll({ method: 'GET', path: '/x', query: { per_page: 2 } }, byCursor)
     expect(requests[1]!.url).toContain('per_page=2')
     expect(requests[1]!.url).toContain('cursor=c1')
   })
@@ -585,7 +623,7 @@ describe('CloudflareClient.list', () => {
       maxPages: 3,
     })
     // Truncated: the server still offered a cursor when the ceiling hit.
-    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toEqual({
+    await expect(client.listAll({ method: 'GET', path: '/x' }, byCursor)).resolves.toEqual({
       items: ['x', 'x', 'x'],
       truncated: true,
       pages: 3,
@@ -608,7 +646,7 @@ describe('CloudflareClient.list', () => {
       )
     let call = 0
     const { client } = makeClient(async () => (call++ === 0 ? json(ok(['a'], { cursor: 'c1' })) : failure()))
-    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).rejects.toThrow('[2] mid')
+    await expect(client.listAll({ method: 'GET', path: '/x' }, byCursor)).rejects.toThrow('[2] mid')
   })
 
   it('retries a transient failure mid-walk instead of abandoning the page', async () => {
@@ -621,7 +659,7 @@ describe('CloudflareClient.list', () => {
       if (call === 2) return json({ success: false, errors: [], messages: [], result: null }, { status: 503 })
       return json(ok(['b'], { cursor: '' }))
     })
-    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toMatchObject({
+    await expect(client.listAll({ method: 'GET', path: '/x' }, byCursor)).resolves.toMatchObject({
       items: ['a', 'b'],
     })
   })

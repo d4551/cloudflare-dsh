@@ -26,8 +26,8 @@ export interface CloudflareClientOptions {
   /** How long one attempt may run before it is aborted. */
   readonly requestTimeoutMs: number
   readonly fetch: FetchLike
-  readonly sleep?: (ms: number) => Promise<void>
-  readonly random?: () => number
+  readonly sleep: (ms: number) => Promise<void>
+  readonly random: () => number
 }
 
 /**
@@ -57,7 +57,7 @@ export function statusOfError(error: unknown): number {
  */
 export const TRANSPORT_FAILURE_STATUS = 503
 
-/** Default sleep. Exported so its behaviour is directly testable. */
+/** The sleep the service supplies for retry backoff. Exported so its behaviour is directly testable. */
 export function realSleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -135,10 +135,11 @@ export class CloudflareClient {
    *
    * The budget is per attempt, not per operation: a retry gets a fresh one,
    * which is what makes a timeout a transient failure rather than a cap on the
-   * whole retried sequence. A caller signal aborts every attempt.
+   * whole retried sequence. A spec may carry its own budget, for a call whose
+   * tool has declared a longer one. A caller signal aborts every attempt.
    */
   #buildRequest(spec: RequestSpec, token: string): Request {
-    const timeout = AbortSignal.timeout(this.#options.requestTimeoutMs)
+    const timeout = AbortSignal.timeout(spec.timeoutMs ?? this.#options.requestTimeoutMs)
     const signal = spec.signal === undefined ? timeout : AbortSignal.any([spec.signal, timeout])
     return new Request(buildRequest({ baseUrl: this.#baseUrl, spec, token }), { signal })
   }
@@ -182,8 +183,8 @@ export class CloudflareClient {
    */
   #withRetry<T>(attempt: () => Promise<T>): Promise<T> {
     return runWithRetry(attempt, statusOfError, this.#options.retry, {
-      sleep: this.#options.sleep ?? realSleep,
-      random: this.#options.random ?? Math.random,
+      sleep: this.#options.sleep,
+      random: this.#options.random,
     })
   }
 

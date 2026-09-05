@@ -6,14 +6,31 @@
  * contract logic lives in those modules, which is what keeps this file small
  * enough that nothing important hides in it.
  *
- * Two obligations are visible here rather than delegated:
+ * Obligations visible here rather than delegated:
+ *  - every provider request carries the harness's attribution headers, which
+ *    the adapter contract requires on every wire request;
  *  - the adapter never retries internally — one call is one provider attempt,
  *    because the harness owns retry policy;
  *  - `options.signal` is honoured, and a stream that goes quiet longer than the
- *    configured budget fails as a timeout rather than hanging the turn.
+ *    configured budget fails as a timeout rather than hanging the turn;
+ *  - a completion that ends with no content block at all is `EMPTY_RESPONSE`,
+ *    however it ended — a finish reason, the `[DONE]` sentinel, or the socket.
+ *
+ * Two hooks keep the harness defaults on purpose. `providerRetryPolicy` stays
+ * undefined because Cloudflare publishes no route-owned retry policy beyond the
+ * `retry-after` header a rate-limit failure already carries; and
+ * `imageRequestPricing` stays undefined because Cloudflare prices vision input
+ * per token, not per image, so there is no per-image price to declare.
  */
-import { LlmAdapter } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, attributionHeaders } from '@deepseek-ai/dsh-llm'
+import type {
+  GenerateOptions,
+  LlmModelInfo,
+  LlmProviderInfo,
+  LlmResolvedModelInfo,
+  PreparedAdapterCall,
+  StreamChunk,
+} from '@deepseek-ai/dsh-llm'
 import { emptyResponse, idleTimeout, joinDetail, providerError } from './errors.ts'
 import { type GatewayHeaderOptions, buildGatewayHeaders } from './headers.ts'
 import { buildWireRequest } from './request.ts'
@@ -31,7 +48,9 @@ export interface ResolvedEndpoint {
 /** Collaborators the adapter needs. */
 export interface CloudflareAiAdapterDeps {
   /** Resolve the endpoint for one provider route and model. */
-  resolveEndpoint(provider: string, model: string): Promise<ResolvedEndpoint>
+  resolveEndpoint(provider: string, model: string, signal?: AbortSignal): Promise<ResolvedEndpoint>
+  /** Resolve what the catalogue knows about one exact model. */
+  resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>
   /** List the models a route can advertise. */
   listModels(provider: string): Promise<readonly LlmModelInfo[]>
   /** Injected so the adapter is testable without a network. */
@@ -141,21 +160,55 @@ export class CloudflareAiAdapter extends LlmAdapter {
     return this.deps.listModels(provider)
   }
 
+  override async resolveModel(
+    provider: string,
+    model: string,
+    signal?: AbortSignal,
+  ): Promise<LlmResolvedModelInfo> {
+    return this.deps.resolveModel(provider, model, signal)
+  }
+
   /**
-   * Stream one model call.
+   * Bind one call to one generation of connection facts.
+   *
+   * This adapter is dynamic: the endpoint comes from the account and, on the
+   * gateway route, from the API. Resolving it here and handing back a stream
+   * bound to it means a settings change between preparation and dispatch can
+   * never pair one generation's model metadata with another's endpoint — the
+   * case the harness documents `prepareCall` for.
+   */
+  override async prepareCall(
+    provider: string,
+    model: string,
+    signal?: AbortSignal,
+  ): Promise<PreparedAdapterCall> {
+    const [endpoint, info] = await Promise.all([
+      this.deps.resolveEndpoint(provider, model, signal),
+      this.resolveModel(provider, model, signal),
+    ])
+    return { model: info, stream: (options) => this.streamTo(endpoint, options) }
+  }
+
+  /** Stream one model call, resolving the endpoint for this call alone. */
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    const endpoint = await this.deps.resolveEndpoint(options.provider, options.model, options.signal)
+    yield* this.streamTo(endpoint, options)
+  }
+
+  /**
+   * Stream one model call against a resolved endpoint.
    *
    * Yields chunks exactly as the transducer produces them, so the ordering
    * guarantees (`usage` before `finish`, nothing after `finish`) hold here by
    * construction rather than by convention.
    */
-  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+  private async *streamTo(endpoint: ResolvedEndpoint, options: GenerateOptions): AsyncIterable<StreamChunk> {
     const body = buildWireRequest(options)
-    const endpoint = await this.deps.resolveEndpoint(options.provider, options.model)
-    const headers = new Headers({
-      'content-type': 'application/json',
-      accept: 'text/event-stream',
-      authorization: `Bearer ${endpoint.token}`,
-    })
+    // Attribution first, so nothing below can be read as replacing it.
+    const headers = new Headers(attributionHeaders())
+    headers.set('content-type', 'application/json')
+    headers.set('accept', 'text/event-stream')
+    headers.set('authorization', `Bearer ${endpoint.token}`)
     for (const [key, value] of Object.entries(
       buildGatewayHeaders(
         { sessionId: options.sessionId, purpose: options.purpose },
@@ -188,18 +241,17 @@ export class CloudflareAiAdapter extends LlmAdapter {
     const transducer = new StreamTransducer()
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
     const events = readEvents(reader, decoder, this.deps.streamIdleTimeoutMs)
+    // Whether any content block opened. Usage alone is not content: a
+    // completion that reports tokens and then stops has still said nothing.
     let produced = false
 
     try {
       for await (const event of events) {
-        if (event.kind === 'done') {
-          yield* transducer.end()
-          return
-        }
+        if (event.kind === 'done') break
         const read = parseJson<WireChunk>(event.data)
         if (!read.ok) continue
         for (const chunk of transducer.push(read.value)) {
-          produced = true
+          if (chunk.type === 'block-start') produced = true
           yield chunk
         }
       }
@@ -211,7 +263,12 @@ export class CloudflareAiAdapter extends LlmAdapter {
       await reader.cancel()
     }
 
-    if (!produced && !transducer.isFinished) throw emptyResponse()
+    // The transducer holds the finish back until here, so this is where a
+    // completion with no content is judged. A normal finish with nothing before
+    // it — or no finish at all — is the degenerate completion the harness
+    // classifies rather than yields; an error finish already says what went
+    // wrong and is yielded.
+    if (!produced && transducer.finishReason?.kind !== 'error') throw emptyResponse()
     yield* transducer.end()
   }
 }

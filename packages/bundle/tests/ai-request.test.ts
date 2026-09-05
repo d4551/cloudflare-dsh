@@ -1,4 +1,5 @@
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import { ReasoningEffortId, textOnlyImageText } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, Message, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
 import { UNSUPPORTED_OPTION_CODE } from '../src/ai/errors.ts'
@@ -97,6 +98,46 @@ describe('toWireMessages', () => {
     ).toHaveLength(2)
   })
 
+  it('keeps text carried beside tool results, after them, so nothing the message said is lost', () => {
+    expect(
+      toWireMessages(
+        message('user', [
+          { type: 'tool-result', toolCallId: 'a' as ToolCallId, content: [{ type: 'text', text: 'done' }] },
+          { type: 'text', text: 'and one more thing' },
+        ]),
+      ),
+    ).toEqual([
+      { role: 'tool', tool_call_id: 'a', content: 'done' },
+      { role: 'user', content: 'and one more thing' },
+    ])
+  })
+
+  it("carries a failed result's content verbatim, which is how the wire says it failed", () => {
+    expect(
+      toWireMessages(
+        message('user', [
+          {
+            type: 'tool-result',
+            toolCallId: 'a' as ToolCallId,
+            content: [{ type: 'text', text: 'Error: no such table' }],
+            isError: true,
+          },
+        ]),
+      ),
+    ).toEqual([{ role: 'tool', tool_call_id: 'a', content: 'Error: no such table' }])
+  })
+
+  it('leaves reasoning out of what the provider sees again', () => {
+    expect(
+      toWireMessages(
+        message('assistant', [
+          { type: 'reasoning', text: 'let me think' },
+          { type: 'text', text: 'the answer' },
+        ]),
+      ),
+    ).toEqual([{ role: 'assistant', content: 'the answer' }])
+  })
+
   it('prefers the tool-result mapping when a message carries both', () => {
     const wire = toWireMessages(
       message('user', [
@@ -171,6 +212,29 @@ describe('buildWireRequest', () => {
 
   it('includes a zero temperature rather than treating it as absent', () => {
     expect(buildWireRequest(options({ temperature: 0 })).temperature).toBe(0)
+  })
+
+  it('projects an image to the harness text for a text model, never dropping it silently', () => {
+    const attachment = {
+      attachmentId: AttachmentId('sha256:0123456789abcdef'),
+      mediaType: 'image/png' as const,
+      bytes: 1,
+      width: 1,
+      height: 1,
+    }
+    const wire = buildWireRequest(
+      options({
+        messages: [
+          message('user', [
+            { type: 'image', attachment },
+            { type: 'text', text: ' what is this?' },
+          ]),
+        ],
+      }),
+    )
+    expect(wire.messages).toEqual([
+      { role: 'user', content: `${textOnlyImageText(attachment)} what is this?` },
+    ])
   })
 
   it('includes tools when given', () => {

@@ -15,8 +15,6 @@ export interface CloudflareMcpServer {
   readonly serverName: string
   /** Streamable-HTTP endpoint. */
   readonly url: string
-  /** What the server is for. */
-  readonly summary: string
 }
 
 /**
@@ -29,42 +27,34 @@ export const CLOUDFLARE_MCP_SERVERS: readonly CloudflareMcpServer[] = [
   {
     serverName: 'cloudflare-docs',
     url: 'https://docs.mcp.cloudflare.com/mcp',
-    summary: 'Search Cloudflare developer documentation.',
   },
   {
     serverName: 'cloudflare-bindings',
     url: 'https://bindings.mcp.cloudflare.com/mcp',
-    summary: 'Manage Workers bindings: KV, R2, D1, Hyperdrive.',
   },
   {
     serverName: 'cloudflare-observability',
     url: 'https://observability.mcp.cloudflare.com/mcp',
-    summary: 'Query Workers logs and analytics.',
   },
   {
     serverName: 'cloudflare-radar',
     url: 'https://radar.mcp.cloudflare.com/mcp',
-    summary: 'Internet traffic and security insights.',
   },
   {
     serverName: 'cloudflare-browser',
     url: 'https://browser.mcp.cloudflare.com/mcp',
-    summary: 'Browser rendering: fetch, screenshot, convert pages.',
   },
   {
     serverName: 'cloudflare-ai-gateway',
     url: 'https://ai-gateway.mcp.cloudflare.com/mcp',
-    summary: 'Search and inspect AI Gateway logs.',
   },
   {
     serverName: 'cloudflare-autorag',
     url: 'https://autorag.mcp.cloudflare.com/mcp',
-    summary: 'List and search AI Search (AutoRAG) instances.',
   },
   {
     serverName: 'cloudflare-logpush',
     url: 'https://logs.mcp.cloudflare.com/mcp',
-    summary: 'Summarise Logpush job health.',
   },
 ]
 

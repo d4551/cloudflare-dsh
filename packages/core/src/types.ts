@@ -24,17 +24,12 @@ export interface CloudflareResultInfo {
 export interface CloudflareEnvelope<T = unknown> {
   readonly success: boolean
   readonly errors: readonly CloudflareErrorEntry[]
-  readonly messages: readonly CloudflareErrorEntry[]
   readonly result: T
   readonly result_info?: CloudflareResultInfo
 }
 
-/** Which scope root a resource path hangs off. */
-export type ScopeKind = 'account' | 'zone'
-
-/** A resolved scope: the kind plus its identifier. */
+/** The account whose resources a request addresses. */
 export interface Scope {
-  readonly kind: ScopeKind
   readonly id: string
 }
 
@@ -62,7 +57,12 @@ export interface RequestSpec {
   /** Parameters whose order and repetition are significant; appended after `query`. */
   readonly orderedQuery?: readonly QueryPair[]
   readonly body?: unknown
-  readonly headers?: Readonly<Record<string, string>>
   /** Caller cancellation, fused with the client's own request timeout. */
-  readonly signal?: AbortSignal
+  readonly signal?: AbortSignal | undefined
+  /**
+   * Budget for one attempt of this request, replacing the client default. A
+   * tool that has declared a longer cooperative budget passes it here, so the
+   * HTTP deadline matches the budget instead of cutting it short.
+   */
+  readonly timeoutMs?: number | undefined
 }

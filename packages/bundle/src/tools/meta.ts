@@ -48,8 +48,11 @@ export function toQuery(
   return query
 }
 
-/** Methods the generic tool advertises to the model. */
-const METHODS: readonly HttpMethod[] = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']
+/** Methods that cannot change server state; all the tool offers unless mutations are permitted. */
+const READ_METHODS: readonly HttpMethod[] = ['GET', 'HEAD']
+
+/** Every method the tool can offer once mutations are permitted. */
+const ALL_METHODS: readonly HttpMethod[] = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']
 
 export interface MetaConfig {
   /** Permit state-changing verbs through `cloudflare_api`. Off by default. */
@@ -103,8 +106,8 @@ export function apply(ctx: Context, config: MetaConfig): void {
         render: (_args, value) => listing(value.accounts.length, 'account', value),
       },
       isConcurrencySafe: () => true,
-      async execute() {
-        const { accounts, truncated } = await cf.listAccounts()
+      async execute(_args, exec) {
+        const { accounts, truncated } = await cf.listAccounts(exec.signal)
         // Projected field by field rather than cast: the canonical value is a
         // programmatic API under PTC, so it is declared here, not inherited
         // from whatever the REST response happened to carry. `truncated` says
@@ -127,7 +130,9 @@ export function apply(ctx: Context, config: MetaConfig): void {
         method: {
           type: 'string',
           required: true,
-          enum: METHODS,
+          // Decided by the schema, so a method the plugin does not permit is
+          // never offered to the model and never reaches execution.
+          enum: config.allowMutations ? ALL_METHODS : READ_METHODS,
           description: 'HTTP method.',
         },
         path: {
@@ -153,12 +158,11 @@ export function apply(ctx: Context, config: MetaConfig): void {
         },
         render: (_args, value) => json(value.result),
       },
-      async execute(args) {
+      async execute(args, exec) {
         const spec = buildGenericSpec(args.method, args.path, toQuery(args.query), args.body, {
-          allowMutations: config.allowMutations,
           denyPathPrefixes: config.denyPathPrefixes,
         })
-        const result = await cf.client.request<JsonValue>(spec)
+        const result = await cf.client.request<JsonValue>({ ...spec, signal: exec.signal })
         return { result }
       },
     }),

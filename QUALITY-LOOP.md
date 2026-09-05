@@ -9,7 +9,82 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 7**
+**I'm a fucking loser: 8**
+
+<details>
+<summary><strong>Restart 8 — a known and scheduled anti-pattern is still an anti-pattern</strong></summary>
+
+A fresh adversarial audit of the tree at `5a1c5f5` reported a violation and,
+by design, not where. Its one general remark: a claim the code does not honour
+is fixed by making the code true, not by rewording, deferring or scheduling it
+— a known and scheduled anti-pattern is still an anti-pattern in the tree.
+
+The self-audit therefore started from the remediation plan's own register and
+treated every defect it still listed as present, whatever phase it was
+scheduled for. The tree at `5a1c5f5` still violated contracts it documents:
+
+- the harness requires `attributionHeaders()` on every provider request, and
+  no request carried it;
+- the harness classifies a completion with no content as `EMPTY_RESPONSE`, and
+  a finish reason or a `[DONE]` with nothing before it was yielded as a
+  successful `stop`, with twelve tests blessing the degenerate stream;
+- `content_filter` and every unknown finish reason read as `stop`;
+- a tool call the provider never named was emitted with an empty `ToolCallId`;
+- image blocks were dropped silently, text beside tool results was lost, and
+  reasoning had no stated fate;
+- the README called `inferenceTimeoutMs` and `renderTimeoutMs` "cooperative
+  budgets" while no tool read `exec.signal`, so a cancelled call ran to
+  completion and a 120 s budget was unreachable behind the 30 s request
+  deadline;
+- the adapter re-resolved its endpoint on every call and told the harness
+  nothing about a model, though the catalogue publishes its context window and
+  modalities.
+
+Repairs, in the code:
+
+1. **The harness contracts are honoured.** `attributionHeaders()` is the first
+   thing set on every provider request. A completion with no content block is
+   `EMPTY_RESPONSE` however it ended — a finish reason, `[DONE]`, or the socket
+   — judged by the reason the transducer closed with, so an error finish that
+   explains itself is yielded instead. `content_filter` and every unknown
+   reason are an `error` finish naming the reason. A tool call the provider
+   never named gets `call_<index>`. Images are projected through the harness's
+   own helper, text beside tool results is kept after them, reasoning is left
+   out by rule; each fate is stated in the module and pinned by a test. The
+   adapter overrides `prepareCall` and `resolveModel`: the endpoint URL is read
+   once per plugin instance, the token on every call, and the catalogue's
+   `context_window` and `vision` properties reach the harness as context and
+   modalities. `providerRetryPolicy` and `imageRequestPricing` keep the harness
+   defaults, and the module says why.
+2. **Every tool forwards `exec.signal`**, all 32, and a tool with a budget of
+   its own passes it as the request deadline, so `inferenceTimeoutMs` and
+   `renderTimeoutMs` are what the README called them. A cancellation suite runs
+   every tool through the real registry with a signal that fires mid-request
+   and asserts both that the request followed it and that the call was
+   reported aborted.
+3. **Dead surface alive only through tests is gone**: `nextCursorQuery`, the
+   zone scope (`service.scope`, `scopedRequest`, the `zone` kind), the
+   `cacheKey` header knob no configuration could set, `RequestSpec.headers`
+   that nothing set, `CloudflareEnvelope.messages` and `CloudflareError.codes`
+   that nothing read (the code stays in the message), the MCP `summary` nothing
+   read, and the transducer's `isFinished` once the adapter stopped needing it.
+   The `fetch`, `sleep` and `random` seams are required inputs the service
+   supplies in production, not options only tests set.
+4. **Claims made true rather than reworded.** `cloudflare_api` now offers the
+   model only `GET` and `HEAD` while read-only — the README said "rejected at
+   the schema level" and the code refused in `execute` — so the execute-time
+   check and its error are gone with the tests that pinned them. An empty bulk
+   write, delete or settlement is refused instead of posted as a request that
+   does nothing. The README's account-discovery sentence describes the refusal
+   to guess between several accounts; two statements about the MCP bridge that
+   this repository cannot verify are removed.
+
+Two tests were removed for pinning the defects themselves: an empty key list
+sent as a bulk delete, and an empty settlement posted; the refusal tests
+replace them. The `toLogFilters` unit tests went in the previous restart with
+the code they kept alive.
+
+</details>
 
 <details>
 <summary><strong>Restart 1 — the mutation glob matched less than the claim</strong></summary>

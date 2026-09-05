@@ -15,7 +15,8 @@
  *  - `usage` is emitted before `finish`, and nothing is emitted after it.
  */
 import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { CONTENT_FILTER_CODE, PROVIDER_ERROR_CODE } from './errors.ts'
 
 /** One streamed tool call, as OpenAI-compatible providers send it. */
 export interface WireToolCallDelta {
@@ -53,15 +54,38 @@ export interface WireChunk {
   readonly usage?: WireUsage | null
 }
 
-/** Map a provider finish reason onto the harness vocabulary. */
+/**
+ * Map a provider finish reason onto the harness vocabulary.
+ *
+ * Every reason has a stated meaning. A completion the provider withheld under
+ * its content policy, or ended for a reason this adapter does not know, is an
+ * `error` finish naming that reason — not a `stop` the loop would read as a
+ * successful answer.
+ */
 export function mapFinishReason(reason: string): FinishReason {
   switch (reason) {
+    case 'stop':
+      return { kind: 'stop' }
     case 'tool_calls':
       return { kind: 'tool-calls' }
     case 'length':
       return { kind: 'max-tokens' }
+    case 'content_filter':
+      return {
+        kind: 'error',
+        failure: {
+          message: 'the provider withheld the completion under its content policy',
+          code: CONTENT_FILTER_CODE,
+        },
+      }
     default:
-      return { kind: 'stop' }
+      return {
+        kind: 'error',
+        failure: {
+          message: `the provider ended the completion for a reason this adapter does not recognise: ${reason}`,
+          code: PROVIDER_ERROR_CODE,
+        },
+      }
   }
 }
 
@@ -131,7 +155,7 @@ export class StreamTransducer {
       case 'tool-call':
         return {
           type: 'tool-call',
-          id: block.id as ToolCallId,
+          id: ToolCallId(block.id),
           name: block.name,
           arguments: block.text,
         }
@@ -203,14 +227,17 @@ export class StreamTransducer {
         this.toolCalls.set(call.index, block)
         out.push({ type: 'block-start', index: block.index, blockType: 'tool-call' })
       }
-      if (call.id !== undefined) block.id = call.id
+      // The first fragment names the call, and that name is kept: a provider
+      // that never sends one gets a deterministic id, because an empty
+      // ToolCallId could not be correlated with the result the loop sends back.
+      if (block.id === '') block.id = call.id === undefined || call.id === '' ? `call_${call.index}` : call.id
       if (call.function?.name !== undefined) block.name = call.function.name
       const args = call.function?.arguments
       if (args !== undefined) block.text += args
       out.push({
         type: 'tool-call-delta',
         index: block.index,
-        id: block.id as ToolCallId,
+        id: ToolCallId(block.id),
         ...(block.name === '' ? {} : { name: block.name }),
         argumentsDelta: args ?? '',
       })
@@ -252,8 +279,8 @@ export class StreamTransducer {
     return [...this.closeAll(), { type: 'finish', reason: { kind: 'stop' } }]
   }
 
-  /** Whether the provider has terminated the stream, however it ends. */
-  get isFinished(): boolean {
-    return this.finished || this.closedReason !== undefined
+  /** The reason the provider closed with, once it has; the adapter judges an empty completion by it. */
+  get finishReason(): FinishReason | undefined {
+    return this.closedReason
   }
 }

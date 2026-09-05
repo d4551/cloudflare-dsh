@@ -66,7 +66,7 @@ class ToolRunError extends Error {
   }
 }
 
-interface Harness {
+export interface Harness {
   readonly requests: Request[]
   /** Every tool the plugin registered, by name. */
   names(): string[]

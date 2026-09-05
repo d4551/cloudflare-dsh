@@ -24,8 +24,24 @@ describe('mapFinishReason', () => {
     expect(mapFinishReason('stop')).toEqual({ kind: 'stop' })
   })
 
-  it('falls back to stop for an unknown reason rather than throwing', () => {
-    expect(mapFinishReason('content_filter')).toEqual({ kind: 'stop' })
+  it('maps a content filter to an error finish that names the policy', () => {
+    expect(mapFinishReason('content_filter')).toEqual({
+      kind: 'error',
+      failure: {
+        message: 'the provider withheld the completion under its content policy',
+        code: 'CONTENT_FILTER',
+      },
+    })
+  })
+
+  it('maps a reason it does not know to an error finish that quotes it', () => {
+    expect(mapFinishReason('eos_token')).toEqual({
+      kind: 'error',
+      failure: {
+        message: 'the provider ended the completion for a reason this adapter does not recognise: eos_token',
+        code: 'PROVIDER_ERROR',
+      },
+    })
   })
 })
 
@@ -234,12 +250,44 @@ describe('tool-call streaming', () => {
     ).toEqual([0, 0])
   })
 
-  it('leaves the id empty when the provider never sends one', () => {
+  // An empty ToolCallId could not be correlated with the result the loop sends
+  // back, so a call the provider never named gets a deterministic one.
+  it('gives a call the provider never named a deterministic id', () => {
     const chunks = run([call({ function: { name: 'f', arguments: '{}' } }), done('tool_calls')])
     expect(chunks.at(-2)).toEqual({
       type: 'block-end',
       index: 0,
-      block: { type: 'tool-call', id: '', name: 'f', arguments: '{}' },
+      block: { type: 'tool-call', id: 'call_0', name: 'f', arguments: '{}' },
+    })
+  })
+
+  it('uses the same deterministic id on the delta as on the block', () => {
+    const chunks = run([call({ function: { name: 'f', arguments: '{}' } }), done('tool_calls')])
+    expect(chunks.find((chunk) => chunk.type === 'tool-call-delta')).toMatchObject({ id: 'call_0' })
+  })
+
+  it('treats an empty provider id as no id', () => {
+    const chunks = run([call({ id: '', function: { name: 'f', arguments: '{}' } }), done('tool_calls')])
+    expect(chunks.at(-2)).toMatchObject({ block: { id: 'call_0' } })
+  })
+
+  it('exposes the reason it closed with, and none before a finish reason arrives', () => {
+    const t = new StreamTransducer()
+    expect(t.finishReason).toBeUndefined()
+    t.push(done('length'))
+    expect(t.finishReason).toEqual({ kind: 'max-tokens' })
+  })
+
+  it('keeps the first id a call was given', () => {
+    const chunks = run([
+      call({ id: 'first', function: { name: 'f', arguments: '{' } }),
+      call({ id: 'second', function: { arguments: '}' } }),
+      done('tool_calls'),
+    ])
+    expect(chunks.at(-2)).toEqual({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: 'first', name: 'f', arguments: '{}' },
     })
   })
 
@@ -325,13 +373,6 @@ describe('usage and finish ordering', () => {
     t.push({ choices: [{ delta: {}, finish_reason: 'length' }] })
     t.push({ choices: [], usage: { prompt_tokens: 1, completion_tokens: 2 } })
     expect(t.end()).toEqual([{ type: 'finish', reason: { kind: 'max-tokens' } }])
-  })
-
-  it('reports that it has finished', () => {
-    const t = new StreamTransducer()
-    expect(t.isFinished).toBe(false)
-    t.push(done())
-    expect(t.isFinished).toBe(true)
   })
 
   it('closes a truncated stream that never sent a finish reason', () => {

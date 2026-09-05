@@ -10,13 +10,6 @@ import type { CloudflareEnvelope, QueryValue } from './types.ts'
 /** The query overlay for the next page, or null when the walk is complete. */
 export type NextPageQuery = Readonly<Record<string, QueryValue>> | null
 
-/** Next step for a cursor-paginated endpoint (KV keys, Vectorize, AI Gateway logs). */
-export function nextCursorQuery(envelope: Pick<CloudflareEnvelope, 'result_info'>): NextPageQuery {
-  const cursor = envelope.result_info?.cursor
-  if (cursor === undefined || cursor === '') return null
-  return { cursor }
-}
-
 /**
  * Next step for a page-numbered endpoint.
  *

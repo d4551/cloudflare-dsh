@@ -23,6 +23,8 @@ export const TIMEOUT_CODE = 'TIMEOUT'
 export const PROVIDER_ERROR_CODE = 'PROVIDER_ERROR'
 /** Code for a rate-limited request. */
 export const RATE_LIMIT_CODE = 'RATE_LIMIT'
+/** Code for a completion the provider withheld under its content policy. */
+export const CONTENT_FILTER_CODE = 'CONTENT_FILTER'
 
 /** What a failed provider response tells us. */
 export interface ProviderFailure {

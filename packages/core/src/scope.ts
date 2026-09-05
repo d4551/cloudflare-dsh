@@ -1,32 +1,22 @@
 /**
- * The `{accounts_or_zones}` abstraction.
+ * Account scoping for request paths.
  *
- * Many Cloudflare endpoints accept either `/accounts/{id}/...` or
- * `/zones/{id}/...`. Rather than duplicate every call site, a resource path is
- * written scope-relative and prefixed here.
+ * Every Cloudflare resource this bundle wraps hangs off an account, so the scope
+ * is the account and nothing else. A scope-relative path becomes absolute by
+ * prefixing it, with the identifier percent-encoded.
  */
-import type { Scope, ScopeKind } from './types.ts'
+import type { Scope } from './types.ts'
 
-/** URL segment for each scope kind. */
-export function scopeSegment(kind: ScopeKind): string {
-  return kind === 'account' ? 'accounts' : 'zones'
+/** Build the account scope, refusing an empty id so misconfiguration fails loud. */
+export function makeScope(id: string): Scope {
+  if (id === '') throw new TypeError('Cloudflare account id must not be empty')
+  return { id }
 }
 
-/** Build a scope, rejecting an empty identifier so misconfiguration fails loud. */
-export function makeScope(kind: ScopeKind, id: string): Scope {
-  if (id === '') throw new TypeError(`Cloudflare ${kind} id must not be empty`)
-  return { kind, id }
-}
-
-/**
- * Prefix a scope-relative path with its scope root.
- *
- * @param scope - the resolved account or zone.
- * @param relative - path below the scope, with a leading slash (e.g. `/d1/database`).
- */
+/** Prefix a scope-relative path with the account root. */
 export function scopedPath(scope: Scope, relative: string): string {
   if (!relative.startsWith('/')) {
     throw new TypeError(`scope-relative path must start with "/", got ${JSON.stringify(relative)}`)
   }
-  return `/${scopeSegment(scope.kind)}/${encodeURIComponent(scope.id)}${relative}`
+  return `/accounts/${encodeURIComponent(scope.id)}${relative}`
 }

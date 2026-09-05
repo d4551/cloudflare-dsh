@@ -13,12 +13,10 @@ export const CF_CODE_UNAUTHORIZED = 10_000
 export class CloudflareError extends Error {
   override readonly name: string = 'CloudflareError'
   readonly status: number
-  readonly codes: readonly number[]
 
-  constructor(message: string, status: number, codes: readonly number[] = []) {
+  constructor(message: string, status: number) {
     super(message)
     this.status = status
-    this.codes = codes
   }
 }
 
@@ -32,8 +30,8 @@ export class CloudflareAuthError extends CloudflareError {
   override readonly name = 'CloudflareAuthError'
   readonly credentialRef: string
 
-  constructor(credentialRef: string, message: string, status: number, codes: readonly number[] = []) {
-    super(message, status, codes)
+  constructor(credentialRef: string, message: string, status: number) {
+    super(message, status)
     this.credentialRef = credentialRef
   }
 }
@@ -43,8 +41,8 @@ export class CloudflareRateLimitError extends CloudflareError {
   override readonly name = 'CloudflareRateLimitError'
   readonly retryAfterMs: number | null
 
-  constructor(message: string, retryAfterMs: number | null, codes: readonly number[] = []) {
-    super(message, 429, codes)
+  constructor(message: string, retryAfterMs: number | null) {
+    super(message, 429)
     this.retryAfterMs = retryAfterMs
   }
 }
@@ -52,8 +50,8 @@ export class CloudflareRateLimitError extends CloudflareError {
 /** The addressed resource does not exist. */
 export class CloudflareNotFoundError extends CloudflareError {
   override readonly name = 'CloudflareNotFoundError'
-  constructor(message: string, codes: readonly number[] = []) {
-    super(message, 404, codes)
+  constructor(message: string) {
+    super(message, 404)
   }
 }
 
@@ -132,13 +130,13 @@ export function classifyFailure(input: FailureInput): CloudflareError {
     input.envelope === undefined ? describeBody(input.status, input.body) : formatErrorEntries(entries)
 
   if (codes.includes(CF_CODE_UNAUTHORIZED) || input.status === 401 || input.status === 403) {
-    return new CloudflareAuthError(input.credentialRef, message, input.status, codes)
+    return new CloudflareAuthError(input.credentialRef, message, input.status)
   }
   if (input.status === 429) {
-    return new CloudflareRateLimitError(message, parseRetryAfterMs(input.retryAfter), codes)
+    return new CloudflareRateLimitError(message, parseRetryAfterMs(input.retryAfter))
   }
   if (input.status === 404) {
-    return new CloudflareNotFoundError(message, codes)
+    return new CloudflareNotFoundError(message)
   }
-  return new CloudflareError(message, input.status, codes)
+  return new CloudflareError(message, input.status)
 }

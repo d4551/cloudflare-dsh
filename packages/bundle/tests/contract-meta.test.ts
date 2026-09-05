@@ -56,7 +56,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
         method: {
           type: 'string',
           description: 'HTTP method.',
-          enum: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+          enum: ['GET', 'HEAD'],
         },
         path: {
           type: 'string',

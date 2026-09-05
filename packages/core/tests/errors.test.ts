@@ -120,17 +120,13 @@ describe('classifyFailure', () => {
     expect(err.name).toBe('CloudflareError')
   })
 
-  it('preserves codes on the fallback path', () => {
+  it('carries the envelope code in the message on the fallback path', () => {
     const err = classifyFailure({
       status: 400,
       credentialRef: REF,
       envelope: { errors: [{ code: 1004, message: 'bad request' }] },
     })
-    expect(err.codes).toEqual([1004])
-  })
-
-  it('defaults codes to an empty list when no envelope is supplied', () => {
-    expect(classifyFailure({ status: 500, credentialRef: REF, body: '' }).codes).toEqual([])
+    expect(err.message).toBe('[1004] bad request')
   })
 
   it('carries the status and the body when the body is not an envelope', () => {
@@ -170,12 +166,5 @@ describe('error identity', () => {
     expect(new CloudflareAuthError(REF, 'm', 401).name).toBe('CloudflareAuthError')
     expect(new CloudflareRateLimitError('m', null).name).toBe('CloudflareRateLimitError')
     expect(new CloudflareNotFoundError('m').name).toBe('CloudflareNotFoundError')
-  })
-
-  it('defaults codes to empty for directly constructed errors', () => {
-    expect(new CloudflareError('m', 500).codes).toEqual([])
-    expect(new CloudflareAuthError(REF, 'm', 401).codes).toEqual([])
-    expect(new CloudflareRateLimitError('m', null).codes).toEqual([])
-    expect(new CloudflareNotFoundError('m').codes).toEqual([])
   })
 })

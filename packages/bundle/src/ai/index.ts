@@ -14,7 +14,7 @@
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
-import type { LlmModelInfo } from '@deepseek-ai/dsh-llm'
+import type { LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import Schema from '@deepseek-ai/schemastery'
 import { aiModelsSearchSpec, gatewayUrlSpec } from '../specs/ai.ts'
 import { CloudflareAiAdapter, type ResolvedEndpoint } from './adapter.ts'
@@ -30,6 +30,13 @@ export type { ParsedJson, SseEvent } from './sse.ts'
 export { SSE_DONE, SseDecoder, decodeLine, parseJson } from './sse.ts'
 export type { WireChunk, WireChoice, WireDelta, WireToolCallDelta, WireUsage } from './transducer.ts'
 export { StreamTransducer, mapFinishReason, mapUsage } from './transducer.ts'
+
+/**
+ * Page size for a catalogue lookup by exact name. The search is a substring
+ * match, so a page must hold every model whose name contains the one asked
+ * for; the endpoint's own ceiling is the safe bound.
+ */
+const CATALOGUE_LOOKUP_PAGE_SIZE = 100
 
 /** Route names this plugin registers. */
 export const WORKERS_AI_PROVIDER = 'cloudflare-workers-ai'
@@ -106,6 +113,40 @@ interface GatewayUrlResult {
   readonly url?: string
 }
 
+/** One catalogue record, in the fields this plugin reads. */
+export interface CatalogueModel {
+  readonly name?: string
+  readonly description?: string
+  /** Cloudflare publishes model facts as `{ property_id, value }` pairs, values as strings. */
+  readonly properties?: readonly { readonly property_id?: string; readonly value?: unknown }[]
+}
+
+/**
+ * Turn one catalogue record into the metadata the harness can use for a call.
+ *
+ * `context_window` becomes the context size when it is a positive whole number,
+ * and the `vision` property widens the input modalities to images. A model the
+ * catalogue does not list keeps the bare identity: the list is advisory, and an
+ * unlisted id must still be callable.
+ */
+export function toResolvedModelInfo(
+  provider: string,
+  model: string,
+  record: CatalogueModel | undefined,
+): LlmResolvedModelInfo {
+  if (record === undefined) return { provider, id: model, name: model }
+  const properties = new Map(record.properties?.map((entry) => [entry.property_id, entry.value]))
+  const contextWindow = Number(properties.get('context_window'))
+  return {
+    provider,
+    id: model,
+    name: model,
+    ...(record.description === undefined ? {} : { description: record.description }),
+    inputModalities: properties.get('vision') === 'true' ? ['text', 'image'] : ['text'],
+    ...(Number.isInteger(contextWindow) && contextWindow > 0 ? { context: { contextWindow } } : {}),
+  }
+}
+
 /**
  * Turn the catalogue response into advisory model info.
  *
@@ -133,26 +174,67 @@ export function apply(ctx: Context, config: AiConfig): void {
   const cf = (ctx as CloudflareContext).cloudflare
   const llm = ctx.llm
 
-  async function resolveEndpoint(provider: string, _model: string): Promise<ResolvedEndpoint> {
-    const token = await cf.client.resolveToken()
+  // The endpoint URL is a fact of this configuration — the gateway's advertised
+  // base, or the account's OpenAI-compatible path — so it is read once per
+  // plugin instance rather than once per model call. The token is resolved on
+  // every call and never cached.
+  const endpointUrls = new Map<string, string>()
 
+  async function endpointUrl(provider: string, signal: AbortSignal | undefined): Promise<string> {
+    const known = endpointUrls.get(provider)
+    if (known !== undefined) return known
+    let url: string
     if (provider === AI_GATEWAY_PROVIDER) {
       if (config.gatewayId === '') throw new MissingGatewayError()
-      const result = await cf.accountRequest<GatewayUrlResult>(
-        gatewayUrlSpec(config.gatewayId, config.gatewayProvider),
-      )
+      const result = await cf.accountRequest<GatewayUrlResult>({
+        ...gatewayUrlSpec(config.gatewayId, config.gatewayProvider),
+        signal,
+      })
       const base = result.url
       if (base === undefined || base === '') {
         throw new MissingGatewayError()
       }
-      return { url: joinUrl(base, config.chatCompletionsPath), token }
+      url = joinUrl(base, config.chatCompletionsPath)
+    } else {
+      const scope = await cf.accountScope(signal)
+      url = joinUrl(cf.config.baseUrl, `/accounts/${encodeURIComponent(scope.id)}${config.workersAiPath}`)
     }
+    endpointUrls.set(provider, url)
+    return url
+  }
 
-    const scope = await cf.accountScope()
-    return {
-      url: joinUrl(cf.config.baseUrl, `/accounts/${encodeURIComponent(scope.id)}${config.workersAiPath}`),
-      token,
-    }
+  async function resolveEndpoint(
+    provider: string,
+    _model: string,
+    signal?: AbortSignal,
+  ): Promise<ResolvedEndpoint> {
+    const [token, url] = await Promise.all([cf.client.resolveToken(), endpointUrl(provider, signal)])
+    return { url, token }
+  }
+
+  // Model facts change when Cloudflare changes them, not between two calls of
+  // one plugin instance; one catalogue lookup per model is enough.
+  const modelInfo = new Map<string, LlmResolvedModelInfo>()
+
+  async function resolveModel(
+    provider: string,
+    model: string,
+    signal?: AbortSignal,
+  ): Promise<LlmResolvedModelInfo> {
+    const key = `${provider} ${model}`
+    const known = modelInfo.get(key)
+    if (known !== undefined) return known
+    const matches = await cf.accountRequest<CatalogueModel[]>({
+      ...aiModelsSearchSpec(model, undefined, CATALOGUE_LOOKUP_PAGE_SIZE),
+      signal,
+    })
+    const info = toResolvedModelInfo(
+      provider,
+      model,
+      matches.find((record) => record.name === model),
+    )
+    modelInfo.set(key, info)
+    return info
   }
 
   async function listModels(provider: string): Promise<readonly LlmModelInfo[]> {
@@ -167,6 +249,7 @@ export function apply(ctx: Context, config: AiConfig): void {
 
   const adapter = new CloudflareAiAdapter({
     resolveEndpoint,
+    resolveModel,
     listModels,
     fetch: (request) => fetch(request),
     headerOptions: {

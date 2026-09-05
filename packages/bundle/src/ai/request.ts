@@ -7,8 +7,17 @@
  * Tool-call arguments stay raw JSON strings in both directions: the harness
  * requires it, and re-parsing them here would lose whatever the model actually
  * emitted when it is not valid JSON.
+ *
+ * Every content block kind has a stated fate here. Text is sent. Tool calls and
+ * tool results round-trip. Images are projected to the harness's deterministic
+ * text through its own helper: inlining them would need the attachment store's
+ * bytes, which this adapter is not wired to, and Cloudflare's OpenAI-compatible
+ * endpoint accepts only data URLs for images in any case. Reasoning is the
+ * model's earlier thinking; OpenAI-compatible reasoning APIs refuse it in input,
+ * so it is left out by that rule rather than dropped by accident.
  */
 import type { ContentBlock, GenerateOptions, Message, ToolSchema } from '@deepseek-ai/dsh-llm'
+import { projectImagesForTextModel } from '@deepseek-ai/dsh-llm'
 import { unsupportedOption } from './errors.ts'
 
 /** One tool call carried on an assistant message. */
@@ -44,7 +53,7 @@ export interface WireRequest {
   readonly tools?: readonly WireTool[]
 }
 
-/** Concatenate the text-bearing blocks of a message. */
+/** Concatenate the text blocks of a message; reasoning is not text the provider may see again. */
 export function textOf(content: readonly ContentBlock[]): string {
   return content.reduce((text, block) => (block.type === 'text' ? text + block.text : text), '')
 }
@@ -53,16 +62,25 @@ export function textOf(content: readonly ContentBlock[]): string {
  * Translate one harness message into zero or more wire messages.
  *
  * A tool-result block becomes its own `role: 'tool'` message, which is how
- * OpenAI-compatible providers expect results to be correlated.
+ * OpenAI-compatible providers correlate results. Text carried beside the
+ * results follows them as a message in the original role, so nothing the
+ * message said is lost; the results come first because the provider expects
+ * them directly after the assistant turn that called the tools.
+ *
+ * The wire has no field for `isError`: the registry writes a failed result's
+ * content as `Error: …`, and that text reaches the provider verbatim.
  */
 export function toWireMessages(message: Message): WireMessage[] {
+  const text = textOf(message.content)
   const toolResults = message.content.filter((b) => b.type === 'tool-result')
   if (toolResults.length > 0) {
-    return toolResults.map((block): WireMessage => ({
+    const wire: WireMessage[] = toolResults.map((block) => ({
       role: 'tool',
       tool_call_id: block.toolCallId,
       content: textOf(block.content),
     }))
+    if (text !== '') wire.push({ role: message.role, content: text })
+    return wire
   }
 
   const toolCalls = message.content.filter((b) => b.type === 'tool-call')
@@ -70,7 +88,7 @@ export function toWireMessages(message: Message): WireMessage[] {
     return [
       {
         role: 'assistant',
-        content: textOf(message.content),
+        content: text,
         tool_calls: toolCalls.map((block): WireToolCall => ({
           id: block.id,
           type: 'function',
@@ -79,7 +97,7 @@ export function toWireMessages(message: Message): WireMessage[] {
       },
     ]
   }
-  return [{ role: message.role, content: textOf(message.content) }]
+  return [{ role: message.role, content: text }]
 }
 
 /** Translate harness tool schemas into the provider's `tools` field. */
@@ -106,7 +124,9 @@ export function buildWireRequest(options: GenerateOptions): WireRequest {
   if (options.system !== undefined && options.system !== '') {
     messages.push({ role: 'system', content: options.system })
   }
-  for (const message of options.messages) messages.push(...toWireMessages(message))
+  for (const message of projectImagesForTextModel(options.messages)) {
+    messages.push(...toWireMessages(message))
+  }
 
   const tools = options.tools
   return {
