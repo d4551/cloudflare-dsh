@@ -76,10 +76,6 @@ describe('buildGatewayHeaders', () => {
     expect(buildGatewayHeaders({}, {})['cf-aig-cache-ttl']).toBeUndefined()
   })
 
-  it('omits the cache ttl when unset, leaving gateway defaults alone', () => {
-    expect(buildGatewayHeaders({}, {})['cf-aig-cache-ttl']).toBeUndefined()
-  })
-
   it('skips the cache only when explicitly asked', () => {
     expect(buildGatewayHeaders({}, { skipCache: true })['cf-aig-skip-cache']).toBe('true')
     expect(buildGatewayHeaders({}, { skipCache: false })['cf-aig-skip-cache']).toBeUndefined()

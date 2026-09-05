@@ -4,11 +4,13 @@
     ".": {
       "entry": [
         "stryker.config.json",
-        "tests/**/*.test.ts"
+        "tests/**/*.test.ts",
+        "scripts/**/*.ts"
       ],
       "project": [
         "*.ts",
-        "tests/**/*.ts"
+        "tests/**/*.ts",
+        "scripts/**/*.ts"
       ]
     },
     "packages/core": {

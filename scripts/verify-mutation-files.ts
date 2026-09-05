@@ -15,12 +15,17 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import ts from 'typescript'
 
+/** The subset of Stryker's JSON report this guard reads. */
+interface MutationReport {
+  readonly files: Readonly<Record<string, unknown>>
+}
+
 const REPORT = 'reports/mutation/mutation.json'
 const ROOTS = readdirSync('packages').map((pkg) => join('packages', pkg, 'src'))
 
 /** Every `.ts`/`.tsx` file under the mutated roots. */
-function sources(dir) {
-  const out = []
+function sources(dir: string): string[] {
+  const out: string[] = []
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry)
     if (statSync(path).isDirectory()) out.push(...sources(path))
@@ -30,7 +35,7 @@ function sources(dir) {
 }
 
 /** Whether the file emits no JavaScript once its types are erased. */
-function isTypeOnly(path) {
+function isTypeOnly(path: string): boolean {
   const { outputText } = ts.transpileModule(readFileSync(path, 'utf8'), {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
@@ -42,10 +47,23 @@ function isTypeOnly(path) {
   return outputText.replace(/export\s*\{\s*\}\s*;?/g, '').trim() === ''
 }
 
-const report = JSON.parse(readFileSync(REPORT, 'utf8'))
+// A report older than the sources it claims to describe proves nothing: it
+// would happily validate a tree it never saw. This is not a style check —
+// an interrupted run leaves exactly such a file behind.
+const reportedAt = statSync(REPORT).mtimeMs
+const stale = ROOTS.flatMap(sources).filter((path: string) => statSync(path).mtimeMs > reportedAt)
+if (stale.length > 0) {
+  console.error(
+    `The mutation report predates these sources, so it does not describe this tree:\n  ${stale.join('\n  ')}`,
+  )
+  console.error('Re-run `bun run stryker`.')
+  process.exit(1)
+}
+
+const report = JSON.parse(readFileSync(REPORT, 'utf8')) as MutationReport
 const mutated = new Set(Object.keys(report.files).map((f) => relative('.', f)))
 
-const escaped = ROOTS.flatMap(sources).filter((path) => !mutated.has(path) && !isTypeOnly(path))
+const escaped = ROOTS.flatMap(sources).filter((path: string) => !mutated.has(path) && !isTypeOnly(path))
 
 if (escaped.length > 0) {
   console.error(`These files emit JavaScript but produced no mutants:\n  ${escaped.join('\n  ')}`)

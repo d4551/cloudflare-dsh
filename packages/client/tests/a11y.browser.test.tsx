@@ -143,11 +143,14 @@ describe('accessibility in Chromium', () => {
   it('computes real colour contrast, which jsdom cannot', async () => {
     const { page, context } = await open(SURFACES[0]!.markup, 'light')
     try {
-      const results = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze()
-      // The rule must actually have run here — that is the whole point of this
-      // lane. A jsdom run reports it as inapplicable.
+      // No rule filter even here: the full rule set runs, and the contrast rule
+      // is proven to have executed by finding it in the results rather than by
+      // narrowing the run to it. A jsdom run reports it as inapplicable, so its
+      // presence among passes or incomplete is the real signal.
+      const results = await new AxeBuilder({ page }).analyze()
       expect(results.violations).toEqual([])
-      expect(results.passes.length + results.incomplete.length).toBeGreaterThan(0)
+      const contrast = [...results.passes, ...results.incomplete].filter((r) => r.id === 'color-contrast')
+      expect(contrast).not.toEqual([])
     } finally {
       await context.close()
     }

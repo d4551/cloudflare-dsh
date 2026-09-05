@@ -64,8 +64,9 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-llm": "0.1.2-rc.1",
     "@deepseek-ai/dsh-tools": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-llm": "0.1.2-rc.1"
+    "yaml": "^2.8.0"
   },
   "scripts": {
     "build": "tsdown",

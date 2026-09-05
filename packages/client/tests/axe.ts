@@ -9,12 +9,17 @@
  * No rule is disabled and no selector is excluded — a violation here means the
  * markup is wrong.
  */
-import axe, { type AxeResults, type RunOptions } from 'axe-core'
+import axe, { type AxeResults } from 'axe-core'
 import { expect } from 'vitest'
 
-/** Run axe against a container and return its results. */
-async function runAxe(container: Element, options: RunOptions = {}): Promise<AxeResults> {
-  return axe.run(container, options)
+/**
+ * Run axe against a container and return its results.
+ *
+ * Takes no options on purpose: an options parameter here is where a rule
+ * disable would hide, and no caller has ever needed one.
+ */
+async function runAxe(container: Element): Promise<AxeResults> {
+  return axe.run(container)
 }
 
 /** Format violations so a failure names the rule and the offending nodes. */
@@ -28,7 +33,7 @@ function formatViolations(results: AxeResults): string {
 }
 
 /** Assert a container has no accessibility violations. */
-export async function expectNoViolations(container: Element, options: RunOptions = {}): Promise<void> {
-  const results = await runAxe(container, options)
+export async function expectNoViolations(container: Element): Promise<void> {
+  const results = await runAxe(container)
   expect(results.violations, `axe violations:\n${formatViolations(results)}`).toEqual([])
 }

@@ -8,6 +8,9 @@
     "packages/*/src/**/*.tsx",
     "packages/*/tests/**/*.ts",
     "packages/*/tests/**/*.tsx",
+    "packages/*/tsdown.config.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
     "*.config.ts"
   ]
 }

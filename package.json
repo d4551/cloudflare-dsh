@@ -16,7 +16,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:a11y": "vitest run --config vitest.a11y.config.ts",
-    "stryker": "stryker run && node scripts/verify-mutation-files.mjs",
+    "stryker": "stryker run && bun scripts/verify-mutation-files.ts",
     "publint": "bun run --filter '*' publint",
     "knip": "knip",
     "test:dist": "vitest run --config vitest.dist.config.ts",

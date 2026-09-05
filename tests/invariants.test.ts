@@ -22,10 +22,44 @@ const tracked = execFileSync('git', ['ls-files'], { cwd: root('..'), encoding: '
   .filter((line) => line !== '')
 
 const read = (file: string): string => readFileSync(root(`../${file}`), 'utf8')
-const json = (file: string): Record<string, never> => JSON.parse(read(file)) as Record<string, never>
+const json = <T>(file: string): T => JSON.parse(read(file)) as T
+
+/** The gate configuration this suite polices, typed so a missing key is an error. */
+interface PackageJson {
+  readonly scripts: Readonly<Record<string, string>>
+}
+interface StrykerConfig {
+  readonly mutate: readonly string[]
+  readonly thresholds: Readonly<Record<string, number>>
+}
+interface OxlintConfig {
+  readonly categories: Readonly<Record<string, string>>
+}
+interface TsConfigBase {
+  readonly compilerOptions: Readonly<Record<string, unknown>>
+}
+interface TsConfig {
+  readonly include: readonly string[]
+}
+interface KnipWorkspace {
+  readonly project?: readonly string[]
+  readonly entry?: readonly string[]
+  readonly ignore?: readonly string[]
+  readonly ignoreDependencies?: readonly string[]
+}
+interface KnipConfig {
+  readonly workspaces: Readonly<Record<string, KnipWorkspace>>
+}
 
 const code = tracked.filter((file) => /\.(ts|tsx|mjs|cjs|js|json|ya?ml)$/.test(file))
-const tests = code.filter((file) => /\.test\.tsx?$/.test(file))
+/**
+ * Every file under a tests directory, not only `*.test.ts`.
+ *
+ * A helper is exactly where an evasion would hide: a shared harness or an axe
+ * wrapper with a rule-disabling default is invisible to a scan that only looks
+ * at files whose name ends in `.test.ts`.
+ */
+const tests = code.filter((file) => /(^|\/)tests\//.test(file))
 const sources = code.filter((file) => /^packages\/[^/]+\/src\//.test(file))
 
 /** Files containing a needle, so a failure names them. */
@@ -60,19 +94,19 @@ describe('no test evasions', () => {
 
 describe('mutation testing cannot be narrowed', () => {
   it('mutates every source extension, with no negated pattern', () => {
-    expect(json('stryker.config.json').mutate).toEqual([
+    expect(json<StrykerConfig>('stryker.config.json').mutate).toEqual([
       'packages/*/src/**/*.ts',
       'packages/*/src/**/*.tsx',
     ])
   })
 
   it('fails the run below a perfect score', () => {
-    expect(json('stryker.config.json').thresholds).toEqual({ high: 100, low: 100, break: 100 })
+    expect(json<StrykerConfig>('stryker.config.json').thresholds).toEqual({ high: 100, low: 100, break: 100 })
   })
 
   it('runs the escape guard after the mutation run', () => {
-    expect(json('package.json').scripts.stryker).toBe(
-      'stryker run && node scripts/verify-mutation-files.mjs',
+    expect(json<PackageJson>('package.json').scripts.stryker).toBe(
+      'stryker run && bun scripts/verify-mutation-files.ts',
     )
   })
 
@@ -80,6 +114,7 @@ describe('mutation testing cannot be narrowed', () => {
     // Stryker does not mutate inside a const assertion. One of these once hid a
     // whole file: 47 mutants, ten of them untested.
     expect(containing(sources, 'as const')).toEqual([])
+    expect(containing(sources, `<con${'st>'}`)).toEqual([])
   })
 })
 
@@ -94,6 +129,18 @@ describe('coverage cannot be softened', () => {
     ])
   })
 
+  it('excludes nothing from the measurement', () => {
+    // `coverage.exclude: ['packages/bundle/src/**']` would leave every other
+    // assertion in this block passing while the metric measured almost nothing.
+    // The lane-separation `test.exclude` is a different key and is legitimate,
+    // so this reads the coverage block alone rather than the whole file.
+    const config = read('vitest.config.ts')
+    const start = config.indexOf('coverage: {')
+    expect(start).toBeGreaterThan(-1)
+    const block = config.slice(start, config.indexOf('\n    }', start))
+    expect(block).not.toContain('exclude')
+  })
+
   it('measures every source extension', () => {
     expect(read('vitest.config.ts')).toContain(
       "include: ['packages/*/src/**/*.ts', 'packages/*/src/**/*.tsx']",
@@ -103,12 +150,22 @@ describe('coverage cannot be softened', () => {
 
 describe('linting cannot be softened', () => {
   it('grades every enabled category as an error', () => {
-    const categories: Record<string, string> = json('.oxlintrc.json').categories
+    const { categories } = json<OxlintConfig>('.oxlintrc.json')
     expect(Object.entries(categories).filter(([, level]) => level !== 'error')).toEqual([])
   })
 
+  it('keeps every category that must be graded, so none can be dropped', () => {
+    // Asserting only that present categories are errors is checkable by
+    // omission: deleting one leaves an empty filter and a green gate.
+    expect(Object.keys(json<OxlintConfig>('.oxlintrc.json').categories).toSorted()).toEqual([
+      'correctness',
+      'perf',
+      'suspicious',
+    ])
+  })
+
   it('fails the build on a warning', () => {
-    expect(json('package.json').scripts.lint).toContain('--deny-warnings')
+    expect(json<PackageJson>('package.json').scripts.lint).toContain('--deny-warnings')
   })
 })
 
@@ -119,19 +176,53 @@ describe('type checking cannot be skipped', () => {
     ['noUncheckedIndexedAccess', true],
     ['exactOptionalPropertyTypes', true],
   ])('%s is %s', (option, value) => {
-    expect(json('tsconfig.base.json').compilerOptions[option]).toBe(value)
+    expect(json<TsConfigBase>('tsconfig.base.json').compilerOptions[option]).toBe(value)
   })
 })
 
 describe('nothing is hidden from the unused-code gate', () => {
   it('scans the root workspace as well as the packages', () => {
-    expect(json('knip.json').workspaces['.'].project).toEqual(['*.ts', 'tests/**/*.ts'])
+    expect(json<KnipConfig>('knip.json').workspaces['.']?.project).toEqual([
+      '*.ts',
+      'tests/**/*.ts',
+      'scripts/**/*.ts',
+    ])
+  })
+
+  it('gives every workspace a project scope', () => {
+    const { workspaces } = json<KnipConfig>('knip.json')
+    expect(Object.entries(workspaces).filter(([, ws]) => (ws.project ?? []).length === 0)).toEqual([])
+  })
+
+  it('hides nothing behind an ignore list', () => {
+    // An `ignore` or `ignoreDependencies` key would silently exempt code from
+    // the unused-code gate, which is the same shape as a mutate exclusion.
+    const { workspaces } = json<KnipConfig>('knip.json')
+    const hiding = Object.entries(workspaces).filter(
+      ([, ws]) => ws.ignore !== undefined || ws.ignoreDependencies !== undefined,
+    )
+    expect(hiding).toEqual([])
+  })
+})
+
+describe('nothing is hidden from the type checker', () => {
+  it.each([
+    'tests/**/*.ts',
+    'scripts/**/*.ts',
+    'packages/*/tsdown.config.ts',
+    'packages/*/src/**/*.ts',
+    'packages/*/tests/**/*.ts',
+  ])('%s is typechecked', (pattern) => {
+    // This suite polices every other gate, and until these patterns existed it
+    // was not itself typechecked — eight real type errors were hiding in it.
+    expect(json<TsConfig>('tsconfig.json').include).toContain(pattern)
   })
 })
 
 describe('accessibility cannot be filtered', () => {
   it.each([
     ['tag scope', `with${'Tags('}`],
+    ['rule narrowing', `with${'Rules('}`],
     ['rule disabling', `disable${'Rules('}`],
     ['selector exclusion', `.exc${'lude('}`],
     ['inline rule overrides', `rul${'es: {'}`],
