@@ -208,6 +208,13 @@ The invariants lane now bans defined-only, truthy, falsy and anything-matcher
 assertions, swallowed rejections, and locale imports in tests, so none of
 these can return unnoticed.
 
+**Mutation result at `e69554f`: 99.96%, one survivor** — the diagnostic label
+on the client plugin's effect registrations, which nothing observed. cordis
+reports those labels through `getEffects()`, so the lifecycle test now pins all
+five (slot and key) and asserts none remain after disposal. Every registration
+this package makes is keyed, so the slice interface now requires the id rather
+than carrying a fallback for a case that never occurs.
+
 </details>
 
 <details>

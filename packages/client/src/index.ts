@@ -28,10 +28,10 @@ export {
 export { BrowserRender, type BrowserRenderProps } from './toolviews/BrowserRender.tsx'
 export { D1Result, type D1ResultProps, type D1ResultSet } from './toolviews/D1Result.tsx'
 
-/** One slot registration request. */
+/** One slot registration request. Every registration this package makes is keyed. */
 export interface SlotRegistration {
   readonly name: string
-  readonly id?: string
+  readonly id: string
   readonly order?: number
 }
 
@@ -67,7 +67,10 @@ export function apply(ctx: Context): void {
   // whenever the host declares that slot; the effect is created at that moment,
   // which the fiber accepts for as long as the plugin is loaded.
   const register = (registration: SlotRegistration, component: unknown): void => {
-    ctx.effect(() => slots.register(registration, component), `slots.register(${registration.name})`)
+    ctx.effect(
+      () => slots.register(registration, component),
+      `slots.register(${registration.name}#${registration.id})`,
+    )
   }
 
   slots.inject(SESSION_HEADER_SLOT, () => {

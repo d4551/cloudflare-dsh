@@ -7,7 +7,7 @@ import { D1Result } from '../src/toolviews/D1Result.tsx'
 
 /** A context with a recording slots runtime, as the Web Client would supply. */
 function harness() {
-  const registered: { name: string; id?: string; order?: number; component: unknown }[] = []
+  const registered: { name: string; id: string; order?: number; component: unknown }[] = []
   const declared: string[] = []
   const ctx = new Context()
   ctx.provide('slots', {
@@ -107,7 +107,17 @@ describe('lifecycle', () => {
     const { ctx, registered } = harness()
     const fiber = await ctx.plugin(client)
     expect(registered).toHaveLength(5)
+    // The labels are what `getEffects()` shows someone debugging a profile, so
+    // they name the slot and the key of each contribution.
+    expect(fiber.getEffects().map((effect) => effect.label)).toEqual([
+      'slots.register(conversation.session.header.actions#cloudflare-cost)',
+      'slots.register(tool.call.toolview#cloudflare_d1_query)',
+      'slots.register(tool.call.toolview#cloudflare_browser_render)',
+      'slots.register(tool.call.toolview#cloudflare_browser_accessibility_tree)',
+      'slots.register(settings.plugin.cloudflare#cloudflare-settings)',
+    ])
     await fiber.dispose()
     expect(registered).toEqual([])
+    expect(fiber.getEffects()).toEqual([])
   })
 })
