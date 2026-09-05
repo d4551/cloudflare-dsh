@@ -195,6 +195,10 @@ now, by making the code true rather than the words softer.
 The test harness applies each plugin through its own `Config`, as the harness
 does, so no test reaches a tool with an unvalidated configuration.
 
+The run that followed, on the committed tree, scored 100.00% — 2,689 killed,
+13 timeouts, none surviving — across 2,702 mutants, 56 more than the run
+before it; the cursor guard and every `Config` default are among them.
+
 </details>
 
 <details>
