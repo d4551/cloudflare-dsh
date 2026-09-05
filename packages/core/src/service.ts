@@ -66,6 +66,7 @@ export class CloudflareService extends Service {
         maxDelayMs: config.retryMaxDelayMs,
       },
       maxPages: config.maxPages,
+      requestTimeoutMs: config.requestTimeoutMs,
       fetch: deps.fetch ?? ((request) => fetch(request)),
     })
   }

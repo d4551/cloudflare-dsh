@@ -105,6 +105,7 @@ export class StreamTransducer {
   private text: OpenBlock | undefined
   private reasoning: OpenBlock | undefined
   private readonly toolCalls = new Map<number, OpenBlock>()
+  private closedReason: FinishReason | undefined
   private finished = false
 
   /** Open a block, allocating the next index in first-seen order. */
@@ -142,22 +143,29 @@ export class StreamTransducer {
     if (this.finished) return []
     const out: StreamChunk[] = []
     const choices = chunk.choices
+    const open = this.closedReason === undefined
 
     // A usage-only chunk carries no choices at all, so the absence is a real
     // state rather than something to paper over with an empty default.
-    if (choices !== undefined) {
+    if (choices !== undefined && open) {
       for (const choice of choices) this.pushDelta(choice.delta, out)
     }
+
+    // Usage is still accepted after a finish reason. OpenAI-compatible
+    // providers asked for `stream_options.include_usage` answer with the
+    // finish-reason chunk carrying `usage: null`, then a final choice-less
+    // chunk carrying the counts. Emitting `finish` on the first of those would
+    // discard the token accounting the whole gateway cost feature is built on.
     if (chunk.usage !== undefined && chunk.usage !== null) {
       out.push({ type: 'usage', usage: mapUsage(chunk.usage) })
     }
-    if (choices !== undefined) {
+
+    if (choices !== undefined && open) {
       for (const choice of choices) {
         const reason = choice.finish_reason
         if (reason === undefined || reason === null) continue
         out.push(...this.closeAll())
-        out.push({ type: 'finish', reason: mapFinishReason(reason) })
-        this.finished = true
+        this.closedReason = mapFinishReason(reason)
         return out
       }
     }
@@ -239,11 +247,13 @@ export class StreamTransducer {
   end(): StreamChunk[] {
     if (this.finished) return []
     this.finished = true
+    const closed = this.closedReason
+    if (closed !== undefined) return [{ type: 'finish', reason: closed }]
     return [...this.closeAll(), { type: 'finish', reason: { kind: 'stop' } }]
   }
 
-  /** Whether a finish chunk has already been emitted. */
+  /** Whether the provider has terminated the stream, however it ends. */
   get isFinished(): boolean {
-    return this.finished
+    return this.finished || this.closedReason !== undefined
   }
 }

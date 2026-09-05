@@ -1,11 +1,9 @@
 /**
  * The quality rules, as a gate rather than as prose.
  *
- * Every rule the README states is asserted here. A rule documented but not
- * enforced is a claim standing on nothing: it holds only until someone changes
- * a config, and nothing goes red when they do. Three restarts of this project's
- * audit loop were exactly that failure — a gate passing for the wrong reason —
- * so the rules now fail a build instead of describing an intention.
+ * Every rule the README states is asserted here. A rule that is only documented
+ * holds until someone edits a config, and nothing goes red when they do — so
+ * the rules fail a build instead of describing an intention.
  *
  * The suppression and evasion needles are assembled from fragments so this file
  * does not contain the text it forbids, and therefore needs no exemption for

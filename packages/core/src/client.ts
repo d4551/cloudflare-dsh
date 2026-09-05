@@ -24,15 +24,35 @@ export interface CloudflareClientOptions {
   readonly baseUrl?: string
   readonly retry: RetryPolicy
   readonly maxPages: number
+  /** How long one attempt may run before it is aborted. */
+  readonly requestTimeoutMs: number
   readonly fetch: FetchLike
   readonly sleep?: (ms: number) => Promise<void>
   readonly random?: () => number
 }
 
-/** Recover the HTTP status behind a thrown value, for the retry policy. */
+/**
+ * Recover the HTTP status behind a thrown value, for the retry policy.
+ *
+ * A transport failure — a reset connection, a DNS blip — arrives as a bare
+ * `TypeError` from `fetch` with no status at all. It is the commonest transient
+ * failure there is, so it maps onto a retryable status rather than being
+ * treated as a permanent error. An `AbortError` is the caller's decision and
+ * must never be retried.
+ */
 export function statusOfError(error: unknown): number {
-  return error instanceof CloudflareError ? error.status : 0
+  if (error instanceof CloudflareError) return error.status
+  if (error instanceof TypeError) return TRANSPORT_FAILURE_STATUS
+  return 0
 }
+
+/**
+ * Status stood in for a transport failure that carries none.
+ *
+ * 503 is the closest true statement: the service could not be reached on this
+ * attempt, and the condition is expected to be transient.
+ */
+export const TRANSPORT_FAILURE_STATUS = 503
 
 /** Default sleep. Exported so its behaviour is directly testable. */
 export function realSleep(ms: number): Promise<void> {
@@ -94,6 +114,19 @@ export class CloudflareClient {
   }
 
   /**
+   * Build one attempt's request, under one deadline.
+   *
+   * The budget is per attempt, not per operation: a retry gets a fresh one,
+   * which is what makes a timeout a transient failure rather than a cap on the
+   * whole retried sequence. A caller signal aborts every attempt.
+   */
+  #buildRequest(spec: RequestSpec, token: string): Request {
+    const timeout = AbortSignal.timeout(this.#options.requestTimeoutMs)
+    const signal = spec.signal === undefined ? timeout : AbortSignal.any([spec.signal, timeout])
+    return new Request(buildRequest({ baseUrl: this.#baseUrl, spec, token }), { signal })
+  }
+
+  /**
    * Send one request and read its envelope, with no retrying.
    *
    * Shared by `request` and `requestEnvelope` so both apply exactly the same
@@ -102,7 +135,7 @@ export class CloudflareClient {
   async #send<T>(spec: RequestSpec): Promise<CloudflareEnvelope<T>> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
-    const response = await this.#options.fetch(buildRequest({ baseUrl: this.#baseUrl, spec, token }))
+    const response = await this.#options.fetch(this.#buildRequest(spec, token))
     const read = await readEnvelope<T>(response)
     const retryAfter = response.headers.get('retry-after')
 
@@ -146,7 +179,7 @@ export class CloudflareClient {
   async requestText(spec: RequestSpec): Promise<string> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
-    const response = await this.#options.fetch(buildRequest({ baseUrl: this.#baseUrl, spec, token }))
+    const response = await this.#options.fetch(this.#buildRequest(spec, token))
     const body = await response.text()
     if (!response.ok) {
       throw classifyFailure({

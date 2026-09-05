@@ -1,6 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CloudflareClient, accountScope, readEnvelope, realSleep, statusOfError } from '../src/client.ts'
-import { CloudflareAuthError, CloudflareError, CloudflareNotFoundError } from '../src/errors.ts'
+import {
+  CloudflareClient,
+  TRANSPORT_FAILURE_STATUS,
+  accountScope,
+  readEnvelope,
+  realSleep,
+  statusOfError,
+} from '../src/client.ts'
+import {
+  CloudflareAuthError,
+  CloudflareError,
+  CloudflareNotFoundError,
+  isRetryableStatus,
+} from '../src/errors.ts'
 import { nextCursorQuery } from '../src/paginate.ts'
 import type { CloudflareEnvelope } from '../src/types.ts'
 
@@ -21,7 +33,7 @@ function ok<T>(result: T, info?: CloudflareEnvelope['result_info']): CloudflareE
     : { success: true, errors: [], messages: [], result, result_info: info }
 }
 
-function makeClient(fetchImpl: (req: Request) => Promise<Response>, over: Partial<{ maxPages: number }> = {}) {
+function makeClient(fetchImpl: (req: Request) => Promise<Response>, over: Partial<{ maxPages: number; requestTimeoutMs: number }> = {}) {
   const requests: Request[] = []
   const client = new CloudflareClient({
     credentials: { resolve: () => 'tok' },
@@ -29,6 +41,7 @@ function makeClient(fetchImpl: (req: Request) => Promise<Response>, over: Partia
     baseUrl: 'https://api.test/client/v4',
     retry,
     maxPages: over.maxPages ?? 10,
+    requestTimeoutMs: over.requestTimeoutMs ?? 30_000,
     fetch: async (req) => {
       requests.push(req)
       return fetchImpl(req)
@@ -39,14 +52,70 @@ function makeClient(fetchImpl: (req: Request) => Promise<Response>, over: Partia
   return { client, requests }
 }
 
+/**
+ * A fetch that never settles on its own, the way a hung connection behaves.
+ *
+ * A real fetch rejects immediately on an already-aborted signal rather than
+ * waiting for an event that has been and gone, so this does too.
+ */
+function hang(request: Request): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    const fail = (): void => {
+      reject(new DOMException('aborted', 'AbortError'))
+    }
+    if (request.signal.aborted) fail()
+    else request.signal.addEventListener('abort', fail)
+  })
+}
+
 describe('statusOfError', () => {
   it('reads the status from a Cloudflare error', () => {
     expect(statusOfError(new CloudflareError('x', 503))).toBe(503)
   })
 
+  it('treats a transport failure as retryable', () => {
+    // `fetch` reports a reset connection or a DNS failure as a bare TypeError
+    // with no status. It is the commonest transient failure there is, and it
+    // was previously classified as permanent.
+    expect(statusOfError(new TypeError('fetch failed'))).toBe(TRANSPORT_FAILURE_STATUS)
+    expect(isRetryableStatus(TRANSPORT_FAILURE_STATUS)).toBe(true)
+  })
+
+  it('does not retry an abort, which is the caller deciding to stop', () => {
+    // Aborting a fetch throws a DOMException, not a TypeError.
+    expect(statusOfError(new DOMException('aborted', 'AbortError'))).toBe(0)
+  })
+
   it('reports zero for anything else so it is not retried', () => {
     expect(statusOfError(new Error('boom'))).toBe(0)
     expect(statusOfError('nope')).toBe(0)
+  })
+})
+
+describe('request cancellation', () => {
+  it('aborts an attempt that outruns the configured budget', async () => {
+    // Without this the request hangs for as long as the connection does, and
+    // `requestTimeoutMs` is a setting that does nothing.
+    const { client } = makeClient(hang, { requestTimeoutMs: 10 })
+    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow('aborted')
+  })
+
+  it('aborts an attempt when the caller cancels', async () => {
+    const controller = new AbortController()
+    const { client } = makeClient((request) => {
+      controller.abort()
+      return hang(request)
+    })
+    await expect(
+      client.request({ method: 'GET', path: '/x', signal: controller.signal }),
+    ).rejects.toThrow('aborted')
+  })
+
+  it('does not retry an abort', async () => {
+    const fetchImpl = vi.fn(hang)
+    const { client } = makeClient(fetchImpl, { requestTimeoutMs: 10 })
+    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow('aborted')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -112,6 +181,7 @@ describe('CloudflareClient.request', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
+    requestTimeoutMs: 30_000,
       fetch: async (req) => {
         requests.push(req)
         return json(ok(null))
@@ -220,6 +290,7 @@ describe('CloudflareClient.request', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
+    requestTimeoutMs: 30_000,
       fetch: async () => {
         calls += 1
         return calls === 1 ? json({ success: false, errors: [], messages: [], result: null }, { status: 500 }) : json(ok(1))
@@ -237,6 +308,7 @@ describe('CloudflareClient.request', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
+    requestTimeoutMs: 30_000,
       fetch: async () => json(ok(null)),
     })
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareAuthError)
@@ -249,6 +321,7 @@ describe('CloudflareClient.request', () => {
       apiTokenRef: REF,
       retry: { maxRetries: 1, baseDelayMs: 0, maxDelayMs: 0 },
       maxPages: 1,
+    requestTimeoutMs: 30_000,
       fetch: async () => {
         calls += 1
         return calls === 1 ? json({ success: false, errors: [], messages: [], result: null }, { status: 500 }) : json(ok('ok'))
@@ -273,6 +346,7 @@ describe('CloudflareClient.resolveToken', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
+    requestTimeoutMs: 30_000,
       fetch: async () => json(ok(null)),
     })
     await expect(client.resolveToken()).resolves.toBe('first')
@@ -285,6 +359,7 @@ describe('CloudflareClient.resolveToken', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
+    requestTimeoutMs: 30_000,
       fetch: async () => json(ok(null)),
     })
     await expect(client.resolveToken()).rejects.toThrow(CloudflareAuthError)
@@ -328,6 +403,7 @@ describe('CloudflareClient.requestText', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
+    requestTimeoutMs: 30_000,
       fetch: async () => new Response('v'),
     })
     await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareAuthError)
@@ -359,6 +435,7 @@ describe('CloudflareClient.requestEnvelope', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
+    requestTimeoutMs: 30_000,
       fetch: async () => json(ok(null)),
     })
     await expect(client.requestEnvelope({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareAuthError)

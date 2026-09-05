@@ -52,4 +52,6 @@ export interface RequestSpec {
   readonly query?: Readonly<Record<string, QueryValue | undefined>>
   readonly body?: unknown
   readonly headers?: Readonly<Record<string, string>>
+  /** Caller cancellation, fused with the client's own request timeout. */
+  readonly signal?: AbortSignal
 }

@@ -287,9 +287,41 @@ describe('usage and finish ordering', () => {
 
   it('emits nothing after finish, even if the provider keeps sending', () => {
     const t = new StreamTransducer()
-    t.push(done())
+    // The finish reason closes the blocks; the chunk itself is held back until
+    // the stream ends, so a trailing usage chunk can still be observed.
+    expect(t.push(done()).filter((c) => c.type === 'finish')).toEqual([])
     expect(t.push(text('late'))).toEqual([])
+    expect(t.end()).toEqual([{ type: 'finish', reason: { kind: 'stop' } }])
+    expect(t.push(text('later'))).toEqual([])
+    // Usage is the one thing still accepted after a finish reason, so it is
+    // the case that proves the door really closes once finish is emitted.
+    expect(t.push({ choices: [], usage: { prompt_tokens: 1, completion_tokens: 1 } })).toEqual([])
     expect(t.end()).toEqual([])
+  })
+
+  it('keeps the usage a provider sends after the finish reason', () => {
+    // The shape `stream_options.include_usage` produces: the finish-reason
+    // chunk carries `usage: null`, and the counts arrive in a final chunk with
+    // no choices at all. Emitting finish on the first would drop them.
+    const t = new StreamTransducer()
+    const out = [
+      ...t.push(text('hi')),
+      ...t.push({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: null }),
+      ...t.push({ choices: [], usage: { prompt_tokens: 10, completion_tokens: 5 } }),
+      ...t.end(),
+    ]
+    expect(out.map((c) => c.type)).toEqual(['block-start', 'text-delta', 'block-end', 'usage', 'finish'])
+    expect(out.find((c) => c.type === 'usage')).toEqual({
+      type: 'usage',
+      usage: { inputTokens: 10, outputTokens: 5 },
+    })
+  })
+
+  it('keeps the finish reason the provider gave, not a default', () => {
+    const t = new StreamTransducer()
+    t.push({ choices: [{ delta: {}, finish_reason: 'length' }] })
+    t.push({ choices: [], usage: { prompt_tokens: 1, completion_tokens: 2 } })
+    expect(t.end()).toEqual([{ type: 'finish', reason: { kind: 'max-tokens' } }])
   })
 
   it('reports that it has finished', () => {

@@ -60,8 +60,20 @@ describe('buildGatewayHeaders', () => {
     expect(buildGatewayHeaders({}, { cacheTtlSeconds: 3600 })['cf-aig-cache-ttl']).toBe('3600')
   })
 
-  it('sets a zero cache ttl rather than treating it as absent', () => {
-    expect(buildGatewayHeaders({}, { cacheTtlSeconds: 0 })['cf-aig-cache-ttl']).toBe('0')
+  it('treats a zero cache ttl as no opinion, leaving gateway defaults alone', () => {
+    // Sending `cf-aig-cache-ttl: 0` would override the gateway's own cache
+    // configuration on every request, which is the opposite of not asking.
+    expect(buildGatewayHeaders({}, { cacheTtlSeconds: 0 })['cf-aig-cache-ttl']).toBeUndefined()
+  })
+
+  it('sends a positive cache ttl', () => {
+    expect(buildGatewayHeaders({}, { cacheTtlSeconds: 60 })['cf-aig-cache-ttl']).toBe('60')
+  })
+
+  it('sends no cache ttl at all when none is configured', () => {
+    // Without the presence check the header would be sent as the string
+    // "undefined", which the gateway would have to interpret.
+    expect(buildGatewayHeaders({}, {})['cf-aig-cache-ttl']).toBeUndefined()
   })
 
   it('omits the cache ttl when unset, leaving gateway defaults alone', () => {

@@ -63,8 +63,12 @@ export function buildGatewayHeaders(
   if (Object.keys(metadata).length > 0) {
     headers['cf-aig-metadata'] = JSON.stringify(metadata)
   }
-  if (options.cacheTtlSeconds !== undefined) {
-    headers['cf-aig-cache-ttl'] = String(options.cacheTtlSeconds)
+  // Zero means "no opinion", not "cache for zero seconds": sending it would
+  // override whatever the gateway itself is configured to do, which is the
+  // opposite of leaving defaults alone.
+  const cacheTtl = options.cacheTtlSeconds ?? 0
+  if (cacheTtl > 0) {
+    headers['cf-aig-cache-ttl'] = String(cacheTtl)
   }
   if (options.skipCache === true) {
     headers['cf-aig-skip-cache'] = 'true'
