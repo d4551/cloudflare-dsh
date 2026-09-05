@@ -96,7 +96,9 @@ the tree at `1bb75b7`, with the dead surface gone as well, scored 99.93%:
 is now. In `classifyFailure`, the `?? []` fallback for a missing envelope fed
 nothing but the unauthorized-code check, so any array classified the same; the
 flag is computed from the envelope directly, and a mixed envelope with the
-unauthorized code among other entries is pinned.
+unauthorized code among other entries is pinned. The run on the tree at
+`930ad13` scored 100.00%: 3,077 mutants over 36 files, 3,065 killed, 12 timing
+out, none surviving.
 
 </details>
 
