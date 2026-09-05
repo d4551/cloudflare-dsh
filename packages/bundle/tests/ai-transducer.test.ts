@@ -126,12 +126,39 @@ describe('reasoning streaming', () => {
     ])
   })
 
+  it('reuses the reasoning block across deltas', () => {
+    const chunks = run(
+      [
+        { choices: [{ delta: { reasoning_content: 'be' } }] },
+        { choices: [{ delta: { reasoning_content: 'cause' } }] },
+        done(),
+      ],
+    )
+    expect(chunks.filter((c) => c.type === 'block-start')).toHaveLength(1)
+    expect(chunks.at(-2)).toEqual({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'reasoning', text: 'because' },
+    })
+  })
+
   it('ignores empty reasoning content', () => {
     expect(run([{ choices: [{ delta: { reasoning_content: '' } }] }], false)).toEqual([])
   })
 
   it('ignores null reasoning content', () => {
     expect(run([{ choices: [{ delta: { reasoning_content: null } }] }], false)).toEqual([])
+  })
+
+  // Blocks close in index order, which is not the order they are collected in:
+  // reasoning is gathered first regardless of when it opened.
+  it('closes blocks in index order even when text opened first', () => {
+    const chunks = run([text('t'), { choices: [{ delta: { reasoning_content: 'r' } }] }, done()])
+    const ends = chunks.filter((c) => c.type === 'block-end')
+    expect(ends).toEqual([
+      { type: 'block-end', index: 0, block: { type: 'text', text: 't' } },
+      { type: 'block-end', index: 1, block: { type: 'reasoning', text: 'r' } },
+    ])
   })
 
   it('closes reasoning and text in index order', () => {
@@ -208,6 +235,24 @@ describe('tool-call streaming', () => {
     ])
   })
 
+  it('leaves the id empty when the provider never sends one', () => {
+    const chunks = run([call({ function: { name: 'f', arguments: '{}' } }), done('tool_calls')])
+    expect(chunks.at(-2)).toEqual({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: '', name: 'f', arguments: '{}' },
+    })
+  })
+
+  it('accumulates no arguments when no fragment carries any', () => {
+    const chunks = run([call({ id: 'c1', function: { name: 'f' } }), done('tool_calls')])
+    expect(chunks.at(-2)).toEqual({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: 'c1', name: 'f', arguments: '' },
+    })
+  })
+
   it('interleaves text and tool calls with distinct indices', () => {
     const chunks = run([text('thinking'), call({ id: 'c1', function: { name: 'f', arguments: '{}' } }), done('tool_calls')])
     expect(chunks.filter((c) => c.type === 'block-start')).toEqual([
@@ -262,6 +307,12 @@ describe('usage and finish ordering', () => {
       { type: 'block-end', index: 0, block: { type: 'text', text: 'partial' } },
       { type: 'finish', reason: { kind: 'stop' } },
     ])
+  })
+
+  it('finishes only once when end is called twice', () => {
+    const t = new StreamTransducer()
+    expect(t.end()).toEqual([{ type: 'finish', reason: { kind: 'stop' } }])
+    expect(t.end()).toEqual([])
   })
 
   it('finishes an empty stream cleanly', () => {

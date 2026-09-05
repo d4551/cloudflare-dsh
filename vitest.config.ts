@@ -12,13 +12,13 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['packages/*/tests/**/*.test.ts'],
-    exclude: ['**/node_modules/**', 'packages/client/tests/**'],
+    include: ['packages/*/tests/**/*.test.ts', 'packages/*/tests/**/*.test.tsx'],
+    exclude: ['**/node_modules/**'],
     pool: 'threads',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      include: ['packages/*/src/**/*.ts'],
+      include: ['packages/*/src/**/*.ts', 'packages/*/src/**/*.tsx'],
       thresholds: { lines: 99, branches: 99, functions: 99, statements: 99 },
     },
   },

@@ -82,6 +82,18 @@ export class CloudflareClient {
   }
 
   /**
+   * Resolve the API token for one operation.
+   *
+   * Exposed because some Cloudflare surfaces live on other hosts (an AI
+   * Gateway endpoint, for one) and need the same credential without going
+   * through this client's request path. Resolution still happens per call, so
+   * the no-caching rule holds.
+   */
+  async resolveToken(): Promise<string> {
+    return requireCredential(this.#options.credentials, this.#options.apiTokenRef)
+  }
+
+  /**
    * Send one request and read its envelope, with no retrying.
    *
    * Shared by `request` and `requestEnvelope` so both apply exactly the same

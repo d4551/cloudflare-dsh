@@ -87,8 +87,13 @@ Stryker has no official Bun runner, and DSH executes plugins on Node
 (`^22.19.0 || >=24.0.0`) — testing on Bun would validate a runtime production
 never uses. Bun remains the package manager, workspace and script runner.
 
-Vitest is pinned to 4.x: Stryker 10's vitest runner reports ~0.15 tests per
-mutant against Vitest 5, silently collapsing the mutation score.
+Vitest is pinned to 4.x because of a known upstream bug: on Vitest 5 the
+Stryker vitest runner's per-test name filter matches nothing, so every covered
+mutant is reported as surviving
+([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210) —
+Vitest 5 changed `testNamePattern` to join the describe/test chain with `' > '`).
+Measured here: the same suite scores 1.19% on Vitest 5.0.0 and 100% on 4.1.11.
+This is deterministic, not flaky — unpin once that issue is fixed.
 
 ### Quality gates
 

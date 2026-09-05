@@ -259,6 +259,38 @@ describe('CloudflareClient.request', () => {
   })
 })
 
+describe('CloudflareClient.resolveToken', () => {
+  it('returns the resolved token for callers on other Cloudflare hosts', async () => {
+    const { client } = makeClient(async () => json(ok(null)))
+    await expect(client.resolveToken()).resolves.toBe('tok')
+  })
+
+  it('resolves per call so a rotated credential is picked up', async () => {
+    const values = ['first', 'second']
+    let i = 0
+    const client = new CloudflareClient({
+      credentials: { resolve: () => values[i++] },
+      apiTokenRef: REF,
+      retry,
+      maxPages: 1,
+      fetch: async () => json(ok(null)),
+    })
+    await expect(client.resolveToken()).resolves.toBe('first')
+    await expect(client.resolveToken()).resolves.toBe('second')
+  })
+
+  it('fails loud when the credential is missing', async () => {
+    const client = new CloudflareClient({
+      credentials: { resolve: () => undefined },
+      apiTokenRef: REF,
+      retry,
+      maxPages: 1,
+      fetch: async () => json(ok(null)),
+    })
+    await expect(client.resolveToken()).rejects.toThrow(CloudflareAuthError)
+  })
+})
+
 describe('CloudflareClient.requestText', () => {
   it('returns the raw body for endpoints that do not use an envelope', async () => {
     const { client } = makeClient(async () => new Response('stored-value', { status: 200 }))

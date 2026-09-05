@@ -114,15 +114,26 @@ export class StreamTransducer {
     return block
   }
 
-  /** Materialise an open block as its finished content block. */
+  /**
+   * Materialise an open block as its finished content block.
+   *
+   * An exhaustive switch rather than a chain with a fallback: a block type that
+   * is not handled should be a visible failure, not silently rendered as a
+   * tool call.
+   */
   private static finish(block: OpenBlock): ContentBlock {
-    if (block.type === 'text') return { type: 'text', text: block.text }
-    if (block.type === 'reasoning') return { type: 'reasoning', text: block.text }
-    return {
-      type: 'tool-call',
-      id: block.id as ToolCallId,
-      name: block.name,
-      arguments: block.text,
+    switch (block.type) {
+      case 'text':
+        return { type: 'text', text: block.text }
+      case 'reasoning':
+        return { type: 'reasoning', text: block.text }
+      case 'tool-call':
+        return {
+          type: 'tool-call',
+          id: block.id as ToolCallId,
+          name: block.name,
+          arguments: block.text,
+        }
     }
   }
 
@@ -130,20 +141,25 @@ export class StreamTransducer {
   push(chunk: WireChunk): StreamChunk[] {
     if (this.finished) return []
     const out: StreamChunk[] = []
+    const choices = chunk.choices
 
-    for (const choice of chunk.choices ?? []) {
-      this.pushDelta(choice.delta, out)
+    // A usage-only chunk carries no choices at all, so the absence is a real
+    // state rather than something to paper over with an empty default.
+    if (choices !== undefined) {
+      for (const choice of choices) this.pushDelta(choice.delta, out)
     }
     if (chunk.usage !== undefined && chunk.usage !== null) {
       out.push({ type: 'usage', usage: mapUsage(chunk.usage) })
     }
-    for (const choice of chunk.choices ?? []) {
-      const reason = choice.finish_reason
-      if (reason === undefined || reason === null) continue
-      out.push(...this.closeAll())
-      out.push({ type: 'finish', reason: mapFinishReason(reason) })
-      this.finished = true
-      return out
+    if (choices !== undefined) {
+      for (const choice of choices) {
+        const reason = choice.finish_reason
+        if (reason === undefined || reason === null) continue
+        out.push(...this.closeAll())
+        out.push({ type: 'finish', reason: mapFinishReason(reason) })
+        this.finished = true
+        return out
+      }
     }
     return out
   }
@@ -182,9 +198,7 @@ export class StreamTransducer {
       if (call.id !== undefined) block.id = call.id
       if (call.function?.name !== undefined) block.name = call.function.name
       const args = call.function?.arguments
-      if (args !== undefined && args !== '') {
-        block.text += args
-      }
+      if (args !== undefined) block.text += args
       out.push({
         type: 'tool-call-delta',
         index: block.index,
@@ -195,17 +209,19 @@ export class StreamTransducer {
     }
   }
 
-  /** Close every open block, in index order. */
+  /**
+   * Close every open block, in index order.
+   *
+   * Only ever called at termination, so it does not reset the open-block state:
+   * `finished` already makes every later call a no-op, and clearing here would
+   * be work nothing can observe.
+   */
   private closeAll(): StreamChunk[] {
     const open: OpenBlock[] = []
     if (this.reasoning !== undefined) open.push(this.reasoning)
     if (this.text !== undefined) open.push(this.text)
     open.push(...this.toolCalls.values())
     open.sort((a, b) => a.index - b.index)
-
-    this.reasoning = undefined
-    this.text = undefined
-    this.toolCalls.clear()
 
     return open.map((block) => ({
       type: 'block-end' as const,
