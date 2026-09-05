@@ -1,3 +1,4 @@
+import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, Message, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
 import { UNSUPPORTED_OPTION_CODE } from '../src/ai/errors.ts'
@@ -109,9 +110,9 @@ describe('toWireMessages', () => {
 
 describe('toWireTools', () => {
   it('maps a tool schema to the provider function shape', () => {
-    const tools = [
+    const tools: ToolSchema[] = [
       { name: 'f', description: 'does f', parameters: { type: 'object', properties: {} } },
-    ] as unknown as ToolSchema[]
+    ]
     expect(toWireTools(tools)).toEqual([
       {
         type: 'function',
@@ -173,7 +174,7 @@ describe('buildWireRequest', () => {
   })
 
   it('includes tools when given', () => {
-    const tools = [{ name: 'f', description: 'd', parameters: {} }] as unknown as ToolSchema[]
+    const tools: ToolSchema[] = [{ name: 'f', description: 'd', parameters: {} }]
     expect(buildWireRequest(options({ tools })).tools).toHaveLength(1)
   })
 
@@ -184,14 +185,14 @@ describe('buildWireRequest', () => {
   // The harness is explicit that an adapter must reject an option it cannot
   // express rather than silently dropping it.
   it('rejects reasoningEffort rather than dropping it', () => {
-    const withEffort = { ...options(), reasoningEffort: 'high' } as unknown as GenerateOptions
+    const withEffort = { ...options(), reasoningEffort: ReasoningEffortId('high') }
     expect(() => buildWireRequest(withEffort)).toThrow(
       expect.objectContaining({ code: UNSUPPORTED_OPTION_CODE }),
     )
   })
 
   it('names the rejected option, so the message is actionable', () => {
-    const withEffort = { ...options(), reasoningEffort: 'high' } as unknown as GenerateOptions
+    const withEffort = { ...options(), reasoningEffort: ReasoningEffortId('high') }
     expect(() => buildWireRequest(withEffort)).toThrow(/does not support the reasoningEffort option/)
   })
 })

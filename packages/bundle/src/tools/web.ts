@@ -93,20 +93,33 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
+          additionalProperties: false,
           description: 'The rendered result, plus the url and format that produced it.',
+          properties: {
+            url: { type: 'string', required: true, description: 'The URL that was rendered.' },
+            format: {
+              type: 'string',
+              required: true,
+              description: 'The format that was requested.',
+              enum: FORMATS,
+            },
+            body: {
+              type: 'json',
+              required: true,
+              description: 'The rendered body: text for text formats, structured data otherwise.',
+            },
+          },
         },
         render: (args, value) => {
-          const v = value as { body: JsonValue }
-          if (typeof v.body === 'string') return text(truncate(v.body, config.renderLimit))
-          return json(v.body)
+          if (typeof value.body === 'string') return text(truncate(value.body, config.renderLimit))
+          return json(value.body)
         },
       },
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,
       async execute(args) {
         const body = await cf.accountRequest<JsonValue>(
-          browserRenderSpec(args.format as RenderFormat, renderOptionsFrom(args)),
+          browserRenderSpec(args.format, renderOptionsFrom(args)),
         )
         return { url: args.url, format: args.format, body }
       },
@@ -131,13 +144,20 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
+          additionalProperties: false,
           description: 'The accessibility tree for the page.',
+          properties: {
+            url: { type: 'string', required: true, description: 'The URL that was inspected.' },
+            tree: {
+              type: 'json',
+              required: true,
+              description: 'The accessibility tree as the API returns it.',
+            },
+          },
         },
         render: (args, value) => {
-          const v = value as { tree: JsonValue }
           return text(
-            `Accessibility tree for ${args.url}\n${truncate(JSON.stringify(v.tree, null, 2), config.renderLimit)}`,
+            `Accessibility tree for ${args.url}\n${truncate(JSON.stringify(value.tree, null, 2), config.renderLimit)}`,
           )
         },
       },

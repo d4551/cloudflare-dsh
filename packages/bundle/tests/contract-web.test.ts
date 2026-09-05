@@ -61,8 +61,18 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        url: {
+          type: 'string',
+          description: 'The URL that was inspected.',
+        },
+        tree: {
+          description: 'The accessibility tree as the API returns it.',
+        },
+      },
+      required: ['url', 'tree'],
       description: 'The accessibility tree for the page.',
-      additionalProperties: true,
     },
   },
   cloudflare_browser_render: {
@@ -120,8 +130,23 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        url: {
+          type: 'string',
+          description: 'The URL that was rendered.',
+        },
+        format: {
+          type: 'string',
+          enum: ['markdown', 'content', 'links', 'screenshot', 'pdf', 'scrape', 'json'],
+          description: 'The format that was requested.',
+        },
+        body: {
+          description: 'The rendered body: text for text formats, structured data otherwise.',
+        },
+      },
+      required: ['url', 'format', 'body'],
       description: 'The rendered result, plus the url and format that produced it.',
-      additionalProperties: true,
     },
   },
 }
@@ -130,7 +155,7 @@ describe('web tool contract', () => {
   const h = makeHarness(toolsModule, async () => envelope(null))
 
   it('registers exactly the contracted tools', () => {
-    expect([...h.tools.keys()].toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
+    expect(h.names().toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
   })
 
   it.each(Object.keys(CONTRACT))('%s exposes its contracted description', (name) => {

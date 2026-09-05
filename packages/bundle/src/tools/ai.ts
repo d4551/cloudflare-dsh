@@ -12,12 +12,11 @@ import Schema from '@deepseek-ai/schemastery'
 import { nextPageQuery } from '@d4551/dsh-cloudflare-core'
 import { SESSION_METADATA_KEY } from '../ai/headers.ts'
 import {
+  GATEWAY_LOG_FILTER_KEYS,
+  GATEWAY_LOG_FILTER_OPERATORS,
   GATEWAY_LOG_MAX_PAGE_SIZE,
   GATEWAY_LOG_MIN_PAGE_SIZE,
   type BillingView,
-  type GatewayLogFilter,
-  type GatewayLogFilterKey,
-  type GatewayLogFilterOperator,
   aiModelSchemaSpec,
   aiModelsSearchSpec,
   aiRunSpec,
@@ -34,7 +33,7 @@ import {
   vectorizeIndexListSpec,
   vectorizeQuerySpec,
 } from '../specs/ai.ts'
-import type { JsonValue } from './_shared/json.ts'
+import { isFiniteNumber, isObject, type JsonValue } from './_shared/json.ts'
 import { json, listing, text } from './_shared/render.ts'
 
 interface CloudflareContext extends Context {
@@ -82,8 +81,20 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         input: { type: 'json', required: true, description: 'Model input, matching that model’s schema.' },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The model output.' },
-        render: (_args, value) => json((value as { output: JsonValue }).output),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'The model that ran and what it returned.',
+          properties: {
+            model: { type: 'string', required: true, description: 'Model slug that produced the output.' },
+            output: {
+              type: 'json',
+              required: true,
+              description: 'The model output as Workers AI returned it.',
+            },
+          },
+        },
+        render: (_args, value) => json(value.output),
       },
       timeoutMs: config.inferenceTimeoutMs,
       async execute(args) {
@@ -103,12 +114,24 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         perPage: { type: 'integer', description: `Models per page (default ${config.pageSize}).` },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Matching models.' },
-        render: (_args, value) => listing((value as { models: unknown[] }).models.length, 'model', value),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Model catalogue entries.',
+          properties: {
+            models: {
+              type: 'array',
+              required: true,
+              description: 'Catalogue entries as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
+        },
+        render: (_args, value) => listing(value.models.length, 'model', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const models = await cf.accountRequest<JsonValue[]>(
+        const models = await cf.accountRequest<Record<string, JsonValue>[]>(
           aiModelsSearchSpec(args.search, args.task, args.perPage ?? config.pageSize),
         )
         return { models }
@@ -125,10 +148,18 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'The model’s published JSON schema.',
+          additionalProperties: false,
+          description: 'The model and its published JSON schema.',
+          properties: {
+            model: { type: 'string', required: true, description: 'Model slug the schema describes.' },
+            schema: {
+              type: 'json',
+              required: true,
+              description: 'The JSON schema Cloudflare publishes for the model.',
+            },
+          },
         },
-        render: (_args, value) => json((value as { schema: JsonValue }).schema),
+        render: (_args, value) => json(value.schema),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
@@ -148,15 +179,22 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'Gateways with their ids and settings.',
+          additionalProperties: false,
+          description: 'Gateways in the account.',
+          properties: {
+            gateways: {
+              type: 'array',
+              required: true,
+              description: 'Gateway records as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
         },
-        render: (_args, value) =>
-          listing((value as { gateways: unknown[] }).gateways.length, 'gateway', value),
+        render: (_args, value) => listing(value.gateways.length, 'gateway', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const gateways = await cf.accountRequest<JsonValue[]>(
+        const gateways = await cf.accountRequest<Record<string, JsonValue>[]>(
           gatewayListSpec(args.perPage ?? config.pageSize),
         )
         return { gateways }
@@ -170,12 +208,24 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       description: 'Fetch one AI Gateway’s configuration.',
       parameters: { gatewayId: { type: 'string', required: true, description: 'Gateway id.' } },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The gateway configuration.' },
-        render: (_args, value) => json((value as { gateway: JsonValue }).gateway),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'One gateway.',
+          properties: {
+            gateway: {
+              type: 'object',
+              required: true,
+              additionalProperties: true,
+              description: 'The gateway record as the API returns it.',
+            },
+          },
+        },
+        render: (_args, value) => json(value.gateway),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const gateway = await cf.accountRequest<JsonValue>(gatewayGetSpec(args.gatewayId))
+        const gateway = await cf.accountRequest<Record<string, JsonValue>>(gatewayGetSpec(args.gatewayId))
         return { gateway }
       },
     }),
@@ -201,8 +251,8 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
             type: 'object',
             additionalProperties: false,
             properties: {
-              key: { type: 'string', required: true },
-              operator: { type: 'string', required: true },
+              key: { type: 'string', required: true, enum: GATEWAY_LOG_FILTER_KEYS },
+              operator: { type: 'string', required: true, enum: GATEWAY_LOG_FILTER_OPERATORS },
               value: { type: 'string', required: true },
             },
           },
@@ -211,17 +261,32 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
+          additionalProperties: false,
           description: 'Matching log entries and the page they came from.',
+          properties: {
+            logs: {
+              type: 'array',
+              required: true,
+              description: 'Log entries as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+            page: { type: 'integer', required: true, description: '1-based page number that was read.' },
+            perPage: { type: 'integer', required: true, description: 'Entries requested per page.' },
+            complete: {
+              type: 'boolean',
+              required: true,
+              description: 'Whether this page was short, so no page follows.',
+            },
+          },
         },
-        render: (_args, value) => listing((value as { logs: unknown[] }).logs.length, 'log entry', value),
+        render: (_args, value) => listing(value.logs.length, 'log entry', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
         const page = args.page ?? 1
         const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
-        const logs = await cf.accountRequest<JsonValue[]>(
-          gatewayLogsSpec(args.gatewayId, page, perPage, toLogFilters(args.filters)),
+        const logs = await cf.accountRequest<Record<string, JsonValue>[]>(
+          gatewayLogsSpec(args.gatewayId, page, perPage, args.filters ?? []),
         )
         return { logs, page, perPage, complete: logs.length < perPage }
       },
@@ -243,8 +308,19 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The stored body.' },
-        render: (_args, value) => json((value as { body: JsonValue }).body),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'The stored body.',
+          properties: {
+            body: {
+              type: 'json',
+              required: true,
+              description: 'The request or response body as stored by the gateway.',
+            },
+          },
+        },
+        render: (_args, value) => json(value.body),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
@@ -262,12 +338,26 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       description: 'List the dynamic routing rules configured on an AI Gateway.',
       parameters: { gatewayId: { type: 'string', required: true, description: 'Gateway id.' } },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Dynamic routes.' },
-        render: (_args, value) => listing((value as { routes: unknown[] }).routes.length, 'route', value),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Dynamic routes.',
+          properties: {
+            routes: {
+              type: 'array',
+              required: true,
+              description: 'Route records as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
+        },
+        render: (_args, value) => listing(value.routes.length, 'route', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const routes = await cf.accountRequest<JsonValue[]>(gatewayRouteListSpec(args.gatewayId))
+        const routes = await cf.accountRequest<Record<string, JsonValue>[]>(
+          gatewayRouteListSpec(args.gatewayId),
+        )
         return { routes }
       },
     }),
@@ -287,12 +377,29 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The requested billing view.' },
-        render: (_args, value) => json((value as { billing: JsonValue }).billing),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'The requested billing view.',
+          properties: {
+            view: {
+              type: 'string',
+              required: true,
+              description: 'Which billing view was read.',
+              enum: BILLING_VIEWS,
+            },
+            billing: {
+              type: 'json',
+              required: true,
+              description: 'The billing payload as the API returns it.',
+            },
+          },
+        },
+        render: (_args, value) => json(value.billing),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const billing = await cf.accountRequest<JsonValue>(gatewayBillingSpec(args.view as BillingView))
+        const billing = await cf.accountRequest<JsonValue>(gatewayBillingSpec(args.view))
         return { view: args.view, billing }
       },
     }),
@@ -312,8 +419,15 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Matching chunks.' },
-        render: (_args, value) => json((value as { results: JsonValue }).results),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Matching chunks.',
+          properties: {
+            results: { type: 'json', required: true, description: 'Search results as the API returns them.' },
+          },
+        },
+        render: (_args, value) => json(value.results),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
@@ -335,8 +449,19 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         model: { type: 'string', description: 'Override the generating model.' },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The grounded completion.' },
-        render: (_args, value) => json((value as { answer: JsonValue }).answer),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'The grounded answer.',
+          properties: {
+            answer: {
+              type: 'json',
+              required: true,
+              description: 'The answer payload as the API returns it.',
+            },
+          },
+        },
+        render: (_args, value) => json(value.answer),
       },
       timeoutMs: config.inferenceTimeoutMs,
       async execute(args) {
@@ -356,8 +481,15 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         instanceId: { type: 'string', required: true, description: 'AI Search instance id.' },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The created sync job.' },
-        render: (_args, value) => json((value as { job: JsonValue }).job),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'The sync job that was started.',
+          properties: {
+            job: { type: 'json', required: true, description: 'The job record as the API returns it.' },
+          },
+        },
+        render: (_args, value) => json(value.job),
       },
       async execute(args) {
         const job = await cf.accountRequest<JsonValue>(aiSearchSyncSpec(args.instanceId))
@@ -372,12 +504,24 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       description: 'List the Vectorize indexes in the Cloudflare account.',
       parameters: {},
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Vectorize indexes.' },
-        render: (_args, value) => listing((value as { indexes: unknown[] }).indexes.length, 'index', value),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Vector indexes in the account.',
+          properties: {
+            indexes: {
+              type: 'array',
+              required: true,
+              description: 'Index records as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
+        },
+        render: (_args, value) => listing(value.indexes.length, 'index', value),
       },
       isConcurrencySafe: () => true,
       async execute() {
-        const indexes = await cf.accountRequest<JsonValue[]>(vectorizeIndexListSpec())
+        const indexes = await cf.accountRequest<Record<string, JsonValue>[]>(vectorizeIndexListSpec())
         return { indexes }
       },
     }),
@@ -400,15 +544,22 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         returnMetadata: { type: 'boolean', description: 'Include stored metadata in the response.' },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Nearest matches.' },
-        render: (_args, value) => json((value as { matches: JsonValue }).matches),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Nearest matches.',
+          properties: {
+            matches: { type: 'json', required: true, description: 'The query result as the API returns it.' },
+          },
+        },
+        render: (_args, value) => json(value.matches),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
         const matches = await cf.accountRequest<JsonValue>(
           vectorizeQuerySpec(
             args.indexName,
-            args.vector as readonly number[],
+            args.vector,
             args.topK ?? config.vectorTopK,
             args.returnValues ?? false,
             args.returnMetadata ?? true,
@@ -435,21 +586,55 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'Request count, total cost, tokens, and cache hits for the session.',
+          additionalProperties: false,
+          description:
+            'Request count, total cost, tokens, and cache hits for the session, plus how far the scan reached.',
+          properties: {
+            requests: {
+              type: 'integer',
+              required: true,
+              description: 'Log entries that carried the session id.',
+            },
+            cost: {
+              type: 'number',
+              required: true,
+              description: 'Sum of the cost field over those entries.',
+            },
+            tokensIn: { type: 'number', required: true, description: 'Sum of tokens_in over those entries.' },
+            tokensOut: {
+              type: 'number',
+              required: true,
+              description: 'Sum of tokens_out over those entries.',
+            },
+            cached: {
+              type: 'integer',
+              required: true,
+              description: 'Entries the gateway served from cache.',
+            },
+            scanned: {
+              type: 'integer',
+              required: true,
+              description: 'Log entries read across every page, matched or not.',
+            },
+            pages: { type: 'integer', required: true, description: 'Pages read.' },
+            truncated: {
+              type: 'boolean',
+              required: true,
+              description: 'Whether the page ceiling stopped the scan before the last page.',
+            },
+          },
         },
         render: (args, value) => {
-          const v = value as { requests: number; cost: number; cached: number; truncated: boolean }
-          const partial = v.truncated ? ' (partial: the page ceiling stopped the scan)' : ''
+          const partial = value.truncated ? ' (partial: the page ceiling stopped the scan)' : ''
           return text(
-            `Session ${args.sessionId}: ${v.requests} requests, ${v.cached} served from cache, cost ${v.cost}${partial}.`,
+            `Session ${args.sessionId}: ${value.requests} requests, ${value.cached} served from cache, cost ${value.cost}${partial}.`,
           )
         },
       },
       isConcurrencySafe: () => true,
       async execute(args) {
         const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
-        const walk = await cf.accountListAll<JsonValue>(
+        const walk = await cf.accountListAll<Record<string, JsonValue>>(
           gatewayLogsSpec(
             args.gatewayId,
             1,
@@ -476,92 +661,6 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
   )
 }
 
-/**
- * Build a lookup that both validates an unknown value and narrows it.
- *
- * A `Set<string>` cannot be queried with an `unknown`, which is what forces the
- * redundant `typeof` guard this replaces; a map keyed by `unknown` can, and its
- * value type carries the narrowing.
- */
-function lookup<T extends string>(...members: readonly T[]): ReadonlyMap<unknown, T> {
-  const map = new Map<unknown, T>()
-  for (const member of members) map.set(member, member)
-  return map
-}
-
-/** Filter keys the logs endpoint accepts, for validating caller input. */
-const LOG_FILTER_KEYS = lookup<GatewayLogFilterKey>(
-  'id',
-  'created_at',
-  'request_type',
-  'success',
-  'cached',
-  'provider',
-  'model',
-  'model_type',
-  'cost',
-  'tokens',
-  'tokens_in',
-  'tokens_out',
-  'duration',
-  'feedback',
-  'event_id',
-  'metadata.key',
-  'metadata.value',
-)
-
-/** Comparisons the logs endpoint accepts. */
-const LOG_FILTER_OPERATORS = lookup<GatewayLogFilterOperator>('eq', 'neq', 'contains', 'lt', 'gt')
-
-/** Raised when a caller supplies a filter the endpoint cannot express. */
-export class GatewayLogFilterError extends TypeError {
-  override readonly name = 'GatewayLogFilterError'
-}
-
-/**
- * Validate caller-supplied filter clauses.
- *
- * Checked rather than cast: the previous shape was a free-form object cast to
- * `Record<string, string>`, so a non-string value reached `String(value)` and
- * went on the wire as `"[object Object]"`.
- */
-export function toLogFilters(raw: unknown): readonly GatewayLogFilter[] {
-  if (raw === undefined) return []
-  if (!Array.isArray(raw)) throw new GatewayLogFilterError('filters must be an array of clauses')
-  return raw.map((entry, index) => {
-    if (typeof entry !== 'object' || entry === null) {
-      throw new GatewayLogFilterError(`filters[${index}] must be an object`)
-    }
-    const { key: rawKey, operator: rawOperator, value } = entry as Record<string, unknown>
-    const key = LOG_FILTER_KEYS.get(rawKey)
-    if (key === undefined) {
-      throw new GatewayLogFilterError(
-        `filters[${index}].key ${JSON.stringify(rawKey)} is not a filterable field`,
-      )
-    }
-    const operator = LOG_FILTER_OPERATORS.get(rawOperator)
-    if (operator === undefined) {
-      throw new GatewayLogFilterError(
-        `filters[${index}].operator ${JSON.stringify(rawOperator)} is not a supported comparison`,
-      )
-    }
-    if (typeof value !== 'string') {
-      throw new GatewayLogFilterError(`filters[${index}].value must be a string`)
-    }
-    return { key, operator, value }
-  })
-}
-
-/** One gateway log entry, in the shape the summary reads. */
-export interface GatewayLogEntry {
-  readonly cost?: number
-  readonly tokens_in?: number
-  readonly tokens_out?: number
-  readonly cached?: boolean
-  /** Request metadata, which the API returns as a JSON string. */
-  readonly metadata?: unknown
-}
-
 /** Raised when a log entry carries a field the summary cannot add up. */
 export class GatewayLogShapeError extends TypeError {
   override readonly name = 'GatewayLogShapeError'
@@ -574,14 +673,14 @@ export class GatewayLogShapeError extends TypeError {
 }
 
 /** Read one numeric field, refusing a value that would corrupt the total. */
-function numericField(log: GatewayLogEntry, field: 'cost' | 'tokens_in' | 'tokens_out'): number {
+function numericField(log: Record<string, JsonValue>, field: 'cost' | 'tokens_in' | 'tokens_out'): number {
   const value = log[field]
   if (value === undefined) return 0
   // `cost += "0.004"` concatenates and turns the running total into a string.
   // A decimal returned as a string is a plausible API shape, so it is rejected
   // rather than added. `Number.isFinite` does not coerce, so it rejects every
   // non-number as well as NaN and the infinities — no separate `typeof` arm.
-  if (!Number.isFinite(value)) throw new GatewayLogShapeError(field, value)
+  if (!isFiniteNumber(value)) throw new GatewayLogShapeError(field, value)
   return value
 }
 
@@ -591,8 +690,8 @@ function numericField(log: GatewayLogEntry, field: 'cost' | 'tokens_in' | 'token
  * The API returns `metadata` as a JSON string, so this parses it rather than
  * trusting the server-side filter to have been applied.
  */
-export function sessionOf(entry: JsonValue): string | undefined {
-  const metadata = (entry as GatewayLogEntry).metadata
+export function sessionOf(entry: Record<string, JsonValue>): string | undefined {
+  const metadata = entry.metadata
   let parsed: unknown
   try {
     // No separate string guard: `JSON.parse` coerces its argument, and every
@@ -602,10 +701,10 @@ export function sessionOf(entry: JsonValue): string | undefined {
   } catch {
     return undefined
   }
-  // Only `null` needs guarding: indexing a number or a string yields
-  // `undefined`, which the string check below rejects anyway.
-  if (parsed === null) return undefined
-  const value = (parsed as Record<string, unknown>)[SESSION_METADATA_KEY]
+  // Anything but an object — `null`, a number, a string — carries no session
+  // id; the predicate also types the read.
+  if (!isObject(parsed)) return undefined
+  const value = parsed[SESSION_METADATA_KEY]
   return typeof value === 'string' ? value : undefined
 }
 
@@ -615,7 +714,7 @@ export function sessionOf(entry: JsonValue): string | undefined {
  * Pure, so the arithmetic is unit-testable without a gateway; missing fields
  * count as zero because Cloudflare omits them for some providers.
  */
-export function summariseSessionLogs(logs: readonly JsonValue[]): {
+export function summariseSessionLogs(logs: readonly Record<string, JsonValue>[]): {
   requests: number
   cost: number
   tokensIn: number
@@ -626,8 +725,7 @@ export function summariseSessionLogs(logs: readonly JsonValue[]): {
   let tokensIn = 0
   let tokensOut = 0
   let cached = 0
-  for (const entry of logs) {
-    const log = entry as GatewayLogEntry
+  for (const log of logs) {
     cost += numericField(log, 'cost')
     tokensIn += numericField(log, 'tokens_in')
     tokensOut += numericField(log, 'tokens_out')

@@ -163,13 +163,13 @@ describe('every test is uniquely addressable', () => {
   )
 })
 
-describe('no type escape hatch in source', () => {
+describe('no type escape hatch', () => {
   it.each([
     ['double cast', `as unk${'nown as'}`],
     ['explicit any', `: a${'ny'}`],
     ['any cast', `as a${'ny'}`],
-  ])('no %s appears under src', (_label, needle) => {
-    expect(containing(sources, needle)).toEqual([])
+  ])('no %s appears under src or tests', (_label, needle) => {
+    expect(containing([...sources, ...tests], needle)).toEqual([])
   })
 })
 

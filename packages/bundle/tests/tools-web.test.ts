@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest'
 import * as webTools from '../src/tools/web.ts'
 import { envelope, makeHarness } from './harness.ts'
 
+interface ToolsContext extends Context {
+  tools: ToolRuntime
+}
+
 describe('web tools plugin', () => {
   it('declares its name and injections', () => {
     expect(webTools.name).toBe('cloudflare-tools-web')
@@ -13,7 +17,7 @@ describe('web tools plugin', () => {
 
   it('registers both rendering tools', () => {
     const h = makeHarness(webTools, async () => envelope(null))
-    expect([...h.tools.keys()].toSorted()).toEqual([
+    expect(h.names().toSorted()).toEqual([
       'cloudflare_browser_accessibility_tree',
       'cloudflare_browser_render',
     ])
@@ -119,28 +123,31 @@ describe('cloudflare_browser_render', () => {
 
   it('renders a string body as text', () => {
     const h = makeHarness(webTools, async () => envelope(''))
-    const blocks = h
-      .tool('cloudflare_browser_render')
-      .output.render({ url: 'u', format: 'markdown' }, { url: 'u', format: 'markdown', body: 'hello' })
+    const blocks = h.render(
+      'cloudflare_browser_render',
+      { url: 'u', format: 'markdown' },
+      { url: 'u', format: 'markdown', body: 'hello' },
+    )
     expect(blocks).toEqual([{ type: 'text', text: 'hello' }])
   })
 
   it('renders a structured body as JSON', () => {
     const h = makeHarness(webTools, async () => envelope(''))
-    const blocks = h
-      .tool('cloudflare_browser_render')
-      .output.render({ url: 'u', format: 'links' }, { url: 'u', format: 'links', body: ['a'] })
+    const blocks = h.render(
+      'cloudflare_browser_render',
+      { url: 'u', format: 'links' },
+      { url: 'u', format: 'links', body: ['a'] },
+    )
     expect(blocks).toEqual([{ type: 'text', text: '[\n  "a"\n]' }])
   })
 
   it('truncates a very long rendered page', () => {
     const h = makeHarness(webTools, async () => envelope(''))
-    const blocks = h
-      .tool('cloudflare_browser_render')
-      .output.render(
-        { url: 'u', format: 'markdown' },
-        { url: 'u', format: 'markdown', body: 'x'.repeat(9000) },
-      )
+    const blocks = h.render(
+      'cloudflare_browser_render',
+      { url: 'u', format: 'markdown' },
+      { url: 'u', format: 'markdown', body: 'x'.repeat(9000) },
+    )
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated 1000 characters') }])
   })
 
@@ -172,9 +179,11 @@ describe('cloudflare_browser_accessibility_tree', () => {
 
   it('renders the url then the tree', () => {
     const h = makeHarness(webTools, async () => envelope({}))
-    const blocks = h
-      .tool('cloudflare_browser_accessibility_tree')
-      .output.render({ url: 'https://x.test' }, { url: 'https://x.test', tree: { role: 'main' } })
+    const blocks = h.render(
+      'cloudflare_browser_accessibility_tree',
+      { url: 'https://x.test' },
+      { url: 'https://x.test', tree: { role: 'main' } },
+    )
     expect(blocks).toEqual([
       { type: 'text', text: 'Accessibility tree for https://x.test\n{\n  "role": "main"\n}' },
     ])
@@ -183,9 +192,7 @@ describe('cloudflare_browser_accessibility_tree', () => {
   it('truncates a very large tree', () => {
     const h = makeHarness(webTools, async () => envelope({}))
     const big = { role: 'x'.repeat(9000) }
-    const blocks = h
-      .tool('cloudflare_browser_accessibility_tree')
-      .output.render({ url: 'u' }, { url: 'u', tree: big })
+    const blocks = h.render('cloudflare_browser_accessibility_tree', { url: 'u' }, { url: 'u', tree: big })
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated') }])
   })
 })
@@ -213,7 +220,7 @@ describe('lifecycle', () => {
       },
     )
     expect(service.name).toBe('cloudflare')
-    const tools = (ctx as unknown as { tools: ToolRuntime }).tools
+    const tools = (ctx as ToolsContext).tools
 
     const fiber = await ctx.plugin(webTools)
     expect(tools.get('cloudflare_browser_render')?.name).toBe('cloudflare_browser_render')
@@ -243,9 +250,11 @@ describe('WebToolsConfig', () => {
 
   it('applies a configured render limit to a rendered page', () => {
     const h = makeHarness(webTools, async () => envelope(''), {}, { renderLimit: 4 })
-    const blocks = h
-      .tool('cloudflare_browser_render')
-      .output.render({ url: 'u', format: 'markdown' }, { url: 'u', format: 'markdown', body: 'x'.repeat(10) })
+    const blocks = h.render(
+      'cloudflare_browser_render',
+      { url: 'u', format: 'markdown' },
+      { url: 'u', format: 'markdown', body: 'x'.repeat(10) },
+    )
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated 6 characters') }])
   })
 })

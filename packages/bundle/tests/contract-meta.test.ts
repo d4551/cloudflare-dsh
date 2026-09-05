@@ -19,8 +19,32 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Accounts with ids and names.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        accounts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: {
+                type: 'string',
+              },
+              name: {
+                type: 'string',
+              },
+            },
+            required: ['id', 'name'],
+          },
+          description: 'Accounts, projected to id and name.',
+        },
+        truncated: {
+          type: 'boolean',
+          description: 'Whether the page ceiling cut the list short.',
+        },
+      },
+      required: ['accounts', 'truncated'],
+      description: 'Accounts the token can reach.',
     },
   },
   cloudflare_api: {
@@ -51,8 +75,14 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'The unwrapped Cloudflare result for the call.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        result: {
+          description: 'The result field of the API envelope.',
+        },
+      },
+      required: ['result'],
+      description: 'The envelope result, whatever the endpoint returned.',
     },
   },
 }
@@ -61,7 +91,7 @@ describe('meta tool contract', () => {
   const h = makeHarness(toolsModule, async () => envelope(null))
 
   it('registers exactly the contracted tools', () => {
-    expect([...h.tools.keys()].toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
+    expect(h.names().toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
   })
 
   it.each(Object.keys(CONTRACT))('%s exposes its contracted description', (name) => {

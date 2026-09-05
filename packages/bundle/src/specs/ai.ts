@@ -61,9 +61,8 @@ export function gatewayUrlSpec(gatewayId: string, provider: string): RequestSpec
   return { method: 'GET', path: `/ai-gateway/gateways/${seg(gatewayId)}/url/${seg(provider)}` }
 }
 
-/** Query gateway request logs. */
 /** Fields the gateway logs endpoint can filter on. */
-export type GatewayLogFilterKey =
+type GatewayLogFilterKey =
   | 'id'
   | 'created_at'
   | 'request_type'
@@ -83,10 +82,40 @@ export type GatewayLogFilterKey =
   | 'metadata.value'
 
 /** Comparisons the gateway logs endpoint accepts. */
-export type GatewayLogFilterOperator = 'eq' | 'neq' | 'contains' | 'lt' | 'gt'
+type GatewayLogFilterOperator = 'eq' | 'neq' | 'contains' | 'lt' | 'gt'
+
+/** Every filterable field, in the order the model sees them. */
+export const GATEWAY_LOG_FILTER_KEYS: readonly GatewayLogFilterKey[] = [
+  'id',
+  'created_at',
+  'request_type',
+  'success',
+  'cached',
+  'provider',
+  'model',
+  'model_type',
+  'cost',
+  'tokens',
+  'tokens_in',
+  'tokens_out',
+  'duration',
+  'feedback',
+  'event_id',
+  'metadata.key',
+  'metadata.value',
+]
+
+/** Every accepted comparison, in the order the model sees them. */
+export const GATEWAY_LOG_FILTER_OPERATORS: readonly GatewayLogFilterOperator[] = [
+  'eq',
+  'neq',
+  'contains',
+  'lt',
+  'gt',
+]
 
 /** One filter clause. */
-export interface GatewayLogFilter {
+interface GatewayLogFilter {
   readonly key: GatewayLogFilterKey
   readonly operator: GatewayLogFilterOperator
   readonly value: string

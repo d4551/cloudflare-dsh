@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { json } from '../src/tools/_shared/render.ts'
-import { CloudflareNotFoundError } from '@d4551/dsh-cloudflare-core'
 import * as dataTools from '../src/tools/data.ts'
 import { envelope, failure, makeHarness } from './harness.ts'
 
@@ -31,7 +30,7 @@ describe('plugin shape', () => {
 
   it('registers exactly the expected tools', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    expect([...h.tools.keys()].toSorted()).toEqual([...EXPECTED_TOOLS].toSorted())
+    expect(h.names().toSorted()).toEqual([...EXPECTED_TOOLS].toSorted())
   })
 
   it('gives every tool a description and an output schema', () => {
@@ -91,7 +90,7 @@ describe('cloudflare_kv_namespace_list', () => {
 
   it('renders a count and the payload', () => {
     const h = makeHarness(dataTools, async () => envelope([]))
-    const blocks = h.tool('cloudflare_kv_namespace_list').output.render({}, { namespaces: [{ id: 'n1' }] })
+    const blocks = h.render('cloudflare_kv_namespace_list', {}, { namespaces: [{ id: 'n1' }] })
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('1 namespace') }])
   })
 })
@@ -116,7 +115,11 @@ describe('cloudflare_kv_list_keys', () => {
 
   it('renders a key count', () => {
     const h = makeHarness(dataTools, async () => envelope([]))
-    const blocks = h.tool('cloudflare_kv_list_keys').output.render({ namespaceId: 'n' }, { keys: [] })
+    const blocks = h.render(
+      'cloudflare_kv_list_keys',
+      { namespaceId: 'n' },
+      { keys: [], cursor: '', complete: true },
+    )
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('0 keys') }])
   })
 })
@@ -140,25 +143,21 @@ describe('cloudflare_kv_get', () => {
 
   it('renders the key then the value', () => {
     const h = makeHarness(dataTools, async () => new Response('v'))
-    const blocks = h
-      .tool('cloudflare_kv_get')
-      .output.render({ namespaceId: 'n', key: 'k' }, { key: 'k', value: 'v' })
+    const blocks = h.render('cloudflare_kv_get', { namespaceId: 'n', key: 'k' }, { key: 'k', value: 'v' })
     expect(blocks).toEqual([{ type: 'text', text: 'k\nv' }])
   })
 
   it('truncates a very large value for display', () => {
     const h = makeHarness(dataTools, async () => new Response('v'))
     const big = 'x'.repeat(5000)
-    const blocks = h
-      .tool('cloudflare_kv_get')
-      .output.render({ namespaceId: 'n', key: 'k' }, { key: 'k', value: big })
+    const blocks = h.render('cloudflare_kv_get', { namespaceId: 'n', key: 'k' }, { key: 'k', value: big })
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated 1000 characters') }])
   })
 
   it('surfaces a missing key as an error', async () => {
-    const h = makeHarness(dataTools, async () => new Response('not found', { status: 404 }))
+    const h = makeHarness(dataTools, async () => failure(10009, "get: 'key not found'", 404))
     await expect(h.run('cloudflare_kv_get', { namespaceId: 'n1', key: 'nope' })).rejects.toThrow(
-      CloudflareNotFoundError,
+      "[10009] get: 'key not found'",
     )
   })
 })
@@ -181,9 +180,7 @@ describe('cloudflare_kv_put', () => {
 
   it('renders how many pairs were written', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    const blocks = h
-      .tool('cloudflare_kv_put')
-      .output.render({ namespaceId: 'n', entries: [] }, { written: 3 })
+    const blocks = h.render('cloudflare_kv_put', { namespaceId: 'n', entries: [] }, { written: 3 })
     expect(blocks).toEqual([{ type: 'text', text: 'Wrote 3 key/value pairs.' }])
   })
 })
@@ -217,9 +214,7 @@ describe('cloudflare_kv_delete', () => {
 
   it('renders how many keys were deleted', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    const blocks = h
-      .tool('cloudflare_kv_delete')
-      .output.render({ namespaceId: 'n', keys: [] }, { deleted: 2 })
+    const blocks = h.render('cloudflare_kv_delete', { namespaceId: 'n', keys: [] }, { deleted: 2 })
     expect(blocks).toEqual([{ type: 'text', text: 'Deleted 2 keys.' }])
   })
 })
@@ -240,7 +235,7 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
 
   it('renders a database count', () => {
     const h = makeHarness(dataTools, async () => envelope([]))
-    const blocks = h.tool('cloudflare_d1_list').output.render({}, { databases: [{}, {}] })
+    const blocks = h.render('cloudflare_d1_list', {}, { databases: [{}, {}] })
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('2 databases') }])
   })
 
@@ -265,7 +260,7 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
 
   it('renders the result as JSON', () => {
     const h = makeHarness(dataTools, async () => envelope([]))
-    const blocks = h.tool('cloudflare_d1_query').output.render({ databaseId: 'd', sql: 's' }, { results: [] })
+    const blocks = h.render('cloudflare_d1_query', { databaseId: 'd', sql: 's' }, { results: [] })
     expect(blocks).toEqual(json({ results: [] }))
   })
 
@@ -291,7 +286,7 @@ describe('queue tools', () => {
 
   it('renders a queue count', () => {
     const h = makeHarness(dataTools, async () => envelope([]))
-    expect(h.tool('cloudflare_queue_list').output.render({}, { queues: [{}] })).toEqual([
+    expect(h.render('cloudflare_queue_list', {}, { queues: [{}] })).toEqual([
       { type: 'text', text: expect.stringContaining('1 queue') },
     ])
   })
@@ -306,9 +301,9 @@ describe('queue tools', () => {
 
   it('renders a send acknowledgement', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    expect(
-      h.tool('cloudflare_queue_send').output.render({ queueId: 'q', body: null }, { queued: true }),
-    ).toEqual([{ type: 'text', text: 'Message queued.' }])
+    expect(h.render('cloudflare_queue_send', { queueId: 'q', body: null }, { queued: true })).toEqual([
+      { type: 'text', text: 'Message queued.' },
+    ])
   })
 
   it('pulls messages with defaults', async () => {
@@ -332,7 +327,7 @@ describe('queue tools', () => {
 
   it('renders a pulled message count', () => {
     const h = makeHarness(dataTools, async () => envelope({}))
-    expect(h.tool('cloudflare_queue_pull').output.render({ queueId: 'q' }, { messages: [] })).toEqual([
+    expect(h.render('cloudflare_queue_pull', { queueId: 'q' }, { messages: [] })).toEqual([
       { type: 'text', text: expect.stringContaining('0 messages') },
     ])
   })
@@ -354,7 +349,7 @@ describe('queue tools', () => {
 
   it('renders acknowledgement counts', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    expect(h.tool('cloudflare_queue_ack').output.render({ queueId: 'q' }, { acked: 2, retried: 1 })).toEqual([
+    expect(h.render('cloudflare_queue_ack', { queueId: 'q' }, { acked: 2, retried: 1 })).toEqual([
       { type: 'text', text: 'Acknowledged 2, retried 1.' },
     ])
   })
@@ -379,7 +374,7 @@ describe('r2 bucket tools', () => {
 
   it('renders a bucket count', () => {
     const h = makeHarness(dataTools, async () => envelope({}))
-    expect(h.tool('cloudflare_r2_bucket_list').output.render({}, { buckets: [{}] })).toEqual([
+    expect(h.render('cloudflare_r2_bucket_list', {}, { buckets: [{}] })).toEqual([
       { type: 'text', text: expect.stringContaining('1 bucket') },
     ])
   })
@@ -400,7 +395,7 @@ describe('r2 bucket tools', () => {
 
   it('renders the created bucket name from the arguments', () => {
     const h = makeHarness(dataTools, async () => envelope({}))
-    expect(h.tool('cloudflare_r2_bucket_create').output.render({ name: 'media' }, { bucket: {} })).toEqual([
+    expect(h.render('cloudflare_r2_bucket_create', { name: 'media' }, { bucket: {} })).toEqual([
       { type: 'text', text: 'Created R2 bucket media.' },
     ])
   })
@@ -482,9 +477,11 @@ describe('DataToolsConfig', () => {
 
   it('applies a configured render limit to KV values', () => {
     const h = makeHarness(dataTools, async () => new Response('v'), {}, { renderLimit: 5 })
-    const blocks = h
-      .tool('cloudflare_kv_get')
-      .output.render({ namespaceId: 'n', key: 'k' }, { key: 'k', value: 'x'.repeat(12) })
+    const blocks = h.render(
+      'cloudflare_kv_get',
+      { namespaceId: 'n', key: 'k' },
+      { key: 'k', value: 'x'.repeat(12) },
+    )
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated 7 characters') }])
   })
 })

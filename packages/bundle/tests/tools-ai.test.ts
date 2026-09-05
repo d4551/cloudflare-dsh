@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { json } from '../src/tools/_shared/render.ts'
 import * as aiTools from '../src/tools/ai.ts'
-import { sessionOf, summariseSessionLogs, toLogFilters } from '../src/tools/ai.ts'
+import { sessionOf, summariseSessionLogs } from '../src/tools/ai.ts'
 import { envelope, failure, makeHarness } from './harness.ts'
 
 describe('ai plugin shape', () => {
@@ -12,7 +12,7 @@ describe('ai plugin shape', () => {
 
   it('registers the full AI tool set', () => {
     const h = makeHarness(aiTools, async () => envelope(null))
-    expect([...h.tools.keys()].toSorted()).toEqual([
+    expect(h.names().toSorted()).toEqual([
       'cloudflare_ai_model_schema',
       'cloudflare_ai_models_search',
       'cloudflare_ai_run',
@@ -96,7 +96,7 @@ describe('cloudflare_ai_run', () => {
   it('renders the model output as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
-      h.tool('cloudflare_ai_run').output.render({ model: 'm', input: {} }, { model: 'm', output: { a: 1 } }),
+      h.render('cloudflare_ai_run', { model: 'm', input: {} }, { model: 'm', output: { a: 1 } }),
     ).toEqual(json({ a: 1 }))
   })
 
@@ -132,7 +132,7 @@ describe('model catalogue tools', () => {
 
   it('renders a model count', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
-    expect(h.tool('cloudflare_ai_models_search').output.render({}, { models: [{}, {}] })).toEqual([
+    expect(h.render('cloudflare_ai_models_search', {}, { models: [{}, {}] })).toEqual([
       { type: 'text', text: expect.stringContaining('2 models') },
     ])
   })
@@ -148,9 +148,9 @@ describe('model catalogue tools', () => {
 
   it('renders the model schema as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
-    expect(
-      h.tool('cloudflare_ai_model_schema').output.render({ model: 'm' }, { model: 'm', schema: { a: 1 } }),
-    ).toEqual(json({ a: 1 }))
+    expect(h.render('cloudflare_ai_model_schema', { model: 'm' }, { model: 'm', schema: { a: 1 } })).toEqual(
+      json({ a: 1 }),
+    )
   })
 })
 
@@ -165,7 +165,7 @@ describe('gateway tools', () => {
 
   it('renders a gateway count', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
-    expect(h.tool('cloudflare_aigateway_list').output.render({}, { gateways: [{}] })).toEqual([
+    expect(h.render('cloudflare_aigateway_list', {}, { gateways: [{}] })).toEqual([
       { type: 'text', text: expect.stringContaining('1 gateway') },
     ])
   })
@@ -179,9 +179,9 @@ describe('gateway tools', () => {
 
   it('renders a gateway config as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
-    expect(
-      h.tool('cloudflare_aigateway_get').output.render({ gatewayId: 'g' }, { gateway: { id: 'g' } }),
-    ).toEqual(json({ id: 'g' }))
+    expect(h.render('cloudflare_aigateway_get', { gatewayId: 'g' }, { gateway: { id: 'g' } })).toEqual(
+      json({ id: 'g' }),
+    )
   })
 
   it('queries logs by page, reporting which page it read', async () => {
@@ -206,15 +206,55 @@ describe('gateway tools', () => {
   })
 
   it.each([
+    'id',
+    'created_at',
+    'request_type',
+    'success',
+    'cached',
+    'provider',
+    'model',
+    'model_type',
+    'cost',
+    'tokens',
+    'tokens_in',
+    'tokens_out',
+    'duration',
+    'feedback',
+    'event_id',
+    'metadata.key',
+    'metadata.value',
+  ])('accepts the filterable field %s', async (key) => {
+    const h = makeHarness(aiTools, async () => envelope([]))
+    await h.run('cloudflare_aigateway_logs', {
+      gatewayId: 'gw1',
+      filters: [{ key, operator: 'eq', value: 'x' }],
+    })
+    expect(decodeURIComponent(h.requests[0]!.url)).toContain(
+      `filters.key=${key}&filters.operator=eq&filters.value=x`,
+    )
+  })
+
+  it.each(['eq', 'neq', 'contains', 'lt', 'gt'])('accepts the %s comparison', async (operator) => {
+    const h = makeHarness(aiTools, async () => envelope([]))
+    await h.run('cloudflare_aigateway_logs', {
+      gatewayId: 'gw1',
+      filters: [{ key: 'model', operator, value: 'x' }],
+    })
+    expect(decodeURIComponent(h.requests[0]!.url)).toContain(
+      `filters.key=model&filters.operator=${operator}&filters.value=x`,
+    )
+  })
+
+  it.each([
     [
       'an unfilterable field',
       [{ key: 'nope', operator: 'eq', value: 'x' }],
-      'filters[0].key "nope" is not a filterable field',
+      'invalid arguments: "filters[0].key" must be one of ["id","created_at","request_type","success","cached","provider","model","model_type","cost","tokens","tokens_in","tokens_out","duration","feedback","event_id","metadata.key","metadata.value"]',
     ],
     [
       'an unsupported comparison',
       [{ key: 'model', operator: 'like', value: 'x' }],
-      'filters[0].operator "like" is not a supported comparison',
+      'invalid arguments: "filters[0].operator" must be one of ["eq","neq","contains","lt","gt"]',
     ],
     [
       'a non-string value',
@@ -226,8 +266,9 @@ describe('gateway tools', () => {
     // The old shape was cast to `Record<string, string>`, so a non-string value
     // reached `String(value)` and went on the wire as "[object Object]". An
     // argument-less throw assertion would accept any failure, including a
-    // network one; the message pins each rejection to the layer meant to fire —
-    // the parameter schema for shape, `toLogFilters` for membership.
+    // network one; the message pins each rejection to the parameter schema,
+    // which carries the filterable fields and comparisons as enums, so the
+    // model reads the same list the validator enforces.
     const h = makeHarness(aiTools, async () => envelope([]))
     await expect(h.run('cloudflare_aigateway_logs', { gatewayId: 'gw1', filters })).rejects.toThrow(message)
     expect(h.requests).toHaveLength(0)
@@ -235,9 +276,13 @@ describe('gateway tools', () => {
 
   it('renders a log count', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
-    expect(h.tool('cloudflare_aigateway_logs').output.render({ gatewayId: 'g' }, { logs: [{}] })).toEqual([
-      { type: 'text', text: expect.stringContaining('1 log entry') },
-    ])
+    expect(
+      h.render(
+        'cloudflare_aigateway_logs',
+        { gatewayId: 'g' },
+        { logs: [{}], page: 1, perPage: 50, complete: true },
+      ),
+    ).toEqual([{ type: 'text', text: expect.stringContaining('1 log entry') }])
   })
 
   it.each(['request', 'response'] as const)('fetches a stored %s body', async (part) => {
@@ -251,9 +296,11 @@ describe('gateway tools', () => {
   it('renders a stored body as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
-      h
-        .tool('cloudflare_aigateway_log_body')
-        .output.render({ gatewayId: 'g', logId: 'l', part: 'request' }, { body: { a: 1 } }),
+      h.render(
+        'cloudflare_aigateway_log_body',
+        { gatewayId: 'g', logId: 'l', part: 'request' },
+        { body: { a: 1 } },
+      ),
     ).toEqual(json({ a: 1 }))
   })
 
@@ -266,7 +313,7 @@ describe('gateway tools', () => {
 
   it('renders a route count', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
-    expect(h.tool('cloudflare_aigateway_routes').output.render({ gatewayId: 'g' }, { routes: [] })).toEqual([
+    expect(h.render('cloudflare_aigateway_routes', { gatewayId: 'g' }, { routes: [] })).toEqual([
       { type: 'text', text: expect.stringContaining('0 routes') },
     ])
   })
@@ -294,9 +341,11 @@ describe('gateway tools', () => {
   it('renders the billing view as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
-      h
-        .tool('cloudflare_aigateway_cost')
-        .output.render({ view: 'credit-balance' }, { view: 'credit-balance', billing: { a: 1 } }),
+      h.render(
+        'cloudflare_aigateway_cost',
+        { view: 'credit-balance' },
+        { view: 'credit-balance', billing: { a: 1 } },
+      ),
     ).toEqual(json({ a: 1 }))
   })
 })
@@ -437,12 +486,11 @@ describe('cloudflare_aigateway_session_cost', () => {
   it('says so in the rendered summary when the scan was cut short', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
     expect(
-      h
-        .tool('cloudflare_aigateway_session_cost')
-        .output.render(
-          { gatewayId: 'g', sessionId: 's1' },
-          { requests: 1, cost: 1, cached: 0, truncated: true },
-        ),
+      h.render(
+        'cloudflare_aigateway_session_cost',
+        { gatewayId: 'g', sessionId: 's1' },
+        { requests: 1, cost: 1, tokensIn: 0, tokensOut: 0, cached: 0, scanned: 1, pages: 1, truncated: true },
+      ),
     ).toEqual([{ type: 'text', text: expect.stringContaining('partial') }])
   })
 
@@ -475,12 +523,20 @@ describe('cloudflare_aigateway_session_cost', () => {
   it('renders a one-line session summary', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
     expect(
-      h
-        .tool('cloudflare_aigateway_session_cost')
-        .output.render(
-          { gatewayId: 'g', sessionId: 's1' },
-          { requests: 3, cost: 1.25, tokensIn: 0, tokensOut: 0, cached: 2 },
-        ),
+      h.render(
+        'cloudflare_aigateway_session_cost',
+        { gatewayId: 'g', sessionId: 's1' },
+        {
+          requests: 3,
+          cost: 1.25,
+          tokensIn: 0,
+          tokensOut: 0,
+          cached: 2,
+          scanned: 3,
+          pages: 1,
+          truncated: false,
+        },
+      ),
     ).toEqual([{ type: 'text', text: 'Session s1: 3 requests, 2 served from cache, cost 1.25.' }])
   })
 })
@@ -507,9 +563,7 @@ describe('AI Search and Vectorize tools', () => {
   it('renders search results as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
-      h
-        .tool('cloudflare_aisearch_search')
-        .output.render({ instanceId: 'i', query: 'q' }, { results: { a: 1 } }),
+      h.render('cloudflare_aisearch_search', { instanceId: 'i', query: 'q' }, { results: { a: 1 } }),
     ).toEqual(json({ a: 1 }))
   })
 
@@ -533,7 +587,7 @@ describe('AI Search and Vectorize tools', () => {
   it('renders a grounded answer as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
-      h.tool('cloudflare_aisearch_chat').output.render({ instanceId: 'i', query: 'q' }, { answer: { a: 1 } }),
+      h.render('cloudflare_aisearch_chat', { instanceId: 'i', query: 'q' }, { answer: { a: 1 } }),
     ).toEqual(json({ a: 1 }))
   })
 
@@ -547,9 +601,9 @@ describe('AI Search and Vectorize tools', () => {
 
   it('renders the sync job as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
-    expect(
-      h.tool('cloudflare_aisearch_sync').output.render({ instanceId: 'i' }, { job: { id: 'j' } }),
-    ).toEqual(json({ id: 'j' }))
+    expect(h.render('cloudflare_aisearch_sync', { instanceId: 'i' }, { job: { id: 'j' } })).toEqual(
+      json({ id: 'j' }),
+    )
   })
 
   it('lists vectorize indexes', async () => {
@@ -562,7 +616,7 @@ describe('AI Search and Vectorize tools', () => {
 
   it('renders an index count', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
-    expect(h.tool('cloudflare_vectorize_index_list').output.render({}, { indexes: [{}] })).toEqual([
+    expect(h.render('cloudflare_vectorize_index_list', {}, { indexes: [{}] })).toEqual([
       { type: 'text', text: expect.stringContaining('1 index') },
     ])
   })
@@ -593,91 +647,9 @@ describe('AI Search and Vectorize tools', () => {
 
   it('renders matches as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
-    expect(
-      h.tool('cloudflare_vectorize_query').output.render({ indexName: 'i', vector: [] }, { matches: [] }),
-    ).toEqual([{ type: 'text', text: '[]' }])
-  })
-})
-
-describe('toLogFilters', () => {
-  it.each([
-    'id',
-    'created_at',
-    'request_type',
-    'success',
-    'cached',
-    'provider',
-    'model',
-    'model_type',
-    'cost',
-    'tokens',
-    'tokens_in',
-    'tokens_out',
-    'duration',
-    'feedback',
-    'event_id',
-    'metadata.key',
-    'metadata.value',
-  ])('accepts %s, which the endpoint documents as filterable', (key) => {
-    expect(toLogFilters([{ key, operator: 'eq', value: 'x' }])).toEqual([{ key, operator: 'eq', value: 'x' }])
-  })
-
-  it.each(['eq', 'neq', 'contains', 'lt', 'gt'])('accepts the %s comparison', (operator) => {
-    expect(toLogFilters([{ key: 'model', operator, value: 'x' }])).toEqual([
-      { key: 'model', operator, value: 'x' },
+    expect(h.render('cloudflare_vectorize_query', { indexName: 'i', vector: [] }, { matches: [] })).toEqual([
+      { type: 'text', text: '[]' },
     ])
-  })
-
-  it('accepts a well-formed clause', () => {
-    expect(toLogFilters([{ key: 'model', operator: 'eq', value: '@cf/m' }])).toEqual([
-      { key: 'model', operator: 'eq', value: '@cf/m' },
-    ])
-  })
-
-  it('treats an absent filter list as no filters', () => {
-    expect(toLogFilters(undefined)).toEqual([])
-  })
-
-  it.each([
-    ['a non-array', { key: 'model' }, /must be an array/],
-    ['a null entry', [null], /must be an object/],
-    ['a primitive entry', ['model'], /must be an object/],
-    ['an unfilterable field', [{ key: 'nope', operator: 'eq', value: 'x' }], /not a filterable field/],
-    ['a missing key', [{ operator: 'eq', value: 'x' }], /not a filterable field/],
-    [
-      'an unsupported comparison',
-      [{ key: 'model', operator: 'like', value: 'x' }],
-      /not a supported comparison/,
-    ],
-    ['a non-string key', [{ key: 7, operator: 'eq', value: 'x' }], /not a filterable field/],
-    ['a non-string operator', [{ key: 'model', operator: 7, value: 'x' }], /not a supported comparison/],
-    ['a non-string value', [{ key: 'model', operator: 'eq', value: { a: 1 } }], /value must be a string/],
-  ])('rejects %s', (_label, input, message) => {
-    // Rejected rather than cast: the previous shape reached `String(value)` and
-    // put "[object Object]" on the wire.
-    expect(() => toLogFilters(input)).toThrow(message)
-  })
-
-  it.each([
-    ['a null entry', [null], 'filters[0] must be an object'],
-    [
-      'a bad key',
-      [{ key: 'nope', operator: 'eq', value: 'x' }],
-      'filters[0].key "nope" is not a filterable field',
-    ],
-    [
-      'a bad operator',
-      [{ key: 'model', operator: 'like', value: 'x' }],
-      'filters[0].operator "like" is not a supported comparison',
-    ],
-    ['a bad value', [{ key: 'model', operator: 'eq', value: 1 }], 'filters[0].value must be a string'],
-    ['a non-array', 'nope', 'filters must be an array of clauses'],
-  ])('names the offending clause exactly for %s', (_label, input, message) => {
-    expect(() => toLogFilters(input)).toThrow(message)
-  })
-
-  it('names the error type so it is identifiable in a session log', () => {
-    expect(() => toLogFilters('nope')).toThrow(expect.objectContaining({ name: 'GatewayLogFilterError' }))
   })
 })
 

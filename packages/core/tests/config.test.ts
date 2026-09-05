@@ -39,10 +39,11 @@ describe('CloudflareConfig', () => {
   })
 
   it('rejects a value of the wrong type rather than coercing it', () => {
-    // Cast deliberately: cordis.yml is untyped at runtime, so the schema has to
-    // reject this even though TypeScript would catch it at a typed call site.
-    expect(() =>
-      CloudflareConfig({ maxRetries: 'lots' } as unknown as Partial<CloudflareConfigType>),
-    ).toThrow('$.maxRetries expected number but got lots')
+    // cordis.yml is untyped at runtime, so the schema has to reject this even
+    // though TypeScript would catch it at a typed call site.
+    const fromYaml: unknown = { maxRetries: 'lots' }
+    expect(() => CloudflareConfig(fromYaml as Partial<CloudflareConfigType>)).toThrow(
+      '$.maxRetries expected number but got lots',
+    )
   })
 })

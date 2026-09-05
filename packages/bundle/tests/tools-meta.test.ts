@@ -33,7 +33,7 @@ describe('meta plugin shape', () => {
   })
 
   it('registers both meta tools', () => {
-    expect([...harness({}).tools.keys()].toSorted()).toEqual(['cloudflare_account_list', 'cloudflare_api'])
+    expect(harness({}).names().toSorted()).toEqual(['cloudflare_account_list', 'cloudflare_api'])
   })
 })
 
@@ -48,9 +48,9 @@ describe('cloudflare_account_list', () => {
 
   it('renders an account count', () => {
     const h = harness({})
-    expect(h.tool('cloudflare_account_list').output.render({}, { accounts: [{ id: 'a' }] })).toEqual([
-      { type: 'text', text: expect.stringContaining('1 account') },
-    ])
+    expect(
+      h.render('cloudflare_account_list', {}, { accounts: [{ id: 'a', name: 'Acme' }], truncated: false }),
+    ).toEqual([{ type: 'text', text: expect.stringContaining('1 account') }])
   })
 
   it('is concurrency safe', () => {
@@ -75,6 +75,30 @@ describe('cloudflare_api', () => {
     const h = harness({}, async () => envelope(null))
     await h.run('cloudflare_api', { method: 'GET', path: '/zones' })
     expect(h.requests[0]!.url).toBe('https://api.test/v4/zones')
+  })
+
+  it('serializes numbers, booleans and repeated values as the API reads them', async () => {
+    const h = harness({})
+    await h.run('cloudflare_api', {
+      method: 'GET',
+      path: '/zones',
+      query: { page: 2, match: true, status: ['active', 'pending'] },
+    })
+    expect(new URL(h.requests[0]!.url).search).toBe('?page=2&match=true&status=active&status=pending')
+  })
+
+  it.each([
+    ['a null value', { a: null }, 'query.a must be a string, number or boolean'],
+    ['an object value', { a: { b: 1 } }, 'query.a must be a string, number or boolean'],
+    ['a nested array', { a: [['x']] }, 'query.a[0] must be a string, number or boolean'],
+  ])('refuses %s rather than sending it as text', async (_label, query, message) => {
+    const h = harness({})
+    await expect(h.run('cloudflare_api', { method: 'GET', path: '/zones', query })).rejects.toThrow(message)
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('names the query error so a caller can tell it from a transport failure', () => {
+    expect(() => metaTools.toQuery({ a: null })).toThrow(expect.objectContaining({ name: 'ApiQueryError' }))
   })
 
   it('passes query parameters through', async () => {
@@ -179,9 +203,9 @@ describe('cloudflare_api', () => {
 
   it('renders the result as JSON', () => {
     const h = harness({})
-    expect(
-      h.tool('cloudflare_api').output.render({ method: 'GET', path: '/x' }, { result: { a: 1 } }),
-    ).toEqual(json({ a: 1 }))
+    expect(h.render('cloudflare_api', { method: 'GET', path: '/x' }, { result: { a: 1 } })).toEqual(
+      json({ a: 1 }),
+    )
   })
 
   it('is not marked concurrency safe, since it can be configured to write', () => {

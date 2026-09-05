@@ -5,6 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { CloudflareAiAdapter } from '../src/ai/adapter.ts'
 import * as aiPlugin from '../src/ai/index.ts'
 
+interface LlmContext extends Context {
+  llm: LlmRuntime
+}
+
 function envelope<T>(result: T): Response {
   return new Response(JSON.stringify({ success: true, errors: [], messages: [], result }), {
     status: 200,
@@ -98,7 +102,7 @@ describe('lifecycle', () => {
       },
     )
     expect(service.name).toBe('cloudflare')
-    const providers = () => (ctx as unknown as { llm: LlmRuntime }).llm.listProviders().map((info) => info.id)
+    const providers = () => (ctx as LlmContext).llm.listProviders().map((info) => info.id)
 
     const fiber = await ctx.plugin(aiPlugin, {})
     expect(providers()).toEqual(expect.arrayContaining(['cloudflare-workers-ai', 'cloudflare-ai-gateway']))

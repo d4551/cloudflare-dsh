@@ -72,15 +72,22 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'Namespaces with their ids and titles.',
+          additionalProperties: false,
+          description: 'KV namespaces in the account.',
+          properties: {
+            namespaces: {
+              type: 'array',
+              required: true,
+              description: 'Namespace records as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
         },
-        render: (_args, value) =>
-          listing((value as { namespaces: unknown[] }).namespaces.length, 'namespace', value),
+        render: (_args, value) => listing(value.namespaces.length, 'namespace', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const namespaces = await cf.accountRequest<JsonValue[]>(
+        const namespaces = await cf.accountRequest<Record<string, JsonValue>[]>(
           kvNamespaceListSpec(args.perPage ?? config.pageSize),
         )
         return { namespaces }
@@ -155,9 +162,16 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         key: { type: 'string', required: true, description: 'Key to read.' },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The stored value.' },
-        render: (args, value) =>
-          text(`${args.key}\n${truncate((value as { value: string }).value, config.renderLimit)}`),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'The key and its stored value.',
+          properties: {
+            key: { type: 'string', required: true, description: 'The key that was read.' },
+            value: { type: 'string', required: true, description: 'The stored value, verbatim.' },
+          },
+        },
+        render: (args, value) => text(`${args.key}\n${truncate(value.value, config.renderLimit)}`),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
@@ -191,11 +205,18 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'How many pairs were written.' },
-        render: (_args, value) => text(`Wrote ${(value as { written: number }).written} key/value pairs.`),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'How many pairs were written.',
+          properties: {
+            written: { type: 'integer', required: true, description: 'Key/value pairs written.' },
+          },
+        },
+        render: (_args, value) => text(`Wrote ${value.written} key/value pairs.`),
       },
       async execute(args) {
-        const entries = args.entries as readonly { key: string; value: string }[]
+        const entries = args.entries
         await cf.accountRequest<JsonValue>(kvBulkPutSpec(args.namespaceId, entries))
         return { written: entries.length }
       },
@@ -216,11 +237,16 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'How many keys were deleted.' },
-        render: (_args, value) => text(`Deleted ${(value as { deleted: number }).deleted} keys.`),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'How many keys were deleted.',
+          properties: { deleted: { type: 'integer', required: true, description: 'Keys deleted.' } },
+        },
+        render: (_args, value) => text(`Deleted ${value.deleted} keys.`),
       },
       async execute(args) {
-        const keys = args.keys as readonly string[]
+        const keys = args.keys
         const spec =
           keys.length === 1
             ? kvDeleteSpec(args.namespaceId, keys[0]!)
@@ -239,13 +265,26 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         perPage: { type: 'integer', description: `Databases per page (default ${config.pageSize}).` },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Databases with ids and names.' },
-        render: (_args, value) =>
-          listing((value as { databases: unknown[] }).databases.length, 'database', value),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'D1 databases in the account.',
+          properties: {
+            databases: {
+              type: 'array',
+              required: true,
+              description: 'Database records as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
+        },
+        render: (_args, value) => listing(value.databases.length, 'database', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const databases = await cf.accountRequest<JsonValue[]>(d1ListSpec(args.perPage ?? config.pageSize))
+        const databases = await cf.accountRequest<Record<string, JsonValue>[]>(
+          d1ListSpec(args.perPage ?? config.pageSize),
+        )
         return { databases }
       },
     }),
@@ -268,14 +307,17 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'Result sets with rows and metadata.',
+          additionalProperties: false,
+          description: 'Query results.',
+          properties: {
+            results: { type: 'json', required: true, description: 'Result sets as the API returns them.' },
+          },
         },
         render: (_args, value) => json(value),
       },
       async execute(args) {
         const results = await cf.accountRequest<JsonValue>(
-          d1QuerySpec(args.databaseId, args.sql, (args.params ?? []) as readonly string[]),
+          d1QuerySpec(args.databaseId, args.sql, args.params ?? []),
         )
         return { results }
       },
@@ -290,12 +332,26 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         perPage: { type: 'integer', description: `Queues per page (default ${config.pageSize}).` },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Queues with ids and names.' },
-        render: (_args, value) => listing((value as { queues: unknown[] }).queues.length, 'queue', value),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Queues in the account.',
+          properties: {
+            queues: {
+              type: 'array',
+              required: true,
+              description: 'Queue records as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
+        },
+        render: (_args, value) => listing(value.queues.length, 'queue', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const queues = await cf.accountRequest<JsonValue[]>(queueListSpec(args.perPage ?? config.pageSize))
+        const queues = await cf.accountRequest<Record<string, JsonValue>[]>(
+          queueListSpec(args.perPage ?? config.pageSize),
+        )
         return { queues }
       },
     }),
@@ -310,7 +366,18 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         body: { type: 'json', required: true, description: 'Message payload.' },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Send acknowledgement.' },
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Confirmation that the message was queued.',
+          properties: {
+            queued: {
+              type: 'boolean',
+              required: true,
+              description: 'Always true once the API accepted the message.',
+            },
+          },
+        },
         render: () => text('Message queued.'),
       },
       async execute(args) {
@@ -336,14 +403,21 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'Pulled messages with lease ids.',
+          additionalProperties: false,
+          description: 'Pulled messages.',
+          properties: {
+            messages: {
+              type: 'array',
+              required: true,
+              description: 'Messages as the API returns them, each with its lease id.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
         },
-        render: (_args, value) =>
-          listing((value as { messages: unknown[] }).messages.length, 'message', value),
+        render: (_args, value) => listing(value.messages.length, 'message', value),
       },
       async execute(args) {
-        const result = await cf.accountRequest<{ messages?: JsonValue[] }>(
+        const result = await cf.accountRequest<{ messages?: Record<string, JsonValue>[] }>(
           queuePullSpec(
             args.queueId,
             args.batchSize ?? config.queueBatchSize,
@@ -368,17 +442,20 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'Counts acknowledged and retried.',
+          additionalProperties: false,
+          description: 'How many leases were settled.',
+          properties: {
+            acked: { type: 'integer', required: true, description: 'Leases acknowledged.' },
+            retried: { type: 'integer', required: true, description: 'Leases returned for retry.' },
+          },
         },
         render: (_args, value) => {
-          const v = value as { acked: number; retried: number }
-          return text(`Acknowledged ${v.acked}, retried ${v.retried}.`)
+          return text(`Acknowledged ${value.acked}, retried ${value.retried}.`)
         },
       },
       async execute(args) {
-        const acks = (args.acks ?? []) as readonly string[]
-        const retries = (args.retries ?? []) as readonly string[]
+        const acks = args.acks ?? []
+        const retries = args.retries ?? []
         await cf.accountRequest<JsonValue>(queueAckSpec(args.queueId, acks, retries))
         return { acked: acks.length, retried: retries.length }
       },
@@ -395,14 +472,22 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'Buckets with names and creation dates.',
+          additionalProperties: false,
+          description: 'R2 buckets in the account.',
+          properties: {
+            buckets: {
+              type: 'array',
+              required: true,
+              description: 'Bucket records as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+          },
         },
-        render: (_args, value) => listing((value as { buckets: unknown[] }).buckets.length, 'bucket', value),
+        render: (_args, value) => listing(value.buckets.length, 'bucket', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const result = await cf.accountRequest<{ buckets?: JsonValue[] }>(
+        const result = await cf.accountRequest<{ buckets?: Record<string, JsonValue>[] }>(
           r2BucketListSpec(args.perPage ?? config.pageSize),
         )
         return { buckets: result.buckets ?? [] }
@@ -422,7 +507,14 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The created bucket.' },
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'The bucket that was created.',
+          properties: {
+            bucket: { type: 'json', required: true, description: 'The bucket record as the API returns it.' },
+          },
+        },
         render: (args) => text(`Created R2 bucket ${args.name}.`),
       },
       async execute(args) {

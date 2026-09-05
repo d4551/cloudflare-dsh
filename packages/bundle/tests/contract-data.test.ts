@@ -25,8 +25,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Databases with ids and names.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        databases: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Database records as the API returns them.',
+        },
+      },
+      required: ['databases'],
+      description: 'D1 databases in the account.',
     },
   },
   cloudflare_d1_query: {
@@ -55,8 +66,14 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Result sets with rows and metadata.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        results: {
+          description: 'Result sets as the API returns them.',
+        },
+      },
+      required: ['results'],
+      description: 'Query results.',
     },
   },
   cloudflare_kv_delete: {
@@ -80,8 +97,15 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        deleted: {
+          type: 'integer',
+          description: 'Keys deleted.',
+        },
+      },
+      required: ['deleted'],
       description: 'How many keys were deleted.',
-      additionalProperties: true,
     },
   },
   cloudflare_kv_get: {
@@ -102,8 +126,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'The stored value.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        key: {
+          type: 'string',
+          description: 'The key that was read.',
+        },
+        value: {
+          type: 'string',
+          description: 'The stored value, verbatim.',
+        },
+      },
+      required: ['key', 'value'],
+      description: 'The key and its stored value.',
     },
   },
   cloudflare_kv_list_keys: {
@@ -166,8 +201,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Namespaces with their ids and titles.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        namespaces: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Namespace records as the API returns them.',
+        },
+      },
+      required: ['namespaces'],
+      description: 'KV namespaces in the account.',
     },
   },
   cloudflare_kv_put: {
@@ -201,8 +247,15 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        written: {
+          type: 'integer',
+          description: 'Key/value pairs written.',
+        },
+      },
+      required: ['written'],
       description: 'How many pairs were written.',
-      additionalProperties: true,
     },
   },
   cloudflare_queue_ack: {
@@ -234,8 +287,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Counts acknowledged and retried.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        acked: {
+          type: 'integer',
+          description: 'Leases acknowledged.',
+        },
+        retried: {
+          type: 'integer',
+          description: 'Leases returned for retry.',
+        },
+      },
+      required: ['acked', 'retried'],
+      description: 'How many leases were settled.',
     },
   },
   cloudflare_queue_list: {
@@ -251,8 +315,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Queues with ids and names.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        queues: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Queue records as the API returns them.',
+        },
+      },
+      required: ['queues'],
+      description: 'Queues in the account.',
     },
   },
   cloudflare_queue_pull: {
@@ -278,8 +353,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Pulled messages with lease ids.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        messages: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Messages as the API returns them, each with its lease id.',
+        },
+      },
+      required: ['messages'],
+      description: 'Pulled messages.',
     },
   },
   cloudflare_queue_send: {
@@ -299,8 +385,15 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Send acknowledgement.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        queued: {
+          type: 'boolean',
+          description: 'Always true once the API accepted the message.',
+        },
+      },
+      required: ['queued'],
+      description: 'Confirmation that the message was queued.',
     },
   },
   cloudflare_r2_bucket_create: {
@@ -321,8 +414,14 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'The created bucket.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        bucket: {
+          description: 'The bucket record as the API returns it.',
+        },
+      },
+      required: ['bucket'],
+      description: 'The bucket that was created.',
     },
   },
   cloudflare_r2_bucket_list: {
@@ -338,8 +437,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Buckets with names and creation dates.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        buckets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Bucket records as the API returns them.',
+        },
+      },
+      required: ['buckets'],
+      description: 'R2 buckets in the account.',
     },
   },
 }
@@ -348,7 +458,7 @@ describe('data tool contract', () => {
   const h = makeHarness(dataTools, async () => envelope(null))
 
   it('registers exactly the contracted tools', () => {
-    expect([...h.tools.keys()].toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
+    expect(h.names().toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
   })
 
   it.each(Object.keys(CONTRACT))('%s exposes its contracted description', (name) => {

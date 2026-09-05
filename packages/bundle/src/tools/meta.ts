@@ -5,7 +5,7 @@
  * wrap. It is deliberately contained: read-only unless explicitly configured
  * otherwise, subject to a path denylist, and unable to leave the REST root.
  */
-import type { CloudflareService, HttpMethod } from '@d4551/dsh-cloudflare-core'
+import type { CloudflareService, HttpMethod, QueryValue } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
@@ -15,6 +15,37 @@ import { json, listing } from './_shared/render.ts'
 
 interface CloudflareContext extends Context {
   cloudflare: CloudflareService
+}
+
+/** Raised when a query value has no unambiguous text form. */
+export class ApiQueryError extends TypeError {
+  override readonly name = 'ApiQueryError'
+}
+
+/** One query value that serializes as itself. */
+function scalarQueryValue(name: string, value: JsonValue): string | number | boolean {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  throw new ApiQueryError(`query.${name} must be a string, number or boolean`)
+}
+
+/**
+ * Validate caller-supplied query parameters for the wire.
+ *
+ * Strings, numbers and booleans serialize as themselves and an array of them
+ * repeats the key. `null`, an object or a nested array would go on the wire as
+ * text like "[object Object]", so each is refused by name rather than cast.
+ */
+export function toQuery(
+  raw: Readonly<Record<string, JsonValue>> | undefined,
+): Record<string, QueryValue> | undefined {
+  if (raw === undefined) return undefined
+  const query: Record<string, QueryValue> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    query[key] = Array.isArray(value)
+      ? value.map((item, index) => scalarQueryValue(`${key}[${index}]`, item))
+      : scalarQueryValue(key, value)
+  }
+  return query
 }
 
 /** Methods the generic tool advertises to the model. */
@@ -44,9 +75,32 @@ export function apply(ctx: Context, config: MetaConfig): void {
       description: 'List the Cloudflare accounts this API token can access.',
       parameters: {},
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Accounts with ids and names.' },
-        render: (_args, value) =>
-          listing((value as { accounts: unknown[] }).accounts.length, 'account', value),
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Accounts the token can reach.',
+          properties: {
+            accounts: {
+              type: 'array',
+              required: true,
+              description: 'Accounts, projected to id and name.',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  id: { type: 'string', required: true },
+                  name: { type: 'string', required: true },
+                },
+              },
+            },
+            truncated: {
+              type: 'boolean',
+              required: true,
+              description: 'Whether the page ceiling cut the list short.',
+            },
+          },
+        },
+        render: (_args, value) => listing(value.accounts.length, 'account', value),
       },
       isConcurrencySafe: () => true,
       async execute() {
@@ -91,19 +145,19 @@ export function apply(ctx: Context, config: MetaConfig): void {
       output: {
         schema: {
           type: 'object',
-          additionalProperties: true,
-          description: 'The unwrapped Cloudflare result for the call.',
+          additionalProperties: false,
+          description: 'The envelope result, whatever the endpoint returned.',
+          properties: {
+            result: { type: 'json', required: true, description: 'The result field of the API envelope.' },
+          },
         },
-        render: (_args, value) => json((value as { result: JsonValue }).result),
+        render: (_args, value) => json(value.result),
       },
       async execute(args) {
-        const spec = buildGenericSpec(
-          args.method as HttpMethod,
-          args.path,
-          args.query as Record<string, string> | undefined,
-          args.body,
-          { allowMutations: config.allowMutations, denyPathPrefixes: config.denyPathPrefixes },
-        )
+        const spec = buildGenericSpec(args.method, args.path, toQuery(args.query), args.body, {
+          allowMutations: config.allowMutations,
+          denyPathPrefixes: config.denyPathPrefixes,
+        })
         const result = await cf.client.request<JsonValue>(spec)
         return { result }
       },

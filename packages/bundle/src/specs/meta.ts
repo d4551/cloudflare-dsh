@@ -1,7 +1,13 @@
 /**
  * Pure helpers for the account and generic-API tools.
  */
-import { assertSafePath, decodePath, type HttpMethod, type RequestSpec } from '@d4551/dsh-cloudflare-core'
+import {
+  assertSafePath,
+  decodePath,
+  type HttpMethod,
+  type QueryValue,
+  type RequestSpec,
+} from '@d4551/dsh-cloudflare-core'
 
 /** Methods that only read. The generic tool is limited to these by default. */
 const READ_ONLY: ReadonlySet<HttpMethod> = new Set<HttpMethod>(['GET', 'HEAD'])
@@ -27,7 +33,7 @@ export class CloudflareApiDeniedError extends Error {
 export function buildGenericSpec(
   method: HttpMethod,
   path: string,
-  query: Readonly<Record<string, string>> | undefined,
+  query: Readonly<Record<string, QueryValue>> | undefined,
   body: unknown,
   options: { readonly allowMutations: boolean; readonly denyPathPrefixes: readonly string[] },
 ): RequestSpec {

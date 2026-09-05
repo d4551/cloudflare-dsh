@@ -26,8 +26,18 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'The model\u2019s published JSON schema.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        model: {
+          type: 'string',
+          description: 'Model slug the schema describes.',
+        },
+        schema: {
+          description: 'The JSON schema Cloudflare publishes for the model.',
+        },
+      },
+      required: ['model', 'schema'],
+      description: 'The model and its published JSON schema.',
     },
   },
   cloudflare_ai_models_search: {
@@ -51,8 +61,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Matching models.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        models: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Catalogue entries as the API returns them.',
+        },
+      },
+      required: ['models'],
+      description: 'Model catalogue entries.',
     },
   },
   cloudflare_ai_run: {
@@ -73,8 +94,18 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'The model output.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        model: {
+          type: 'string',
+          description: 'Model slug that produced the output.',
+        },
+        output: {
+          description: 'The model output as Workers AI returned it.',
+        },
+      },
+      required: ['model', 'output'],
+      description: 'The model that ran and what it returned.',
     },
   },
   cloudflare_aigateway_cost: {
@@ -93,8 +124,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        view: {
+          type: 'string',
+          enum: ['credit-balance', 'usage-history', 'invoice-preview'],
+          description: 'Which billing view was read.',
+        },
+        billing: {
+          description: 'The billing payload as the API returns it.',
+        },
+      },
+      required: ['view', 'billing'],
       description: 'The requested billing view.',
-      additionalProperties: true,
     },
   },
   cloudflare_aigateway_get: {
@@ -111,8 +153,16 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'The gateway configuration.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        gateway: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'The gateway record as the API returns it.',
+        },
+      },
+      required: ['gateway'],
+      description: 'One gateway.',
     },
   },
   cloudflare_aigateway_list: {
@@ -128,8 +178,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Gateways with their ids and settings.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        gateways: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Gateway records as the API returns them.',
+        },
+      },
+      required: ['gateways'],
+      description: 'Gateways in the account.',
     },
   },
   cloudflare_aigateway_log_body: {
@@ -155,8 +216,14 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        body: {
+          description: 'The request or response body as stored by the gateway.',
+        },
+      },
+      required: ['body'],
       description: 'The stored body.',
-      additionalProperties: true,
     },
   },
   cloudflare_aigateway_logs: {
@@ -187,9 +254,29 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
             properties: {
               key: {
                 type: 'string',
+                enum: [
+                  'id',
+                  'created_at',
+                  'request_type',
+                  'success',
+                  'cached',
+                  'provider',
+                  'model',
+                  'model_type',
+                  'cost',
+                  'tokens',
+                  'tokens_in',
+                  'tokens_out',
+                  'duration',
+                  'feedback',
+                  'event_id',
+                  'metadata.key',
+                  'metadata.value',
+                ],
               },
               operator: {
                 type: 'string',
+                enum: ['eq', 'neq', 'contains', 'lt', 'gt'],
               },
               value: {
                 type: 'string',
@@ -203,8 +290,31 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        logs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Log entries as the API returns them.',
+        },
+        page: {
+          type: 'integer',
+          description: '1-based page number that was read.',
+        },
+        perPage: {
+          type: 'integer',
+          description: 'Entries requested per page.',
+        },
+        complete: {
+          type: 'boolean',
+          description: 'Whether this page was short, so no page follows.',
+        },
+      },
+      required: ['logs', 'page', 'perPage', 'complete'],
       description: 'Matching log entries and the page they came from.',
-      additionalProperties: true,
     },
   },
   cloudflare_aigateway_routes: {
@@ -221,8 +331,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        routes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Route records as the API returns them.',
+        },
+      },
+      required: ['routes'],
       description: 'Dynamic routes.',
-      additionalProperties: true,
     },
   },
   cloudflare_aigateway_session_cost: {
@@ -248,8 +369,44 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Request count, total cost, tokens, and cache hits for the session.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        requests: {
+          type: 'integer',
+          description: 'Log entries that carried the session id.',
+        },
+        cost: {
+          type: 'number',
+          description: 'Sum of the cost field over those entries.',
+        },
+        tokensIn: {
+          type: 'number',
+          description: 'Sum of tokens_in over those entries.',
+        },
+        tokensOut: {
+          type: 'number',
+          description: 'Sum of tokens_out over those entries.',
+        },
+        cached: {
+          type: 'integer',
+          description: 'Entries the gateway served from cache.',
+        },
+        scanned: {
+          type: 'integer',
+          description: 'Log entries read across every page, matched or not.',
+        },
+        pages: {
+          type: 'integer',
+          description: 'Pages read.',
+        },
+        truncated: {
+          type: 'boolean',
+          description: 'Whether the page ceiling stopped the scan before the last page.',
+        },
+      },
+      required: ['requests', 'cost', 'tokensIn', 'tokensOut', 'cached', 'scanned', 'pages', 'truncated'],
+      description:
+        'Request count, total cost, tokens, and cache hits for the session, plus how far the scan reached.',
     },
   },
   cloudflare_aisearch_chat: {
@@ -274,8 +431,14 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'The grounded completion.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        answer: {
+          description: 'The answer payload as the API returns it.',
+        },
+      },
+      required: ['answer'],
+      description: 'The grounded answer.',
     },
   },
   cloudflare_aisearch_search: {
@@ -301,8 +464,14 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        results: {
+          description: 'Search results as the API returns them.',
+        },
+      },
+      required: ['results'],
       description: 'Matching chunks.',
-      additionalProperties: true,
     },
   },
   cloudflare_aisearch_sync: {
@@ -319,8 +488,14 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'The created sync job.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        job: {
+          description: 'The job record as the API returns it.',
+        },
+      },
+      required: ['job'],
+      description: 'The sync job that was started.',
     },
   },
   cloudflare_vectorize_index_list: {
@@ -331,8 +506,19 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
-      description: 'Vectorize indexes.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        indexes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+          },
+          description: 'Index records as the API returns them.',
+        },
+      },
+      required: ['indexes'],
+      description: 'Vector indexes in the account.',
     },
   },
   cloudflare_vectorize_query: {
@@ -368,8 +554,14 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
     output: {
       type: 'object',
+      additionalProperties: false,
+      properties: {
+        matches: {
+          description: 'The query result as the API returns it.',
+        },
+      },
+      required: ['matches'],
       description: 'Nearest matches.',
-      additionalProperties: true,
     },
   },
 }
@@ -378,7 +570,7 @@ describe('ai tool contract', () => {
   const h = makeHarness(toolsModule, async () => envelope(null))
 
   it('registers exactly the contracted tools', () => {
-    expect([...h.tools.keys()].toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
+    expect(h.names().toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
   })
 
   it.each(Object.keys(CONTRACT))('%s exposes its contracted description', (name) => {

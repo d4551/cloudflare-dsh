@@ -259,7 +259,10 @@ Two properties are worth calling out.
 meaning generated code can call `await tools.cloudflare_kv_list_keys({...})` and
 receive the value directly. So results carry ids and cursors that feed the next
 call rather than prose a model has to parse. `cloudflare_kv_list_keys` returns
-`{ keys, cursor, complete }` precisely so a generated loop can page.
+`{ keys, cursor, complete }` precisely so a generated loop can page. Every tool
+declares a closed output object with each field described and required; the
+registry validates a value against it before the model or generated code sees
+it, and a presenter reads typed fields rather than casting.
 
 **Presenters are pure.** `output.render` runs during session-log replay, so it
 performs no I/O, reads no clock and uses no randomness.

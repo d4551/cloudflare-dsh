@@ -199,6 +199,44 @@ The run that followed, on the committed tree, scored 100.00% — 2,689 killed,
 13 timeouts, none surviving — across 2,702 mutants, 56 more than the run
 before it; the cursor guard and every `Config` default are among them.
 
+Item 1 above calls `cloudflare_kv_list_keys` the first tool with a typed output
+schema. Leaving it the only one would have left 28 casts inside presenters that
+run on replayed values, so the restart continued:
+
+5. **Every tool declares a closed output object.** All 32 schemas name their
+   properties, describe each and require each, and the presenters read typed
+   fields — the 28 render casts are gone. Where a schema declares an array of
+   objects the request generic narrows to match, so the type the code carries
+   is the shape the schema validates. The contract goldens pin the compiled
+   schema the model sees.
+6. **The test harness is the real registry.** The recording fake never checked
+   a returned value. Every tool test now runs through `ToolRuntime.execute`, so
+   a value that fails its schema fails the test the way it would fail in the
+   harness, and a hand-built value a test renders must first pass the same
+   validator. Two tests prove the guard end to end: a catalogue of scalars and
+   a queue pull whose messages are not a list both surface as
+   `INVALID_TOOL_OUTPUT`. Five hand-built values the fake had accepted were
+   shapes no tool returns; they are complete now. The harness's own
+   `as unknown as ToolRunContext` is gone with the fake — the registry mints
+   the execution.
+7. **What the real pipeline showed.** A core error's class does not survive
+   the registry: `CloudflareNotFoundError` reaches the model as its message
+   alone, and a 404 with a non-envelope body reaches it as "Cloudflare request
+   failed with no error detail" (the plan's S2-7). The not-found test had used
+   exactly such a body and asserted the class; it now uses the envelope
+   Cloudflare sends for a missing key and asserts the message the model reads.
+   Folding a raw error body into the message is the repair that follows this
+   one.
+8. **Casts the typed arguments made redundant are deleted**: six `as readonly`
+   argument casts, three enum casts, the four in the gateway-log helpers, and
+   `cloudflare_api`'s `query` cast, which let an object reach the wire as
+   `[object Object]` — query values are now validated by name. The filterable
+   fields and comparisons of the gateway-log filter moved into the parameter
+   schema as enums, so the model reads the list the validator enforces; the
+   hand-written re-validation, whose shape branches no tool call could reach,
+   is gone with its unit tests. The eight double casts in test files are gone
+   too, and the escape-hatch invariant now covers tests as well as source.
+
 </details>
 
 <details>
