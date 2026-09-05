@@ -28,6 +28,9 @@ jobs:
       - run: bun run typecheck
       # --deny-warnings: a warning fails the build, so "lint clean" is enforced.
       - run: bun run lint
+      # Every rule the README states, asserted. A documented rule that nothing
+      # checks holds only until someone edits a config.
+      - run: bun run test:invariants
       - run: bun run test:coverage
 
   accessibility:

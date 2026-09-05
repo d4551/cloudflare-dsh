@@ -19,7 +19,8 @@
     "stryker": "stryker run && node scripts/verify-mutation-files.mjs",
     "publint": "bun run --filter '*' publint",
     "knip": "knip",
-    "test:dist": "vitest run --config vitest.dist.config.ts"
+    "test:dist": "vitest run --config vitest.dist.config.ts",
+    "test:invariants": "vitest run --config vitest.invariants.config.ts"
   },
   "devDependencies": {
     "@stryker-mutator/core": "10.0.0",
