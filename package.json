@@ -1,0 +1,36 @@
+{
+  "name": "cloudflare-dsh-workspace",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "oxlint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:a11y": "vitest run --config vitest.a11y.config.ts",
+    "stryker": "stryker run",
+    "publint": "bun run --filter '*' publint",
+    "knip": "knip"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@types/node": "^22.15.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "axe-core": "^4.13.0",
+    "knip": "^5.66.0",
+    "oxlint": "^1.81.0",
+    "publint": "^0.3.14",
+    "typescript": "^5.9.0",
+    "vitest": "4.1.11"
+  }
+}
