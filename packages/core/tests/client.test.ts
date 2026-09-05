@@ -92,6 +92,42 @@ describe('statusOfError', () => {
   })
 })
 
+describe('requestText failure classification', () => {
+  it('uses the Cloudflare code from an error body, not just the status', async () => {
+    // 10000 is unauthorized regardless of the status class, and requestText
+    // previously threw the body away before classifying.
+    const { client } = makeClient(async () =>
+      json({ success: false, errors: [{ code: 10000, message: 'nope' }], messages: [], result: null }, {
+        status: 500,
+      }),
+    )
+    await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toBeInstanceOf(
+      CloudflareAuthError,
+    )
+  })
+
+  it('carries the credential reference and the envelope code', async () => {
+    const { client } = makeClient(async () =>
+      json({ success: false, errors: [{ code: 10000, message: 'nope' }], messages: [], result: null }, {
+        status: 403,
+      }),
+    )
+    await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      credentialRef: REF,
+      codes: [10000],
+    })
+  })
+
+  it('still classifies by status when the error body is not an envelope', async () => {
+    const { client } = makeClient(
+      async () => new Response('<html>gateway error</html>', { status: 404 }),
+    )
+    await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toBeInstanceOf(
+      CloudflareNotFoundError,
+    )
+  })
+})
+
 describe('request cancellation', () => {
   it('aborts an attempt that outruns the configured budget', async () => {
     // Without this the request hangs for as long as the connection does, and

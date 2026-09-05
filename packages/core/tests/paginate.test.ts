@@ -54,6 +54,20 @@ describe('nextPageQuery', () => {
     expect(nextPageQuery({ result_info: info }, 0)).toBeNull()
   })
 
+  it('stops when the page came back short, whatever the advertised total', () => {
+    // A server that returns fewer rows than it was asked for has nothing more,
+    // so continuing to the advertised total just fetches empty pages.
+    expect(
+      nextPageQuery({ result_info: { page: 1, per_page: 20, total_count: 50, count: 7 } }, 7),
+    ).toBeNull()
+  })
+
+  it('continues while a full page comes back', () => {
+    expect(
+      nextPageQuery({ result_info: { page: 1, per_page: 20, total_count: 50, count: 20 } }, 20),
+    ).toEqual({ page: 2, per_page: 20 })
+  })
+
   it('stops on a non-positive page size rather than looping forever', () => {
     expect(nextPageQuery({ result_info: { page: 1, per_page: 0, total_count: 50 } }, 0)).toBeNull()
   })

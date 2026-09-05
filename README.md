@@ -5,8 +5,8 @@
 **Cloudflare tools, an AI Gateway model provider, and MCP passthrough for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
 [![CI](https://github.com/d4551/cloudflare-dsh/actions/workflows/ci.yml/badge.svg)](https://github.com/d4551/cloudflare-dsh/actions/workflows/ci.yml)
-[![Mutation score](https://img.shields.io/badge/mutation-100%25-brightgreen)](#quality-gates)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#quality-gates)
+[![Mutation score](https://img.shields.io/badge/mutation-100%25-brightgreen)](#quality)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#quality)
 [![Accessibility](https://img.shields.io/badge/axe-0%20violations-brightgreen)](#accessibility)
 [![WCAG](https://img.shields.io/badge/WCAG-2.2%20AA-blue)](#accessibility)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)](tsconfig.base.json)
@@ -77,7 +77,7 @@ that value. The correlation is exact, not inferred from timestamps.
 - [Accessibility](#accessibility)
 - [MCP passthrough](#mcp-passthrough)
 - [Security model](#security-model)
-- [Quality gates](#quality-gates)
+- [Quality](#quality)
 - [Development](#development)
 - [Project status](#project-status)
 - [License](#license)
@@ -629,69 +629,30 @@ wrap stay reachable. It is a bounded capability, not a bypass:
 
 ---
 
-## Quality gates
+## Quality
 
-**No overrides, exceptions or justifications.** Not in a config, not in a
-comment, not in a pull request body. A gate either passes on the code as
-written, or the code changes.
+CI runs on Node 22 and 24 and must be green to merge:
 
-Every rule below is **asserted by `bun run test:invariants`**, which runs in CI.
-A rule that is only documented holds until someone edits a config and nothing
-goes red; these fail a build instead.
-
-| Rule | What fails if it stops being true |
+| Gate | Bar |
 |---|---|
-| No mutation-score slack | `stryker.config.json` sets `break: 100`, and the invariants suite asserts the threshold |
-| No file escapes mutation | `mutate` is two positive globs with **no** negated pattern, `scripts/verify-mutation-files.mjs` fails the run if a file that emits JavaScript produced no mutants, and the invariants suite asserts both the globs and that the guard is wired into the `stryker` script |
-| No const assertions in source | Stryker does not mutate inside `as const`; the invariants suite rejects one anywhere under `packages/*/src` |
-| No coverage slack | Vitest thresholds are 100 on every metric, asserted |
-| No suppression comments | No `eslint-disable`, `oxlint-disable`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck` or `Stryker disable` in any tracked code file, asserted |
-| No softened lint severity | Every enabled `oxlint` category is graded `error` and the script carries `--deny-warnings`, asserted |
-| No skipped type checking | `strict`, `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` on, `skipLibCheck` off, asserted |
-| No hidden files | `knip`'s root workspace scope is asserted non-empty |
-| No axe filtering | No tag scope, rule disabling, selector exclusion or inline rule override in any test, asserted, plus a positive assertion that the unfiltered scan is the one that runs |
-| No skipped tests | No `.skip`, `.only`, `.todo`, conditional skip or soft assertion in any test file, asserted |
-| No gate quietly dropped from CI | Every gate command is asserted present in the workflow |
+| `typecheck` | `tsc` strict, zero errors |
+| `lint` | `oxlint --deny-warnings` |
+| `test:invariants` | The gate configuration itself is asserted, so a threshold cannot be quietly lowered |
+| `test:coverage` | 100% lines, branches, functions, statements |
+| `test:dist` | The built artifacts load the way a consumer resolves them |
+| `test:a11y` | Real Chromium, both colour schemes, zero axe violations, no rule filtering |
+| `stryker` | 100% mutation score, no file exclusions |
+| `knip` / `publint` | No unused code or dependencies; packages are publishable |
 
-Each assertion is checked against a deliberately broken config before it is
-trusted: a gate nobody has seen fail is not known to work.
+Two toolchain notes for contributors:
 
-A surviving mutant means the code is untested or dead: write the test or delete
-the code. A lint rule that fires means the code changes, not that the rule gets
-silenced.
-
-### The pipeline
-
-```mermaid
-graph LR
-    A["typecheck<br/>tsc strict"] --> B["lint<br/>oxlint --deny-warnings"]
-    B --> B2["test:invariants<br/>the rules, as assertions"]
-    B2 --> C["test:coverage<br/>100% thresholds"]
-    C --> D["build<br/>tsdown"]
-    D --> E["test:dist<br/>built artifacts"]
-    E --> F["test:a11y<br/>Chromium + axe"]
-    F --> G["stryker<br/>break: 100"]
-    G --> H["verify-mutation-files<br/>no file escaped"]
-    H --> I["knip + publint"]
-```
-
-### Toolchain notes
-
-**Tests run on Vitest under Node, not `bun test`.** Two reasons: Stryker has no
-official Bun runner, and DSH executes plugins on Node — testing on Bun's runtime
-would validate a runtime production never uses. Bun remains the package manager,
-workspace and script runner.
-
-**Vitest is pinned to 4.x** for a specific upstream bug, not a vague
-incompatibility. On Vitest 5 the Stryker vitest runner's per-test name filter
-matches nothing, so every covered mutant is reported as surviving
-([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210):
-Vitest 5 joins the describe/test chain with `' > '`). Measured when the pin was
-chosen: the same suite scored 1.19% on Vitest 5.0.0 and 100% on 4.1.11. The
-behaviour is deterministic, not flaky. Unpin and re-measure once the issue is
-fixed.
-
----
+- Tests run on Vitest under Node rather than `bun test`, because Stryker has no
+  official Bun runner and DSH executes plugins on Node. Bun is the package
+  manager and script runner.
+- Vitest is pinned to 4.x. On Vitest 5 the Stryker vitest runner's per-test
+  filter matches nothing and every covered mutant reports as surviving
+  ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)).
+  Unpin once that is fixed.
 
 ## Development
 
@@ -705,7 +666,7 @@ bun install
 | `bun run lint` | `oxlint --deny-warnings .` |
 | `bun run test` | Vitest on Node |
 | `bun run test:coverage` | The same, with 100% thresholds |
-| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality-gates) |
+| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality) |
 | `bun run test:a11y` | Real Chromium, both colour schemes, axe unfiltered |
 | `bun run build` | `tsdown`, per package |
 | `bun run test:dist` | Loads the **built** artifacts as a consumer resolves them |
@@ -713,8 +674,7 @@ bun install
 | `bun run knip` | Unused files, exports and dependencies |
 | `bun run publint` | Package publishing sanity, all three packages |
 
-The development history of the quality gates — what an adversarial audit
-found and how each finding was fixed — is in [QUALITY-LOOP.md](QUALITY-LOOP.md).
+Development history is in [QUALITY-LOOP.md](QUALITY-LOOP.md).
 
 ### Repository layout
 
@@ -745,35 +705,26 @@ manifest.
 
 ## Project status
 
-Pre-1.0, tracking a pre-stable harness. DSH itself is a developer preview whose
-own documentation warns of compatibility-breaking changes, so DSH dependencies
-are pinned to exact versions rather than ranges.
+Pre-1.0, tracking a pre-stable harness. DSH is a developer preview whose own
+documentation warns of compatibility-breaking changes, so DSH dependencies are
+pinned to exact versions.
 
-### What is verified, and how
+Not yet done, and worth knowing before you depend on this:
 
-| Claim | Evidence |
-|---|---|
-| The bundle composes into a real profile | `@deepseek-ai/dsh` installed, both packages packed and installed into a scratch profile, `dsh --profile <name> --dump-config` prints all six rows as shipped |
-| The published artifacts load | `test:dist` resolves each export the way Node does and requires the file on disk |
-| Every subpath the patch names is exported | Same suite, driven from `cordis.patch.yml` |
-| No `workspace:` range reaches a published manifest | Same suite |
-| The streaming contract holds | The transducer is exercised exhaustively from fixture event arrays; a recorded SSE session replays to an exact `StreamChunk[]` |
-| Accessibility | axe in real Chromium, both colour schemes, no filtering |
-
-### What is *not* claimed
-
-- **Driving the tools from a live agent session.** That needs a DeepSeek API key
-  and Cloudflare credentials, so it has not been executed here.
-- **Module resolution via `--dump-config`.** That command reads configuration
-  without loading plugins — measured by inserting a deliberately unresolvable
-  specifier and watching it print and exit 0. Resolution is `test:dist`'s job.
-- **Request and response body schemas.** Cloudflare's paths, methods and SDK
-  namespaces were ground-truthed against upstream sources; body shapes are
-  modelled and will be corrected against recorded fixtures on first live call.
-- **Publication to npm.** The packages build and pack cleanly; publishing is a
-  human decision.
-
----
+- **The packages are not published to npm.** Build and pack work; publishing is
+  a deliberate step that has not been taken, so the `dsh plugin add` command
+  above will not resolve them yet.
+- **No live Cloudflare call has been made.** Paths, methods and SDK namespaces
+  were taken from Cloudflare's upstream API sources; request and response body
+  shapes are modelled and will be corrected against recorded fixtures.
+- **The tools have not been driven from a real agent session**, which needs a
+  DeepSeek key and Cloudflare credentials.
+- **R2 object access, Vectorize upsert and D1 database creation are missing.**
+  Buckets and indexes can be listed and created; object-level work needs the S3
+  API and is not wrapped yet.
+- **The Web Client components take props no host currently supplies.** They
+  render, and they are covered by tests, but the wiring from tool results to
+  component props is not written.
 
 ## License
 

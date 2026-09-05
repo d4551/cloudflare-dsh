@@ -79,7 +79,17 @@ export type EnvelopeRead<T> =
  * rather than a `SyntaxError` thrown from deep inside the client.
  */
 export async function readEnvelope<T>(response: Response): Promise<EnvelopeRead<T>> {
-  const text = await response.text()
+  return parseEnvelope<T>(await response.text())
+}
+
+/**
+ * Parse a body already read as text.
+ *
+ * Split from `readEnvelope` so a caller holding the text — `requestText`, which
+ * needs the body whether or not it parsed — can classify a failure from the
+ * same envelope rather than from the status alone.
+ */
+function parseEnvelope<T>(text: string): EnvelopeRead<T> {
   try {
     return { ok: true, envelope: JSON.parse(text) as CloudflareEnvelope<T> }
   } catch {
@@ -182,10 +192,15 @@ export class CloudflareClient {
     const response = await this.#options.fetch(this.#buildRequest(spec, token))
     const body = await response.text()
     if (!response.ok) {
+      // An error body is still an envelope when the endpoint sends one, and it
+      // carries the Cloudflare code — which outranks the status class, so a
+      // 10000 here is an auth failure rather than whatever the status implies.
+      const read = parseEnvelope(body)
       throw classifyFailure({
         status: response.status,
         credentialRef: ref,
         retryAfter: response.headers.get('retry-after'),
+        ...(read.ok ? { envelope: read.envelope } : {}),
       })
     }
     return body

@@ -29,10 +29,16 @@ export function nextPageQuery(
 ): NextPageQuery {
   const info = envelope.result_info
   if (info === undefined) return null
-  const { page, per_page: perPage, total_count: totalCount } = info
+  const { page, per_page: perPage, total_count: totalCount, count } = info
   if (page === undefined || perPage === undefined || totalCount === undefined) return null
   if (seen >= totalCount) return null
   if (perPage <= 0) return null
+  // A short page means the server has nothing more to give, whatever its
+  // total_count says. Without this the walk keeps asking for pages that come
+  // back empty until the advertised total is reached. An absent count says
+  // nothing about the page length, so it must not read as short.
+  const returned = count ?? Number.POSITIVE_INFINITY
+  if (returned < perPage) return null
   return { page: page + 1, per_page: perPage }
 }
 
