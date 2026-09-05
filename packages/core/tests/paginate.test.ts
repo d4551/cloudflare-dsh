@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { nextCursorQuery, nextPageQuery, paginate } from '../src/paginate.ts'
 import type { CloudflareEnvelope } from '../src/types.ts'
 
-function page<T>(result: readonly T[], info?: CloudflareEnvelope['result_info']): CloudflareEnvelope<readonly T[]> {
+function page<T>(
+  result: readonly T[],
+  info?: CloudflareEnvelope['result_info'],
+): CloudflareEnvelope<readonly T[]> {
   return info === undefined
     ? { success: true, errors: [], messages: [], result }
     : { success: true, errors: [], messages: [], result, result_info: info }
@@ -59,15 +62,13 @@ describe('nextPageQuery', () => {
   it('stops when the page came back short, whatever the advertised total', () => {
     // A server that returns fewer rows than it was asked for has nothing more,
     // so continuing to the advertised total just fetches empty pages.
-    expect(
-      nextPageQuery({ result_info: { page: 1, per_page: 20, total_count: 50, count: 7 } }, 7),
-    ).toBeNull()
+    expect(nextPageQuery({ result_info: { page: 1, per_page: 20, total_count: 50, count: 7 } }, 7)).toBeNull()
   })
 
   it('continues while a full page comes back', () => {
-    expect(
-      nextPageQuery({ result_info: { page: 1, per_page: 20, total_count: 50, count: 20 } }, 20),
-    ).toEqual({ page: 2, per_page: 20 })
+    expect(nextPageQuery({ result_info: { page: 1, per_page: 20, total_count: 50, count: 20 } }, 20)).toEqual(
+      { page: 2, per_page: 20 },
+    )
   })
 
   it('stops on a non-positive page size rather than looping forever', () => {
@@ -143,6 +144,12 @@ describe('paginate', () => {
   })
 
   it('collects nothing from an empty first page', async () => {
-    await expect(paginate(async () => page([]), () => null, 5)).resolves.toMatchObject({ items: [] })
+    await expect(
+      paginate(
+        async () => page([]),
+        () => null,
+        5,
+      ),
+    ).resolves.toMatchObject({ items: [] })
   })
 })

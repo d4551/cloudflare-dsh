@@ -27,7 +27,6 @@ export function describeNode(node: AxNode): string {
   return name === undefined || name === '' ? role : `${role}: ${name}`
 }
 
-
 function TreeNode({ node }: { readonly node: AxNode }): React.JSX.Element {
   const children = node.children ?? []
   return (

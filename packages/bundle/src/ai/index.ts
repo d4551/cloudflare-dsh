@@ -91,9 +91,7 @@ export const inject = ['llm', 'cloudflare']
 export class MissingGatewayError extends Error {
   override readonly name = 'MissingGatewayError'
   constructor() {
-    super(
-      `the ${AI_GATEWAY_PROVIDER} route needs a gatewayId; set it on the cloudflare-llm plugin config`,
-    )
+    super(`the ${AI_GATEWAY_PROVIDER} route needs a gatewayId; set it on the cloudflare-llm plugin config`)
   }
 }
 
@@ -114,7 +112,10 @@ interface GatewayUrlResult {
  * The harness treats this list as advisory, so an unlisted model must still be
  * accepted at request time; nothing here rejects anything.
  */
-export function toModelInfo(provider: string, models: readonly { name?: string; description?: string }[]): LlmModelInfo[] {
+export function toModelInfo(
+  provider: string,
+  models: readonly { name?: string; description?: string }[],
+): LlmModelInfo[] {
   const info: LlmModelInfo[] = []
   for (const model of models) {
     const id = model.name
@@ -149,10 +150,7 @@ export function apply(ctx: Context, config: AiConfig): void {
 
     const scope = await cf.accountScope()
     return {
-      url: joinUrl(
-        cf.config.baseUrl,
-        `/accounts/${encodeURIComponent(scope.id)}${config.workersAiPath}`,
-      ),
+      url: joinUrl(cf.config.baseUrl, `/accounts/${encodeURIComponent(scope.id)}${config.workersAiPath}`),
       token,
     }
   }

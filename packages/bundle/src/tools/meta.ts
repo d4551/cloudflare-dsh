@@ -45,7 +45,8 @@ export function apply(ctx: Context, config: MetaConfig): void {
       parameters: {},
       output: {
         schema: { type: 'object', additionalProperties: true, description: 'Accounts with ids and names.' },
-        render: (_args, value) => listing((value as { accounts: unknown[] }).accounts.length, 'account', value),
+        render: (_args, value) =>
+          listing((value as { accounts: unknown[] }).accounts.length, 'account', value),
       },
       isConcurrencySafe: () => true,
       async execute() {

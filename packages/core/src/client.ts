@@ -253,6 +253,4 @@ export class CloudflareClient {
       this.#options.maxPages,
     )
   }
-
 }
-

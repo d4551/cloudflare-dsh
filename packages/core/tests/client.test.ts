@@ -32,7 +32,10 @@ function ok<T>(result: T, info?: CloudflareEnvelope['result_info']): CloudflareE
     : { success: true, errors: [], messages: [], result, result_info: info }
 }
 
-function makeClient(fetchImpl: (req: Request) => Promise<Response>, over: Partial<{ maxPages: number; requestTimeoutMs: number }> = {}) {
+function makeClient(
+  fetchImpl: (req: Request) => Promise<Response>,
+  over: Partial<{ maxPages: number; requestTimeoutMs: number }> = {},
+) {
   const requests: Request[] = []
   const client = new CloudflareClient({
     credentials: { resolve: () => 'tok' },
@@ -100,9 +103,12 @@ describe('requestText failure classification', () => {
     // 10000 is unauthorized regardless of the status class, and requestText
     // previously threw the body away before classifying.
     const { client } = makeClient(async () =>
-      json({ success: false, errors: [{ code: 10000, message: 'nope' }], messages: [], result: null }, {
-        status: 500,
-      }),
+      json(
+        { success: false, errors: [{ code: 10000, message: 'nope' }], messages: [], result: null },
+        {
+          status: 500,
+        },
+      ),
     )
     await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toBeInstanceOf(
       CloudflareAuthError,
@@ -111,9 +117,12 @@ describe('requestText failure classification', () => {
 
   it('carries the credential reference and the envelope code', async () => {
     const { client } = makeClient(async () =>
-      json({ success: false, errors: [{ code: 10000, message: 'nope' }], messages: [], result: null }, {
-        status: 403,
-      }),
+      json(
+        { success: false, errors: [{ code: 10000, message: 'nope' }], messages: [], result: null },
+        {
+          status: 403,
+        },
+      ),
     )
     await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toMatchObject({
       credentialRef: REF,
@@ -122,9 +131,7 @@ describe('requestText failure classification', () => {
   })
 
   it('still classifies by status when the error body is not an envelope', async () => {
-    const { client } = makeClient(
-      async () => new Response('<html>gateway error</html>', { status: 404 }),
-    )
+    const { client } = makeClient(async () => new Response('<html>gateway error</html>', { status: 404 }))
     await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toBeInstanceOf(
       CloudflareNotFoundError,
     )
@@ -204,7 +211,9 @@ describe('readEnvelope', () => {
   })
 
   it('reports failure for a non-JSON body rather than throwing SyntaxError', async () => {
-    await expect(readEnvelope(new Response('<html>502</html>', { status: 502 }))).resolves.toEqual({ ok: false })
+    await expect(readEnvelope(new Response('<html>502</html>', { status: 502 }))).resolves.toEqual({
+      ok: false,
+    })
   })
 })
 
@@ -215,7 +224,6 @@ describe('realSleep', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(20)
   })
 })
-
 
 describe('CloudflareClient.request', () => {
   it('exposes the credential reference it authenticates with', () => {
@@ -251,7 +259,7 @@ describe('CloudflareClient.request', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
-    requestTimeoutMs: 30_000,
+      requestTimeoutMs: 30_000,
       fetch: async (req) => {
         requests.push(req)
         return json(ok(null))
@@ -263,14 +271,20 @@ describe('CloudflareClient.request', () => {
 
   it('throws a typed error for an error envelope', async () => {
     const { client } = makeClient(async () =>
-      json({ success: false, errors: [{ code: 7003, message: 'no route' }], messages: [], result: null }, { status: 400 }),
+      json(
+        { success: false, errors: [{ code: 7003, message: 'no route' }], messages: [], result: null },
+        { status: 400 },
+      ),
     )
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow('[7003] no route')
   })
 
   it('maps an unauthenticated response to an auth error', async () => {
     const { client } = makeClient(async () =>
-      json({ success: false, errors: [{ code: 10000, message: 'bad token' }], messages: [], result: null }, { status: 403 }),
+      json(
+        { success: false, errors: [{ code: 10000, message: 'bad token' }], messages: [], result: null },
+        { status: 403 },
+      ),
     )
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareAuthError)
   })
@@ -304,10 +318,13 @@ describe('CloudflareClient.request', () => {
 
   it('carries the retry hint from a rate-limited JSON envelope', async () => {
     const { client } = makeClient(async () =>
-      json({ success: false, errors: [{ code: 971, message: 'slow' }], messages: [], result: null }, {
-        status: 429,
-        headers: { 'content-type': 'application/json', 'retry-after': '7' },
-      }),
+      json(
+        { success: false, errors: [{ code: 971, message: 'slow' }], messages: [], result: null },
+        {
+          status: 429,
+          headers: { 'content-type': 'application/json', 'retry-after': '7' },
+        },
+      ),
     )
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toMatchObject({
       name: 'CloudflareRateLimitError',
@@ -331,7 +348,9 @@ describe('CloudflareClient.request', () => {
     let calls = 0
     const { client } = makeClient(async () => {
       calls += 1
-      return calls === 1 ? json({ success: false, errors: [], messages: [], result: null }, { status: 503 }) : json(ok('done'))
+      return calls === 1
+        ? json({ success: false, errors: [], messages: [], result: null }, { status: 503 })
+        : json(ok('done'))
     })
     await expect(client.request({ method: 'GET', path: '/x' })).resolves.toBe('done')
     expect(calls).toBe(2)
@@ -365,10 +384,12 @@ describe('CloudflareClient.request', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
-    requestTimeoutMs: 30_000,
+      requestTimeoutMs: 30_000,
       fetch: async () => {
         calls += 1
-        return calls === 1 ? json({ success: false, errors: [], messages: [], result: null }, { status: 500 }) : json(ok(1))
+        return calls === 1
+          ? json({ success: false, errors: [], messages: [], result: null }, { status: 500 })
+          : json(ok(1))
       },
       sleep: async () => {},
       random: () => 1,
@@ -383,7 +404,7 @@ describe('CloudflareClient.request', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
-    requestTimeoutMs: 30_000,
+      requestTimeoutMs: 30_000,
       fetch: async () => json(ok(null)),
     })
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareAuthError)
@@ -396,10 +417,12 @@ describe('CloudflareClient.request', () => {
       apiTokenRef: REF,
       retry: { maxRetries: 1, baseDelayMs: 0, maxDelayMs: 0 },
       maxPages: 1,
-    requestTimeoutMs: 30_000,
+      requestTimeoutMs: 30_000,
       fetch: async () => {
         calls += 1
-        return calls === 1 ? json({ success: false, errors: [], messages: [], result: null }, { status: 500 }) : json(ok('ok'))
+        return calls === 1
+          ? json({ success: false, errors: [], messages: [], result: null }, { status: 500 })
+          : json(ok('ok'))
       },
     })
     await expect(client.request({ method: 'GET', path: '/x' })).resolves.toBe('ok')
@@ -421,7 +444,7 @@ describe('CloudflareClient.resolveToken', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
-    requestTimeoutMs: 30_000,
+      requestTimeoutMs: 30_000,
       fetch: async () => json(ok(null)),
     })
     await expect(client.resolveToken()).resolves.toBe('first')
@@ -434,7 +457,7 @@ describe('CloudflareClient.resolveToken', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
-    requestTimeoutMs: 30_000,
+      requestTimeoutMs: 30_000,
       fetch: async () => json(ok(null)),
     })
     await expect(client.resolveToken()).rejects.toThrow(CloudflareAuthError)
@@ -478,7 +501,7 @@ describe('CloudflareClient.requestText', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
-    requestTimeoutMs: 30_000,
+      requestTimeoutMs: 30_000,
       fetch: async () => new Response('v'),
     })
     await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareAuthError)
@@ -518,7 +541,7 @@ describe('CloudflareClient.requestEnvelope', () => {
       apiTokenRef: REF,
       retry,
       maxPages: 1,
-    requestTimeoutMs: 30_000,
+      requestTimeoutMs: 30_000,
       fetch: async () => json(ok(null)),
     })
     await expect(client.requestEnvelope({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareAuthError)
@@ -548,7 +571,9 @@ describe('CloudflareClient.list', () => {
   })
 
   it('honours the maxPages ceiling', async () => {
-    const { client, requests } = makeClient(async () => json(ok(['x'], { cursor: 'always' })), { maxPages: 3 })
+    const { client, requests } = makeClient(async () => json(ok(['x'], { cursor: 'always' })), {
+      maxPages: 3,
+    })
     // Truncated: the server still offered a cursor when the ceiling hit.
     await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toEqual({
       items: ['x', 'x', 'x'],

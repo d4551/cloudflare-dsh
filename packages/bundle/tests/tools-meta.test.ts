@@ -144,7 +144,9 @@ describe('cloudflare_api', () => {
 
   it('cannot reach another host through an encoded denylist bypass', async () => {
     const h = harness({ denyPathPrefixes: ['/accounts/x/tokens'] })
-    await expect(h.run('cloudflare_api', { method: 'GET', path: '/accounts/x/%74okens' })).rejects.toThrow(/denylist/)
+    await expect(h.run('cloudflare_api', { method: 'GET', path: '/accounts/x/%74okens' })).rejects.toThrow(
+      /denylist/,
+    )
     expect(h.requests).toHaveLength(0)
   })
 
@@ -157,7 +159,9 @@ describe('cloudflare_api', () => {
         method: 'GET',
         path: '/accounts/x/%74okens/verify',
       }),
-    ).rejects.toThrow('path /accounts/x/%74okens/verify is blocked by the configured denylist (/accounts/x/tokens)')
+    ).rejects.toThrow(
+      'path /accounts/x/%74okens/verify is blocked by the configured denylist (/accounts/x/tokens)',
+    )
     expect(h.requests).toHaveLength(0)
   })
 
@@ -176,7 +180,9 @@ describe('cloudflare_api', () => {
 
   it('renders the result as JSON', () => {
     const h = harness({})
-    expect(h.tool('cloudflare_api').output.render({ method: 'GET', path: '/x' }, { result: { a: 1 } })).toEqual(json({ a: 1 }))
+    expect(
+      h.tool('cloudflare_api').output.render({ method: 'GET', path: '/x' }, { result: { a: 1 } }),
+    ).toEqual(json({ a: 1 }))
   })
 
   it('is not marked concurrency safe, since it can be configured to write', () => {

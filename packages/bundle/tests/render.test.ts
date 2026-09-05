@@ -29,7 +29,6 @@ describe('plural', () => {
   it('uses the plural for many', () => {
     expect(plural(3, 'key')).toBe('3 keys')
   })
-
 })
 
 describe('listing', () => {

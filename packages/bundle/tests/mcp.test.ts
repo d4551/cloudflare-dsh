@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  CLOUDFLARE_MCP_SERVERS,
-  mcpPatchRow,
-  mcpPatchRows,
-} from '../src/mcp/index.ts'
+import { CLOUDFLARE_MCP_SERVERS, mcpPatchRow, mcpPatchRows } from '../src/mcp/index.ts'
 
 describe('CLOUDFLARE_MCP_SERVERS', () => {
   it('lists the hosted servers', () => {
@@ -81,4 +77,3 @@ describe('mcpPatchRows', () => {
     )
   })
 })
-

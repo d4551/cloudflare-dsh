@@ -120,12 +120,15 @@ describe('AI Gateway specs', () => {
     expect(() => gatewayLogsSpec('gw1', 1, perPage, [])).toThrow(GatewayLogPageSizeError)
   })
 
-  it.each([GATEWAY_LOG_MIN_PAGE_SIZE, GATEWAY_LOG_MAX_PAGE_SIZE])('accepts the boundary size %i', (perPage) => {
-    expect(gatewayLogsSpec('gw1', 1, perPage, []).query).toEqual({
-      page: 1,
-      per_page: perPage,
-    })
-  })
+  it.each([GATEWAY_LOG_MIN_PAGE_SIZE, GATEWAY_LOG_MAX_PAGE_SIZE])(
+    'accepts the boundary size %i',
+    (perPage) => {
+      expect(gatewayLogsSpec('gw1', 1, perPage, []).query).toEqual({
+        page: 1,
+        per_page: perPage,
+      })
+    },
+  )
 
   it('names the bounds so a caller can correct the value', () => {
     expect(() => gatewayLogsSpec('gw1', 1, 100, [])).toThrow('perPage must be between 1 and 50, got 100')
@@ -172,12 +175,15 @@ describe('AI Gateway specs', () => {
     })
   })
 
-  it.each(['credit-balance', 'usage-history', 'invoice-preview'] as const)('reads the %s billing view', (view) => {
-    expect(gatewayBillingSpec(view)).toStrictEqual({
-      method: 'GET',
-      path: `/ai-gateway/billing/${view}`,
-    })
-  })
+  it.each(['credit-balance', 'usage-history', 'invoice-preview'] as const)(
+    'reads the %s billing view',
+    (view) => {
+      expect(gatewayBillingSpec(view)).toStrictEqual({
+        method: 'GET',
+        path: `/ai-gateway/billing/${view}`,
+      })
+    },
+  )
 })
 
 describe('AI Search specs', () => {

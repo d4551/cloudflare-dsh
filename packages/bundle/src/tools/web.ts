@@ -8,7 +8,13 @@
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { RESOURCE_TYPES, type RenderFormat, type RenderOptions, accessibilityTreeSpec, browserRenderSpec } from '../specs/web.ts'
+import {
+  RESOURCE_TYPES,
+  type RenderFormat,
+  type RenderOptions,
+  accessibilityTreeSpec,
+  browserRenderSpec,
+} from '../specs/web.ts'
 import type { JsonValue } from './_shared/json.ts'
 import { json, text, truncate } from './_shared/render.ts'
 
@@ -20,7 +26,15 @@ interface CloudflareContext extends Context {
 const RENDER_LIMIT = 8000
 
 /** Formats the render tool accepts, in the order they appear to the model. */
-const FORMATS: readonly RenderFormat[] = ['markdown', 'content', 'links', 'screenshot', 'pdf', 'scrape', 'json']
+const FORMATS: readonly RenderFormat[] = [
+  'markdown',
+  'content',
+  'links',
+  'screenshot',
+  'pdf',
+  'scrape',
+  'json',
+]
 
 export const name = 'cloudflare-tools-web'
 export const inject = ['tools', 'cloudflare']
@@ -39,7 +53,6 @@ export function renderOptionsFrom(args: {
     rejectResourceTypes: args.rejectResourceTypes,
   }
 }
-
 
 export function apply(ctx: Context): void {
   const cf = (ctx as CloudflareContext).cloudflare
@@ -111,7 +124,9 @@ export function apply(ctx: Context): void {
         },
         render: (args, value) => {
           const v = value as { tree: JsonValue }
-          return text(`Accessibility tree for ${args.url}\n${truncate(JSON.stringify(v.tree, null, 2), RENDER_LIMIT)}`)
+          return text(
+            `Accessibility tree for ${args.url}\n${truncate(JSON.stringify(v.tree, null, 2), RENDER_LIMIT)}`,
+          )
         },
       },
       isConcurrencySafe: () => true,

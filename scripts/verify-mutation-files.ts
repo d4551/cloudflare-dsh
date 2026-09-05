@@ -46,7 +46,10 @@ const RUN_CONFIG = [
   'bun.lock',
   'tsconfig.json',
   'tsconfig.base.json',
-  ...PACKAGES.flatMap((pkg) => [join('packages', pkg, 'package.json'), join('packages', pkg, 'tsconfig.json')]),
+  ...PACKAGES.flatMap((pkg) => [
+    join('packages', pkg, 'package.json'),
+    join('packages', pkg, 'tsconfig.json'),
+  ]),
 ].filter((path) => existsSync(path))
 
 /** Every file under a directory. */
@@ -103,7 +106,9 @@ const unloadable = Object.entries(report.files).flatMap(([file, { mutants }]) =>
     .map((mutant) => `${relative('.', file)}:${mutant.location.start.line} (${mutant.mutatorName})`),
 )
 if (unloadable.length > 0) {
-  console.error(`These mutants ran no tests at all, so "survived" means the mutated module failed to load:\n  ${unloadable.join('\n  ')}`)
+  console.error(
+    `These mutants ran no tests at all, so "survived" means the mutated module failed to load:\n  ${unloadable.join('\n  ')}`,
+  )
   console.error('Restructure the code so the mutation is observable by a test, then re-run.')
   process.exit(1)
 }

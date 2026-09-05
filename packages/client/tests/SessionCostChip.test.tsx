@@ -11,7 +11,9 @@ const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached:
 describe('SessionCostChip', () => {
   it('names the region so it is findable without sight of the layout', () => {
     render(<SessionCostChip usage={usage} />)
-    expect(screen.getByRole('region', { name: 'Cloudflare AI Gateway usage for this session' })).toBeInstanceOf(HTMLElement)
+    expect(
+      screen.getByRole('region', { name: 'Cloudflare AI Gateway usage for this session' }),
+    ).toBeInstanceOf(HTMLElement)
   })
 
   it('announces updates politely rather than stealing focus', () => {
@@ -38,12 +40,16 @@ describe('SessionCostChip', () => {
 
   it('reports the empty state when the session has made no gateway requests', () => {
     render(<SessionCostChip usage={{ ...usage, requests: 0 }} />)
-    expect(screen.getByText('No Cloudflare AI Gateway requests recorded for this session yet.')).toBeInstanceOf(HTMLElement)
+    expect(
+      screen.getByText('No Cloudflare AI Gateway requests recorded for this session yet.'),
+    ).toBeInstanceOf(HTMLElement)
   })
 
   it('reports the empty state when usage is not yet known', () => {
     render(<SessionCostChip />)
-    expect(screen.getByText('No Cloudflare AI Gateway requests recorded for this session yet.')).toBeInstanceOf(HTMLElement)
+    expect(
+      screen.getByText('No Cloudflare AI Gateway requests recorded for this session yet.'),
+    ).toBeInstanceOf(HTMLElement)
   })
 
   it('reports loading', () => {

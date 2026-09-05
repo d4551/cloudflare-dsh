@@ -27,8 +27,12 @@ describe('web tools plugin', () => {
 
   it('marks both as concurrency safe', () => {
     const h = makeHarness(webTools, async () => envelope(null))
-    expect(h.tool('cloudflare_browser_render').isConcurrencySafe?.({ url: 'https://x.test', format: 'markdown' })).toBe(true)
-    expect(h.tool('cloudflare_browser_accessibility_tree').isConcurrencySafe?.({ url: 'https://x.test' })).toBe(true)
+    expect(
+      h.tool('cloudflare_browser_render').isConcurrencySafe?.({ url: 'https://x.test', format: 'markdown' }),
+    ).toBe(true)
+    expect(
+      h.tool('cloudflare_browser_accessibility_tree').isConcurrencySafe?.({ url: 'https://x.test' }),
+    ).toBe(true)
   })
 })
 
@@ -89,7 +93,11 @@ describe('cloudflare_browser_render', () => {
   it('rejects a resource type outside the documented set before any request', async () => {
     const h = makeHarness(webTools, async () => envelope(''))
     await expect(
-      h.run('cloudflare_browser_render', { url: 'https://x.test', format: 'content', rejectResourceTypes: ['video'] }),
+      h.run('cloudflare_browser_render', {
+        url: 'https://x.test',
+        format: 'content',
+        rejectResourceTypes: ['video'],
+      }),
     ).rejects.toThrow(
       'invalid arguments: "rejectResourceTypes[0]" must be one of ["document","stylesheet","image","media","font","script","texttrack","xhr","fetch","prefetch","eventsource","websocket","manifest","signedexchange","ping","cspviolationreport","preflight","other"]',
     )
@@ -129,13 +137,18 @@ describe('cloudflare_browser_render', () => {
     const h = makeHarness(webTools, async () => envelope(''))
     const blocks = h
       .tool('cloudflare_browser_render')
-      .output.render({ url: 'u', format: 'markdown' }, { url: 'u', format: 'markdown', body: 'x'.repeat(9000) })
+      .output.render(
+        { url: 'u', format: 'markdown' },
+        { url: 'u', format: 'markdown', body: 'x'.repeat(9000) },
+      )
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated 1000 characters') }])
   })
 
   it('rejects a format outside the supported set', async () => {
     const h = makeHarness(webTools, async () => envelope(''))
-    await expect(h.run('cloudflare_browser_render', { url: 'https://x.test', format: 'exe' })).rejects.toThrow(
+    await expect(
+      h.run('cloudflare_browser_render', { url: 'https://x.test', format: 'exe' }),
+    ).rejects.toThrow(
       'invalid arguments: "format" must be one of ["markdown","content","links","screenshot","pdf","scrape","json"]',
     )
     expect(h.requests).toHaveLength(0)
@@ -191,16 +204,22 @@ describe('lifecycle', () => {
     await ctx.plugin(ToolRuntime)
     const credentials = { resolve: () => 'tok' }
     ctx.provide('credentials', credentials)
-    const service = new CloudflareService(ctx, CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }), {
-      credentials,
-      fetch: async () => envelope(''),
-    })
+    const service = new CloudflareService(
+      ctx,
+      CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }),
+      {
+        credentials,
+        fetch: async () => envelope(''),
+      },
+    )
     expect(service.name).toBe('cloudflare')
     const tools = (ctx as unknown as { tools: ToolRuntime }).tools
 
     const fiber = await ctx.plugin(webTools)
     expect(tools.get('cloudflare_browser_render')?.name).toBe('cloudflare_browser_render')
-    expect(tools.get('cloudflare_browser_accessibility_tree')?.name).toBe('cloudflare_browser_accessibility_tree')
+    expect(tools.get('cloudflare_browser_accessibility_tree')?.name).toBe(
+      'cloudflare_browser_accessibility_tree',
+    )
     await fiber.dispose()
     expect(tools.get('cloudflare_browser_render')).toBeUndefined()
     expect(tools.get('cloudflare_browser_accessibility_tree')).toBeUndefined()

@@ -136,7 +136,9 @@ describe('buildHeaders', () => {
   })
 
   it('tolerates an undefined extra map', () => {
-    expect(buildHeaders({ token: 't', hasBody: false, extra: undefined }).get('accept')).toBe('application/json')
+    expect(buildHeaders({ token: 't', hasBody: false, extra: undefined }).get('accept')).toBe(
+      'application/json',
+    )
   })
 })
 
@@ -217,7 +219,9 @@ describe('decodePath', () => {
   })
 
   it('rejects a malformed escape rather than passing it through', () => {
-    expect(() => decodePath('/accounts/%zz')).toThrow('path contains a malformed percent-escape: "/accounts/%zz"')
+    expect(() => decodePath('/accounts/%zz')).toThrow(
+      'path contains a malformed percent-escape: "/accounts/%zz"',
+    )
   })
 
   it('refuses a path encoded deeper than it can validate', () => {
@@ -243,7 +247,9 @@ describe('decodePath', () => {
 
 describe('assertSafeBaseUrl', () => {
   it('accepts the Cloudflare REST root', () => {
-    expect(assertSafeBaseUrl('https://api.cloudflare.com/client/v4')).toBe('https://api.cloudflare.com/client/v4')
+    expect(assertSafeBaseUrl('https://api.cloudflare.com/client/v4')).toBe(
+      'https://api.cloudflare.com/client/v4',
+    )
   })
 
   it('rejects a value that is not an absolute URL', () => {

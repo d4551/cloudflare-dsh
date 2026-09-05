@@ -103,7 +103,7 @@ Two violations, both caught by the maintainer rather than by a gate.
   audit; a session segment started without it. Spawned, and the order is now
   part of this record.
 - **A formatter was run across the tree as an unrequested step.** `prettier
-  --write` with default settings — a tool this repository has never used —
+--write` with default settings — a tool this repository has never used —
   rewrote 23 files: 5,563 insertions and 2,837 deletions on top of a change
   whose real size was 1,652 and 214. Typecheck, lint, tests, coverage, knip and
   mutation all stayed green. Recovered by rebuilding every file in the
@@ -213,7 +213,13 @@ on the client plugin's effect registrations, which nothing observed. cordis
 reports those labels through `getEffects()`, so the lifecycle test now pins all
 five (slot and key) and asserts none remain after disposal. Every registration
 this package makes is keyed, so the slice interface now requires the id rather
-than carrying a fallback for a case that never occurs.
+than carrying a fallback for a case that never occurs. The run that followed
+scored 100.00% — 2,633 killed, 13 timeouts, none surviving.
+
+The root cause of this restart's first violation — a formatter run that no gate
+could see — is closed by a formatting gate: one canonical style, checked in CI
+and asserted by the invariants lane, with a single conformance pass recorded as
+its own commit.
 
 </details>
 
@@ -222,8 +228,8 @@ than carrying a fallback for a case that never occurs.
 
 The audit found a violation and, by design, would not say which. It did say
 what class it belonged to: not a red gate, but "a claim standing for the wrong
-reason", and that the remedy is that *a claim not enforced by something that
-fails gets deleted or gets enforcement*.
+reason", and that the remedy is that _a claim not enforced by something that
+fails gets deleted or gets enforcement_.
 
 Applying that test to this repository's own quality section produced an
 uncomfortable answer. Nine of its eleven rules were enforced by nothing at all.
@@ -231,7 +237,7 @@ uncomfortable answer. Nine of its eleven rules were enforced by nothing at all.
 lint severity", "no skipped type checking", "no hidden files" — every one of
 those was a sentence in a document. Adding an `eslint-disable`, a `.skip`, a
 `disableRules`, or flipping `skipLibCheck` back on would have kept every gate
-green and every badge accurate-looking. The two rules that *were* enforced
+green and every badge accurate-looking. The two rules that _were_ enforced
 (the mutation threshold and the file-escape guard) had only become so during
 the previous two restarts, each time after the unenforced version had already
 failed.

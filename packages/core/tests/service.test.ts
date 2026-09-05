@@ -24,7 +24,10 @@ function ok<T>(result: T, info?: CloudflareEnvelope['result_info']): CloudflareE
     : { success: true, errors: [], messages: [], result, result_info: info }
 }
 
-function build(over: Partial<ReturnType<typeof CloudflareConfig>> = {}, fetchImpl?: (r: Request) => Promise<Response>) {
+function build(
+  over: Partial<ReturnType<typeof CloudflareConfig>> = {},
+  fetchImpl?: (r: Request) => Promise<Response>,
+) {
   const requests: Request[] = []
   const ctx = new Context()
   const config = CloudflareConfig({ baseUrl: 'https://api.test/v4', ...over })
@@ -98,17 +101,38 @@ describe('CloudflareService.accountId', () => {
   it('refuses to choose between accounts rather than silently taking the first', async () => {
     // Picking `accounts[0]` pointed every later request — writes included — at
     // an account the operator never named.
-    const { service } = build({}, async () => json(ok([{ id: 'found', name: 'F' }, { id: 'other', name: 'O' }])))
+    const { service } = build({}, async () =>
+      json(
+        ok([
+          { id: 'found', name: 'F' },
+          { id: 'other', name: 'O' },
+        ]),
+      ),
+    )
     await expect(service.accountId()).rejects.toThrow(CloudflareAmbiguousAccountError)
   })
 
   it('names the visible accounts so the operator can pick one', async () => {
-    const { service } = build({}, async () => json(ok([{ id: 'found', name: 'F' }, { id: 'other', name: 'O' }])))
+    const { service } = build({}, async () =>
+      json(
+        ok([
+          { id: 'found', name: 'F' },
+          { id: 'other', name: 'O' },
+        ]),
+      ),
+    )
     await expect(service.accountId()).rejects.toThrow(/found \(F\), other \(O\)/)
   })
 
   it('explains how to resolve the ambiguity', async () => {
-    const { service } = build({}, async () => json(ok([{ id: 'found', name: 'F' }, { id: 'other', name: 'O' }])))
+    const { service } = build({}, async () =>
+      json(
+        ok([
+          { id: 'found', name: 'F' },
+          { id: 'other', name: 'O' },
+        ]),
+      ),
+    )
     // Whole-message equality: a substring match would accept a trailing
     // truncation note on a list that was not truncated.
     await expect(service.accountId()).rejects.toMatchObject({
@@ -118,8 +142,17 @@ describe('CloudflareService.accountId', () => {
   })
 
   it('names the ambiguous-account error so a log line identifies it', async () => {
-    const { service } = build({}, async () => json(ok([{ id: 'found', name: 'F' }, { id: 'other', name: 'O' }])))
-    await expect(service.accountId()).rejects.toThrow(expect.objectContaining({ name: 'CloudflareAmbiguousAccountError' }))
+    const { service } = build({}, async () =>
+      json(
+        ok([
+          { id: 'found', name: 'F' },
+          { id: 'other', name: 'O' },
+        ]),
+      ),
+    )
+    await expect(service.accountId()).rejects.toThrow(
+      expect.objectContaining({ name: 'CloudflareAmbiguousAccountError' }),
+    )
   })
 
   it('refuses when the account list was itself truncated', async () => {

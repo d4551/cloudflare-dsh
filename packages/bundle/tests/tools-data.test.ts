@@ -131,25 +131,33 @@ describe('cloudflare_kv_get', () => {
   it('reads from the value path', async () => {
     const h = makeHarness(dataTools, async () => new Response('v'))
     await h.run('cloudflare_kv_get', { namespaceId: 'n1', key: 'my/key' })
-    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/storage/kv/namespaces/n1/values/my%2Fkey')
+    expect(h.requests[0]!.url).toBe(
+      'https://api.test/v4/accounts/a1/storage/kv/namespaces/n1/values/my%2Fkey',
+    )
   })
 
   it('renders the key then the value', () => {
     const h = makeHarness(dataTools, async () => new Response('v'))
-    const blocks = h.tool('cloudflare_kv_get').output.render({ namespaceId: 'n', key: 'k' }, { key: 'k', value: 'v' })
+    const blocks = h
+      .tool('cloudflare_kv_get')
+      .output.render({ namespaceId: 'n', key: 'k' }, { key: 'k', value: 'v' })
     expect(blocks).toEqual([{ type: 'text', text: 'k\nv' }])
   })
 
   it('truncates a very large value for display', () => {
     const h = makeHarness(dataTools, async () => new Response('v'))
     const big = 'x'.repeat(5000)
-    const blocks = h.tool('cloudflare_kv_get').output.render({ namespaceId: 'n', key: 'k' }, { key: 'k', value: big })
+    const blocks = h
+      .tool('cloudflare_kv_get')
+      .output.render({ namespaceId: 'n', key: 'k' }, { key: 'k', value: big })
     expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated 1000 characters') }])
   })
 
   it('surfaces a missing key as an error', async () => {
     const h = makeHarness(dataTools, async () => new Response('not found', { status: 404 }))
-    await expect(h.run('cloudflare_kv_get', { namespaceId: 'n1', key: 'nope' })).rejects.toThrow(CloudflareNotFoundError)
+    await expect(h.run('cloudflare_kv_get', { namespaceId: 'n1', key: 'nope' })).rejects.toThrow(
+      CloudflareNotFoundError,
+    )
   })
 })
 
@@ -171,7 +179,9 @@ describe('cloudflare_kv_put', () => {
 
   it('renders how many pairs were written', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    const blocks = h.tool('cloudflare_kv_put').output.render({ namespaceId: 'n', entries: [] }, { written: 3 })
+    const blocks = h
+      .tool('cloudflare_kv_put')
+      .output.render({ namespaceId: 'n', entries: [] }, { written: 3 })
     expect(blocks).toEqual([{ type: 'text', text: 'Wrote 3 key/value pairs.' }])
   })
 })
@@ -205,7 +215,9 @@ describe('cloudflare_kv_delete', () => {
 
   it('renders how many keys were deleted', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    const blocks = h.tool('cloudflare_kv_delete').output.render({ namespaceId: 'n', keys: [] }, { deleted: 2 })
+    const blocks = h
+      .tool('cloudflare_kv_delete')
+      .output.render({ namespaceId: 'n', keys: [] }, { deleted: 2 })
     expect(blocks).toEqual([{ type: 'text', text: 'Deleted 2 keys.' }])
   })
 })
@@ -232,9 +244,9 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
 
   it('runs a query and returns its result sets', async () => {
     const h = makeHarness(dataTools, async () => envelope([{ results: [{ n: 1 }], success: true }]))
-    await expect(
-      h.run('cloudflare_d1_query', { databaseId: 'db1', sql: 'SELECT 1' }),
-    ).resolves.toEqual({ results: [{ results: [{ n: 1 }], success: true }] })
+    await expect(h.run('cloudflare_d1_query', { databaseId: 'db1', sql: 'SELECT 1' })).resolves.toEqual({
+      results: [{ results: [{ n: 1 }], success: true }],
+    })
   })
 
   it('defaults params to an empty array', async () => {
@@ -257,9 +269,9 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
 
   it('surfaces a SQL error from Cloudflare', async () => {
     const h = makeHarness(dataTools, async () => failure(7500, 'no such table: nope'))
-    await expect(h.run('cloudflare_d1_query', { databaseId: 'db1', sql: 'SELECT * FROM nope' })).rejects.toThrow(
-      'no such table: nope',
-    )
+    await expect(
+      h.run('cloudflare_d1_query', { databaseId: 'db1', sql: 'SELECT * FROM nope' }),
+    ).rejects.toThrow('no such table: nope')
   })
 })
 
@@ -292,9 +304,9 @@ describe('queue tools', () => {
 
   it('renders a send acknowledgement', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    expect(h.tool('cloudflare_queue_send').output.render({ queueId: 'q', body: null }, { queued: true })).toEqual([
-      { type: 'text', text: 'Message queued.' },
-    ])
+    expect(
+      h.tool('cloudflare_queue_send').output.render({ queueId: 'q', body: null }, { queued: true }),
+    ).toEqual([{ type: 'text', text: 'Message queued.' }])
   })
 
   it('pulls messages with defaults', async () => {

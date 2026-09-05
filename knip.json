@@ -2,37 +2,18 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "workspaces": {
     ".": {
-      "entry": [
-        "stryker.config.json",
-        "tests/**/*.test.ts",
-        "scripts/**/*.ts"
-      ],
-      "project": [
-        "*.ts",
-        "tests/**/*.ts",
-        "scripts/**/*.ts"
-      ]
+      "entry": ["stryker.config.json", "tests/**/*.test.ts", "scripts/**/*.ts"],
+      "project": ["*.ts", "tests/**/*.ts", "scripts/**/*.ts"]
     },
     "packages/core": {
-      "project": [
-        "src/**/*.ts",
-        "tests/**/*.ts"
-      ]
+      "project": ["src/**/*.ts", "tests/**/*.ts"]
     },
     "packages/bundle": {
-      "entry": [
-        "src/tools/*.ts"
-      ],
-      "project": [
-        "src/**/*.ts",
-        "tests/**/*.ts"
-      ]
+      "entry": ["src/tools/*.ts"],
+      "project": ["src/**/*.ts", "tests/**/*.ts"]
     },
     "packages/client": {
-      "project": [
-        "src/**/*.{ts,tsx}",
-        "tests/**/*.{ts,tsx}"
-      ]
+      "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"]
     }
   }
 }

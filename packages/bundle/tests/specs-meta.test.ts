@@ -23,9 +23,11 @@ describe('buildGenericSpec', () => {
   })
 
   it('includes a query when given', () => {
-    expect(buildGenericSpec('GET', '/accounts', { per_page: '5' }, undefined, READ_ONLY).query).toStrictEqual({
-      per_page: '5',
-    })
+    expect(buildGenericSpec('GET', '/accounts', { per_page: '5' }, undefined, READ_ONLY).query).toStrictEqual(
+      {
+        per_page: '5',
+      },
+    )
   })
 
   it('includes a body when given and mutations are allowed', () => {
@@ -33,7 +35,9 @@ describe('buildGenericSpec', () => {
   })
 
   it.each(['POST', 'PUT', 'PATCH', 'DELETE'] as const)('refuses %s while read-only', (method) => {
-    expect(() => buildGenericSpec(method, '/x', undefined, undefined, READ_ONLY)).toThrow(CloudflareApiDeniedError)
+    expect(() => buildGenericSpec(method, '/x', undefined, undefined, READ_ONLY)).toThrow(
+      CloudflareApiDeniedError,
+    )
   })
 
   it('names the denial error so it is identifiable in a session log', () => {
@@ -61,15 +65,17 @@ describe('buildGenericSpec', () => {
     ])('blocks a %s spelling of the same resource', (_label, path) => {
       // The server percent-decodes before it routes, so these all reach
       // `/accounts/x/tokens`. Comparing the raw text alone let them through.
-      expect(() => buildGenericSpec('GET', path, undefined, undefined, DENIED)).toThrow(CloudflareApiDeniedError)
+      expect(() => buildGenericSpec('GET', path, undefined, undefined, DENIED)).toThrow(
+        CloudflareApiDeniedError,
+      )
     })
 
     it('blocks a path that merely starts with the prefix', () => {
       // `startsWith`, not `endsWith`: a denied prefix covers everything beneath
       // it, so the child resource must be blocked too.
-      expect(() => buildGenericSpec('GET', '/accounts/x/tokens/abc123', undefined, undefined, DENIED)).toThrow(
-        CloudflareApiDeniedError,
-      )
+      expect(() =>
+        buildGenericSpec('GET', '/accounts/x/tokens/abc123', undefined, undefined, DENIED),
+      ).toThrow(CloudflareApiDeniedError)
     })
 
     it('names the offending prefix so the denial is explicable', () => {
@@ -93,7 +99,9 @@ describe('buildGenericSpec', () => {
   })
 
   it('rejects an encoded traversal, which decodes to a real one', () => {
-    expect(() => buildGenericSpec('GET', '/a/%2e%2e/%2e%2e/x', undefined, undefined, READ_ONLY)).toThrow(TypeError)
+    expect(() => buildGenericSpec('GET', '/a/%2e%2e/%2e%2e/x', undefined, undefined, READ_ONLY)).toThrow(
+      TypeError,
+    )
   })
 
   it('explains how to permit mutations', () => {
@@ -143,7 +151,9 @@ describe('buildGenericSpec', () => {
   })
 
   it('cannot be pointed at another host', () => {
-    expect(() => buildGenericSpec('GET', 'https://evil.test/x', undefined, undefined, READ_ONLY)).toThrow(TypeError)
+    expect(() => buildGenericSpec('GET', 'https://evil.test/x', undefined, undefined, READ_ONLY)).toThrow(
+      TypeError,
+    )
   })
 
   it('cannot be pointed at a protocol-relative URL', () => {
@@ -151,6 +161,8 @@ describe('buildGenericSpec', () => {
   })
 
   it('cannot traverse out of the api root', () => {
-    expect(() => buildGenericSpec('GET', '/accounts/../../x', undefined, undefined, READ_ONLY)).toThrow(TypeError)
+    expect(() => buildGenericSpec('GET', '/accounts/../../x', undefined, undefined, READ_ONLY)).toThrow(
+      TypeError,
+    )
   })
 })

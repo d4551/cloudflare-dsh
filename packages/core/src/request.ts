@@ -140,7 +140,10 @@ export function assertSafeBaseUrl(baseUrl: string): string {
 }
 
 /** Compose the absolute URL for a request spec. */
-export function buildUrl(baseUrl: string, spec: Pick<RequestSpec, 'path' | 'query' | 'orderedQuery'>): string {
+export function buildUrl(
+  baseUrl: string,
+  spec: Pick<RequestSpec, 'path' | 'query' | 'orderedQuery'>,
+): string {
   const path = assertSafePath(spec.path)
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
   return `${base}${path}${buildQueryString(spec.query, spec.orderedQuery)}`

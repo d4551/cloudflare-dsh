@@ -5,20 +5,12 @@
   "vitest": {
     "configFile": "vitest.config.ts"
   },
-  "reporters": [
-    "html",
-    "json",
-    "clear-text",
-    "progress"
-  ],
+  "reporters": ["html", "json", "clear-text", "progress"],
   "htmlReporter": {
     "fileName": "reports/mutation/index.html"
   },
   "coverageAnalysis": "perTest",
-  "mutate": [
-    "packages/*/src/**/*.ts",
-    "packages/*/src/**/*.tsx"
-  ],
+  "mutate": ["packages/*/src/**/*.ts", "packages/*/src/**/*.tsx"],
   "thresholds": {
     "high": 100,
     "low": 100,
@@ -26,9 +18,7 @@
   },
   "tempDirName": ".stryker-tmp",
   "concurrency": 4,
-  "plugins": [
-    "@stryker-mutator/vitest-runner"
-  ],
+  "plugins": ["@stryker-mutator/vitest-runner"],
   "jsonReporter": {
     "fileName": "reports/mutation/mutation.json"
   }

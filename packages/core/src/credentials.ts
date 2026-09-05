@@ -22,10 +22,7 @@ export interface CredentialResolver {
  * The thrown error names the *reference* (a POSIX environment-variable name),
  * never the value, so it is safe to log or render.
  */
-export async function requireCredential(
-  credentials: CredentialResolver,
-  ref: string,
-): Promise<string> {
+export async function requireCredential(credentials: CredentialResolver, ref: string): Promise<string> {
   const value = await credentials.resolve(ref)
   if (value === undefined || value === '') {
     throw new CloudflareAuthError(

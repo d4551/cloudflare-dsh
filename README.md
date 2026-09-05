@@ -34,8 +34,8 @@ account exists.
 1. **The assistant gets tools.** It can now say "put this in the database",
    "read that web page", "run this AI model" — 32 specific, typed actions
    instead of a vague "call an API somewhere".
-2. **The assistant can think using Cloudflare's own AI.** Not just *call*
-   Cloudflare models as a tool — actually *be powered by* them, routed through
+2. **The assistant can think using Cloudflare's own AI.** Not just _call_
+   Cloudflare models as a tool — actually _be powered by_ them, routed through
    your AI Gateway.
 3. **You get the receipts.** Every one of those thinking-requests is stamped
    with which conversation it came from. So when you ask "what did that
@@ -86,21 +86,21 @@ that value. The correlation is exact, not inferred from timestamps.
 
 ## What you get
 
-| | |
-|---|---|
-| **32 tools** | Workers AI, AI Gateway, AI Search, Vectorize, KV, D1, Queues, R2, Browser Rendering, plus one bounded generic REST tool |
-| **A model provider** | Two routes — `cloudflare-workers-ai` and `cloudflare-ai-gateway` — registered as a real `LlmAdapter`, streaming SSE into the harness chunk contract |
-| **Session cost attribution** | `cf-aig-metadata` carries the harness session id and call purpose, so gateway logs and billing join to sessions exactly |
-| **Web Client surfaces** | A settings card, a per-session usage chip, and three tool views, all WCAG 2.2 AA |
-| **MCP passthrough** | Patch rows for Cloudflare's eight hosted MCP servers, off by default |
+|                              |                                                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **32 tools**                 | Workers AI, AI Gateway, AI Search, Vectorize, KV, D1, Queues, R2, Browser Rendering, plus one bounded generic REST tool                             |
+| **A model provider**         | Two routes — `cloudflare-workers-ai` and `cloudflare-ai-gateway` — registered as a real `LlmAdapter`, streaming SSE into the harness chunk contract |
+| **Session cost attribution** | `cf-aig-metadata` carries the harness session id and call purpose, so gateway logs and billing join to sessions exactly                             |
+| **Web Client surfaces**      | A settings card, a per-session usage chip, and three tool views, all WCAG 2.2 AA                                                                    |
+| **MCP passthrough**          | Patch rows for Cloudflare's eight hosted MCP servers, off by default                                                                                |
 
 ### Packages
 
-| Package | Role |
-|---|---|
-| **`@d4551/dsh-cloudflare-core`** | The `ctx.cloudflare` capability seam — credential resolution, scoping, request construction, error normalization, pagination, retry |
-| **`cloudflare-dsh`** | The bundle — four tool groups, the model provider, MCP rows, presets, and the `cordis.patch.yml` layer |
-| **`@d4551/dsh-cloudflare-client`** | Web Client surfaces — settings card, session usage chip, tool views |
+| Package                            | Role                                                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **`@d4551/dsh-cloudflare-core`**   | The `ctx.cloudflare` capability seam — credential resolution, scoping, request construction, error normalization, pagination, retry |
+| **`cloudflare-dsh`**               | The bundle — four tool groups, the model provider, MCP rows, presets, and the `cordis.patch.yml` layer                              |
+| **`@d4551/dsh-cloudflare-client`** | Web Client surfaces — settings card, session usage chip, tool views                                                                 |
 
 The three packages exist because they have genuinely different consumers.
 Another bundle may want `ctx.cloudflare` without any of these tools; the client
@@ -200,11 +200,11 @@ graph TD
 DSH's own convention is that a capability is complete only when all three roles
 exist: a **service definition**, a **provider**, and a **consumer**. Here:
 
-| Role | Where |
-|---|---|
-| Definition | `CloudflareService` class and its typed surface |
-| Provider | `packages/core` — registers itself as `ctx.cloudflare` |
-| Consumers | Every tool group and the model provider, via `inject: ['cloudflare']` |
+| Role       | Where                                                                 |
+| ---------- | --------------------------------------------------------------------- |
+| Definition | `CloudflareService` class and its typed surface                       |
+| Provider   | `packages/core` — registers itself as `ctx.cloudflare`                |
+| Consumers  | Every tool group and the model provider, via `inject: ['cloudflare']` |
 
 ### Why the pure/impure split
 
@@ -317,16 +317,16 @@ stateDiagram-v2
     Finished --> Finished: later input ignored
 ```
 
-| Obligation | How it holds |
-|---|---|
-| `usage` is emitted before `finish` | The finish reason closes the blocks but is held back until the stream ends, so a provider that reports usage in a trailing chunk — the shape `stream_options.include_usage` produces — is still observed, and `finish` is always last |
-| Nothing follows `finish` | A `finished` flag makes every later `push`/`end` a no-op |
-| Block indices allocated in first-seen order and reused | One allocator, one map keyed by wire index |
-| Tool-call `arguments` stay raw JSON strings | Fragments accumulate as `argumentsDelta`, re-joined at `block-end`, never parsed |
-| One adapter call is one provider attempt | No internal retry — the harness owns retry policy |
-| `options.signal` is honoured | Forwarded to `fetch` unconditionally (`null` is the documented "no signal") |
-| A quiet stream fails as a timeout | Every read races the configurable idle budget |
-| Unsupported options fail loudly | Rejected before any request is issued |
+| Obligation                                             | How it holds                                                                                                                                                                                                                          |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `usage` is emitted before `finish`                     | The finish reason closes the blocks but is held back until the stream ends, so a provider that reports usage in a trailing chunk — the shape `stream_options.include_usage` produces — is still observed, and `finish` is always last |
+| Nothing follows `finish`                               | A `finished` flag makes every later `push`/`end` a no-op                                                                                                                                                                              |
+| Block indices allocated in first-seen order and reused | One allocator, one map keyed by wire index                                                                                                                                                                                            |
+| Tool-call `arguments` stay raw JSON strings            | Fragments accumulate as `argumentsDelta`, re-joined at `block-end`, never parsed                                                                                                                                                      |
+| One adapter call is one provider attempt               | No internal retry — the harness owns retry policy                                                                                                                                                                                     |
+| `options.signal` is honoured                           | Forwarded to `fetch` unconditionally (`null` is the documented "no signal")                                                                                                                                                           |
+| A quiet stream fails as a timeout                      | Every read races the configurable idle budget                                                                                                                                                                                         |
+| Unsupported options fail loudly                        | Rejected before any request is issued                                                                                                                                                                                                 |
 
 ---
 
@@ -365,37 +365,37 @@ profile takes only the groups it wants.
 
 ### AI — `cloudflare-dsh/tools/ai` (15)
 
-| Tool | Purpose |
-|---|---|
-| `cloudflare_ai_run` | Run any Workers AI model |
-| `cloudflare_ai_models_search` | Search the model catalogue |
-| `cloudflare_ai_model_schema` | Fetch a model's live JSON schema |
-| `cloudflare_aigateway_list` / `_get` | Enumerate and inspect gateways |
-| `cloudflare_aigateway_logs` | Page gateway request logs |
-| `cloudflare_aigateway_log_body` | Fetch a logged request or response body |
-| `cloudflare_aigateway_routes` | Dynamic routing configuration |
-| `cloudflare_aigateway_cost` | Credit balance, usage history, invoice preview |
-| `cloudflare_aigateway_session_cost` | Usage and cost for one harness session |
-| `cloudflare_aisearch_search` / `_chat` / `_sync` | AI Search query, chat completion, index sync |
-| `cloudflare_vectorize_index_list` / `_query` | Vector index listing and similarity query |
+| Tool                                             | Purpose                                        |
+| ------------------------------------------------ | ---------------------------------------------- |
+| `cloudflare_ai_run`                              | Run any Workers AI model                       |
+| `cloudflare_ai_models_search`                    | Search the model catalogue                     |
+| `cloudflare_ai_model_schema`                     | Fetch a model's live JSON schema               |
+| `cloudflare_aigateway_list` / `_get`             | Enumerate and inspect gateways                 |
+| `cloudflare_aigateway_logs`                      | Page gateway request logs                      |
+| `cloudflare_aigateway_log_body`                  | Fetch a logged request or response body        |
+| `cloudflare_aigateway_routes`                    | Dynamic routing configuration                  |
+| `cloudflare_aigateway_cost`                      | Credit balance, usage history, invoice preview |
+| `cloudflare_aigateway_session_cost`              | Usage and cost for one harness session         |
+| `cloudflare_aisearch_search` / `_chat` / `_sync` | AI Search query, chat completion, index sync   |
+| `cloudflare_vectorize_index_list` / `_query`     | Vector index listing and similarity query      |
 
 ### Data — `cloudflare-dsh/tools/data` (13)
 
-| Tool | Purpose |
-|---|---|
-| `cloudflare_kv_namespace_list` | List KV namespaces |
-| `cloudflare_kv_list_keys` | Page keys — returns a cursor for PTC loops |
-| `cloudflare_kv_get` / `_put` / `_delete` | Single-key value operations |
-| `cloudflare_d1_list` | List D1 databases |
-| `cloudflare_d1_query` | Parameterised SQL, multi-statement |
-| `cloudflare_queue_list` / `_send` / `_pull` / `_ack` | Queue operations, lease-based |
-| `cloudflare_r2_bucket_list` / `_create` | R2 bucket management |
+| Tool                                                 | Purpose                                    |
+| ---------------------------------------------------- | ------------------------------------------ |
+| `cloudflare_kv_namespace_list`                       | List KV namespaces                         |
+| `cloudflare_kv_list_keys`                            | Page keys — returns a cursor for PTC loops |
+| `cloudflare_kv_get` / `_put` / `_delete`             | Single-key value operations                |
+| `cloudflare_d1_list`                                 | List D1 databases                          |
+| `cloudflare_d1_query`                                | Parameterised SQL, multi-statement         |
+| `cloudflare_queue_list` / `_send` / `_pull` / `_ack` | Queue operations, lease-based              |
+| `cloudflare_r2_bucket_list` / `_create`              | R2 bucket management                       |
 
 ### Web — `cloudflare-dsh/tools/web` (2)
 
-| Tool | Purpose |
-|---|---|
-| `cloudflare_browser_render` | Markdown, screenshot, PDF, scrape, links, JSON, content |
+| Tool                                    | Purpose                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `cloudflare_browser_render`             | Markdown, screenshot, PDF, scrape, links, JSON, content                 |
 | `cloudflare_browser_accessibility_tree` | The roles, names and structure a screen reader would expose for any URL |
 
 `cloudflare_browser_accessibility_tree` is the standout: it hands an agent the
@@ -404,10 +404,10 @@ review needs and what a screenshot cannot provide.
 
 ### Meta — `cloudflare-dsh/tools/meta` (2)
 
-| Tool | Purpose |
-|---|---|
-| `cloudflare_account_list` | Account discovery |
-| `cloudflare_api` | Bounded generic REST call for resources this bundle does not wrap |
+| Tool                      | Purpose                                                           |
+| ------------------------- | ----------------------------------------------------------------- |
+| `cloudflare_account_list` | Account discovery                                                 |
+| `cloudflare_api`          | Bounded generic REST call for resources this bundle does not wrap |
 
 ---
 
@@ -416,9 +416,9 @@ review needs and what a screenshot cannot provide.
 Mounted as the `cloudflare-llm` row (`cloudflare-dsh/ai`), registering two
 routes:
 
-| Route | Endpoint | Notes |
-|---|---|---|
-| `cloudflare-workers-ai` | The account's OpenAI-compatible Workers AI path | Works with defaults |
+| Route                   | Endpoint                                        | Notes                                        |
+| ----------------------- | ----------------------------------------------- | -------------------------------------------- |
+| `cloudflare-workers-ai` | The account's OpenAI-compatible Workers AI path | Works with defaults                          |
 | `cloudflare-ai-gateway` | Base URL resolved from the gateway URL endpoint | Needs `gatewayId`; says so loudly if missing |
 
 Registration is inert until a session selects one of the routes, so mounting the
@@ -429,15 +429,15 @@ row costs nothing.
 Provider failures are mapped onto the harness's canonical vocabulary rather than
 surfaced raw:
 
-| Signal | Code |
-|---|---|
-| Context/token-length error text | `CONTEXT_WINDOW_EXCEEDED` |
-| Quota exhausted | `QUOTA_EXCEEDED` |
-| HTTP 429 | `RATE_LIMIT` |
-| Idle beyond `streamIdleTimeoutMs` | `TIMEOUT` |
-| A stream that carries no chunks at all | `EMPTY_RESPONSE` |
-| Any option the wire format cannot express | `UNSUPPORTED_OPTION` |
-| Anything else from the provider | `PROVIDER_ERROR` |
+| Signal                                    | Code                      |
+| ----------------------------------------- | ------------------------- |
+| Context/token-length error text           | `CONTEXT_WINDOW_EXCEEDED` |
+| Quota exhausted                           | `QUOTA_EXCEEDED`          |
+| HTTP 429                                  | `RATE_LIMIT`              |
+| Idle beyond `streamIdleTimeoutMs`         | `TIMEOUT`                 |
+| A stream that carries no chunks at all    | `EMPTY_RESPONSE`          |
+| Any option the wire format cannot express | `UNSUPPORTED_OPTION`      |
+| Anything else from the provider           | `PROVIDER_ERROR`          |
 
 ---
 
@@ -453,38 +453,38 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 
 ### `cloudflare` — the seam (`@d4551/dsh-cloudflare-core`)
 
-| Field | Default | Meaning |
-|---|---|---|
-| `apiTokenRef` | `CLOUDFLARE_API_TOKEN` | Credential reference — a POSIX env-var **name**, never a value |
-| `accountId` | `''` | Account to operate on; discovered at first use when empty |
-| `baseUrl` | `https://api.cloudflare.com/client/v4` | REST root; overridable for API-compatible proxies |
-| `requestTimeoutMs` | `30000` | Deadline for one attempt, aborting the request. A retry gets a fresh budget, so this caps an attempt rather than the whole retried operation |
-| `maxRetries` | `3` | Retry budget for transient failures |
-| `retryBaseDelayMs` | `250` | First backoff step |
-| `retryMaxDelayMs` | `10000` | Backoff ceiling, and the cap applied to a server `Retry-After` |
-| `maxPages` | `100` | Hard ceiling on pages walked by one list call |
+| Field              | Default                                | Meaning                                                                                                                                      |
+| ------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiTokenRef`      | `CLOUDFLARE_API_TOKEN`                 | Credential reference — a POSIX env-var **name**, never a value                                                                               |
+| `accountId`        | `''`                                   | Account to operate on; discovered at first use when empty                                                                                    |
+| `baseUrl`          | `https://api.cloudflare.com/client/v4` | REST root; overridable for API-compatible proxies                                                                                            |
+| `requestTimeoutMs` | `30000`                                | Deadline for one attempt, aborting the request. A retry gets a fresh budget, so this caps an attempt rather than the whole retried operation |
+| `maxRetries`       | `3`                                    | Retry budget for transient failures                                                                                                          |
+| `retryBaseDelayMs` | `250`                                  | First backoff step                                                                                                                           |
+| `retryMaxDelayMs`  | `10000`                                | Backoff ceiling, and the cap applied to a server `Retry-After`                                                                               |
+| `maxPages`         | `100`                                  | Hard ceiling on pages walked by one list call                                                                                                |
 
 ### `cloudflare-llm` — the model provider (`cloudflare-dsh/ai`)
 
-| Field | Default | Meaning |
-|---|---|---|
-| `gatewayId` | `''` | Gateway to route through; required for the gateway route |
-| `gatewayProvider` | `workers-ai` | Provider slug the gateway forwards to |
-| `chatCompletionsPath` | `/chat/completions` | Path appended to the resolved base URL |
-| `workersAiPath` | `/ai/v1/chat/completions` | OpenAI-compatible Workers AI path, relative to the account scope |
-| `cacheTtlSeconds` | `0` | `cf-aig-cache-ttl` |
-| `skipCache` | `false` | `cf-aig-skip-cache` |
-| `collectLog` | `true` | `cf-aig-collect-log` — required for session cost attribution |
-| `tags` | `{}` | Static tags merged into `cf-aig-metadata` |
-| `streamIdleTimeoutMs` | `300000` | How long a stream may go quiet before failing as a timeout |
-| `models` | `[]` | Advertised models; empty means query the catalogue |
+| Field                 | Default                   | Meaning                                                          |
+| --------------------- | ------------------------- | ---------------------------------------------------------------- |
+| `gatewayId`           | `''`                      | Gateway to route through; required for the gateway route         |
+| `gatewayProvider`     | `workers-ai`              | Provider slug the gateway forwards to                            |
+| `chatCompletionsPath` | `/chat/completions`       | Path appended to the resolved base URL                           |
+| `workersAiPath`       | `/ai/v1/chat/completions` | OpenAI-compatible Workers AI path, relative to the account scope |
+| `cacheTtlSeconds`     | `0`                       | `cf-aig-cache-ttl`                                               |
+| `skipCache`           | `false`                   | `cf-aig-skip-cache`                                              |
+| `collectLog`          | `true`                    | `cf-aig-collect-log` — required for session cost attribution     |
+| `tags`                | `{}`                      | Static tags merged into `cf-aig-metadata`                        |
+| `streamIdleTimeoutMs` | `300000`                  | How long a stream may go quiet before failing as a timeout       |
+| `models`              | `[]`                      | Advertised models; empty means query the catalogue               |
 
 ### `cloudflare-tools-meta` — the escape hatch (`cloudflare-dsh/tools/meta`)
 
-| Field | Default | Meaning |
-|---|---|---|
-| `allowMutations` | `false` | When false, `cloudflare_api` rejects anything but `GET`/`HEAD` |
-| `denyPathPrefixes` | `[]` | Path prefixes `cloudflare_api` refuses outright |
+| Field              | Default | Meaning                                                        |
+| ------------------ | ------- | -------------------------------------------------------------- |
+| `allowMutations`   | `false` | When false, `cloudflare_api` rejects anything but `GET`/`HEAD` |
+| `denyPathPrefixes` | `[]`    | Path prefixes `cloudflare_api` refuses outright                |
 
 ### The shipped patch layer
 
@@ -516,13 +516,13 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 `@d4551/dsh-cloudflare-client` contributes to three slots. Components never
 receive `ctx`; they take props.
 
-| Component | Slot | What it shows |
-|---|---|---|
-| `SettingsCard` | `settings.plugin.cloudflare` | Credential reference, account and gateway selection. Write-only for secrets |
-| `SessionCostChip` | `conversation.session.header.actions` | This session's requests, cost, cache hit rate and token counts |
-| `D1Result` | `tool.call.toolview` → `cloudflare_d1_query` | A real table with column headers and a caption naming the query |
-| `BrowserRender` | `tool.call.toolview` → `cloudflare_browser_render` | Rendered output, with meaningful alternative text for screenshots |
-| `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump |
+| Component           | Slot                                                           | What it shows                                                               |
+| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `SettingsCard`      | `settings.plugin.cloudflare`                                   | Credential reference, account and gateway selection. Write-only for secrets |
+| `SessionCostChip`   | `conversation.session.header.actions`                          | This session's requests, cost, cache hit rate and token counts              |
+| `D1Result`          | `tool.call.toolview` → `cloudflare_d1_query`                   | A real table with column headers and a caption naming the query             |
+| `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered output, with meaningful alternative text for screenshots           |
+| `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump                            |
 
 The package ships `cloudflare.css`. Colours are CSS custom properties, so a
 host's theme wins wherever it defines them.
@@ -613,7 +613,7 @@ graph LR
   takes effect without a restart.
 - Configuration and patch YAML hold the reference **name**, never the secret.
 - Error messages name the reference, never the value.
-- The settings UI is write-only: it can set a credential and learn *whether* one
+- The settings UI is write-only: it can set a credential and learn _whether_ one
   is stored, never read it back.
 
 ### The escape hatch is bounded
@@ -633,16 +633,17 @@ wrap stay reachable. It is a bounded capability, not a bypass:
 
 CI runs on Node 22 and 24 and must be green to merge:
 
-| Gate | Bar |
-|---|---|
-| `typecheck` | `tsc` strict, zero errors |
-| `lint` | `oxlint --deny-warnings` |
-| `test:invariants` | The gate configuration itself is asserted, so a threshold cannot be quietly lowered |
-| `test:coverage` | 100% lines, branches, functions, statements |
-| `test:dist` | The built artifacts load the way a consumer resolves them |
-| `test:a11y` | Real Chromium, both colour schemes, zero axe violations, no rule filtering |
-| `stryker` | 100% mutation score, no file exclusions |
-| `knip` / `publint` | No unused code or dependencies; packages are publishable |
+| Gate               | Bar                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `typecheck`        | `tsc` strict, zero errors                                                                           |
+| `lint`             | `oxlint --deny-warnings`                                                                            |
+| `format:check`     | `oxfmt --check` — one canonical style, no per-file overrides, nothing outside `.gitignore` excluded |
+| `test:invariants`  | The gate configuration itself is asserted, so a threshold cannot be quietly lowered                 |
+| `test:coverage`    | 100% lines, branches, functions, statements                                                         |
+| `test:dist`        | The built artifacts load the way a consumer resolves them                                           |
+| `test:a11y`        | Real Chromium, both colour schemes, zero axe violations, no rule filtering                          |
+| `stryker`          | 100% mutation score, no file exclusions                                                             |
+| `knip` / `publint` | No unused code or dependencies; packages are publishable                                            |
 
 Two toolchain notes for contributors:
 
@@ -660,19 +661,20 @@ Two toolchain notes for contributors:
 bun install
 ```
 
-| Script | What it does |
-|---|---|
-| `bun run typecheck` | `tsc -b`, strict, `skipLibCheck: false` |
-| `bun run lint` | `oxlint --deny-warnings .` |
-| `bun run test` | Vitest on Node |
-| `bun run test:coverage` | The same, with 100% thresholds |
-| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality) |
-| `bun run test:a11y` | Real Chromium, both colour schemes, axe unfiltered |
-| `bun run build` | `tsdown`, per package |
-| `bun run test:dist` | Loads the **built** artifacts as a consumer resolves them |
-| `bun run stryker` | Mutation testing, then the escape guard |
-| `bun run knip` | Unused files, exports and dependencies |
-| `bun run publint` | Package publishing sanity, all three packages |
+| Script                    | What it does                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| `bun run typecheck`       | `tsc -b`, strict, `skipLibCheck: false`                                                      |
+| `bun run lint`            | `oxlint --deny-warnings .`                                                                   |
+| `bun run format:check`    | `oxfmt --check`; fails on any file outside the canonical style. `bun run format` conforms it |
+| `bun run test`            | Vitest on Node                                                                               |
+| `bun run test:coverage`   | The same, with 100% thresholds                                                               |
+| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality)                                              |
+| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered                                           |
+| `bun run build`           | `tsdown`, per package                                                                        |
+| `bun run test:dist`       | Loads the **built** artifacts as a consumer resolves them                                    |
+| `bun run stryker`         | Mutation testing, then the escape guard                                                      |
+| `bun run knip`            | Unused files, exports and dependencies                                                       |
+| `bun run publint`         | Package publishing sanity, all three packages                                                |
 
 Development history is in [QUALITY-LOOP.md](QUALITY-LOOP.md).
 

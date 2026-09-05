@@ -155,7 +155,11 @@ export function sessionLogFilters(sessionId: string, metadataKey: string): reado
 }
 
 /** Fetch a single log's request or response body. */
-export function gatewayLogBodySpec(gatewayId: string, logId: string, part: 'request' | 'response'): RequestSpec {
+export function gatewayLogBodySpec(
+  gatewayId: string,
+  logId: string,
+  part: 'request' | 'response',
+): RequestSpec {
   return {
     method: 'GET',
     path: `/ai-gateway/gateways/${seg(gatewayId)}/logs/${seg(logId)}/${part}`,

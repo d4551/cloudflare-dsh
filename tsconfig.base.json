@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -25,12 +21,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@d4551/dsh-cloudflare-core": [
-        "./packages/core/src/index.ts"
-      ],
-      "@d4551/dsh-cloudflare-client": [
-        "./packages/client/src/index.ts"
-      ]
+      "@d4551/dsh-cloudflare-core": ["./packages/core/src/index.ts"],
+      "@d4551/dsh-cloudflare-client": ["./packages/client/src/index.ts"]
     },
     "jsx": "react-jsx"
   }

@@ -43,7 +43,9 @@ export function nextPageQuery(
 }
 
 /** Fetches one page given a query overlay. */
-export type PageFetcher<T> = (query: Readonly<Record<string, QueryValue>>) => Promise<CloudflareEnvelope<readonly T[]>>
+export type PageFetcher<T> = (
+  query: Readonly<Record<string, QueryValue>>,
+) => Promise<CloudflareEnvelope<readonly T[]>>
 
 /** Everything one walk produced. */
 export interface PageWalk<T> {

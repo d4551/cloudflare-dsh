@@ -78,8 +78,6 @@ describe('plugin shape', () => {
     expect(registered[0]!.providers).toEqual(['cloudflare-workers-ai', 'cloudflare-ai-gateway'])
     expect(registered[0]!.adapter).toBeInstanceOf(CloudflareAiAdapter)
   })
-
-
 })
 
 describe('lifecycle', () => {
@@ -91,10 +89,14 @@ describe('lifecycle', () => {
     await ctx.plugin(LlmRuntime)
     const credentials = { resolve: () => 'tok' }
     ctx.provide('credentials', credentials)
-    const service = new CloudflareService(ctx, CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }), {
-      credentials,
-      fetch: async () => envelope(null),
-    })
+    const service = new CloudflareService(
+      ctx,
+      CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }),
+      {
+        credentials,
+        fetch: async () => envelope(null),
+      },
+    )
     expect(service.name).toBe('cloudflare')
     const providers = () => (ctx as unknown as { llm: LlmRuntime }).llm.listProviders().map((info) => info.id)
 
@@ -283,10 +285,8 @@ describe('endpoint resolution', () => {
   it('applies a cost override configured on the input side alone', async () => {
     // Each side is a reason to send the header on its own; a mutation testing
     // survivor showed only the output side was ever asserted.
-    const { outbound } = await stream(
-      { customCostPerTokenIn: 0.001 },
-      'cloudflare-workers-ai',
-      async () => envelope(null),
+    const { outbound } = await stream({ customCostPerTokenIn: 0.001 }, 'cloudflare-workers-ai', async () =>
+      envelope(null),
     )
     expect(outbound[0]!.headers.get('cf-aig-custom-cost')).toBe('{"per_token_in":0.001,"per_token_out":0}')
   })

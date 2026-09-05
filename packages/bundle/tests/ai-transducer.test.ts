@@ -48,9 +48,7 @@ describe('mapUsage', () => {
   })
 
   it('never reports negative input when a provider over-reports cache hits', () => {
-    expect(
-      mapUsage({ prompt_tokens: 2, prompt_tokens_details: { cached_tokens: 9 } }).inputTokens,
-    ).toBe(0)
+    expect(mapUsage({ prompt_tokens: 2, prompt_tokens_details: { cached_tokens: 9 } }).inputTokens).toBe(0)
   })
 
   it('omits cacheReadTokens when nothing was cached', () => {
@@ -94,9 +92,9 @@ describe('text streaming', () => {
   })
 
   it('ignores empty and null content rather than opening an empty block', () => {
-    expect(run([{ choices: [{ delta: { content: '' } }] }, { choices: [{ delta: { content: null } }] }])).toEqual([
-      { type: 'finish', reason: { kind: 'stop' } },
-    ])
+    expect(
+      run([{ choices: [{ delta: { content: '' } }] }, { choices: [{ delta: { content: null } }] }]),
+    ).toEqual([{ type: 'finish', reason: { kind: 'stop' } }])
   })
 
   it('ignores a chunk with no choices', () => {
@@ -127,13 +125,11 @@ describe('reasoning streaming', () => {
   })
 
   it('reuses the reasoning block across deltas', () => {
-    const chunks = run(
-      [
-        { choices: [{ delta: { reasoning_content: 'be' } }] },
-        { choices: [{ delta: { reasoning_content: 'cause' } }] },
-        done(),
-      ],
-    )
+    const chunks = run([
+      { choices: [{ delta: { reasoning_content: 'be' } }] },
+      { choices: [{ delta: { reasoning_content: 'cause' } }] },
+      done(),
+    ])
     expect(chunks.filter((c) => c.type === 'block-start')).toHaveLength(1)
     expect(chunks.at(-2)).toEqual({
       type: 'block-end',
@@ -229,10 +225,13 @@ describe('tool-call streaming', () => {
   })
 
   it('reuses the block index across fragments of the same call', () => {
-    const chunks = run([call({ id: 'c1', function: { arguments: 'a' } }), call({ function: { arguments: 'b' } })], false)
-    expect(chunks.filter((c) => c.type === 'tool-call-delta').map((c) => (c as { index: number }).index)).toEqual([
-      0, 0,
-    ])
+    const chunks = run(
+      [call({ id: 'c1', function: { arguments: 'a' } }), call({ function: { arguments: 'b' } })],
+      false,
+    )
+    expect(
+      chunks.filter((c) => c.type === 'tool-call-delta').map((c) => (c as { index: number }).index),
+    ).toEqual([0, 0])
   })
 
   it('leaves the id empty when the provider never sends one', () => {
@@ -254,7 +253,11 @@ describe('tool-call streaming', () => {
   })
 
   it('interleaves text and tool calls with distinct indices', () => {
-    const chunks = run([text('thinking'), call({ id: 'c1', function: { name: 'f', arguments: '{}' } }), done('tool_calls')])
+    const chunks = run([
+      text('thinking'),
+      call({ id: 'c1', function: { name: 'f', arguments: '{}' } }),
+      done('tool_calls'),
+    ])
     expect(chunks.filter((c) => c.type === 'block-start')).toEqual([
       { type: 'block-start', index: 0, blockType: 'text' },
       { type: 'block-start', index: 1, blockType: 'tool-call' },
@@ -352,10 +355,9 @@ describe('usage and finish ordering', () => {
   })
 
   it('ignores a null finish reason', () => {
-    expect(run([{ choices: [{ delta: { content: 'x' }, finish_reason: null }] }], false).map((c) => c.type)).toEqual([
-      'block-start',
-      'text-delta',
-    ])
+    expect(
+      run([{ choices: [{ delta: { content: 'x' }, finish_reason: null }] }], false).map((c) => c.type),
+    ).toEqual(['block-start', 'text-delta'])
   })
 
   it('still emits content that arrived in the same chunk as the finish reason', () => {

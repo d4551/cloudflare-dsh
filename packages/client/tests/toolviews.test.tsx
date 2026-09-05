@@ -39,7 +39,14 @@ describe('cellText', () => {
 })
 
 describe('D1Result', () => {
-  const resultSets = [{ results: [{ id: 1, name: 'a' }, { id: 2, name: 'b' }] }]
+  const resultSets = [
+    {
+      results: [
+        { id: 1, name: 'a' },
+        { id: 2, name: 'b' },
+      ],
+    },
+  ]
 
   it('renders a real table with column headers', () => {
     render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
@@ -48,7 +55,9 @@ describe('D1Result', () => {
 
   it('captions the table with the query that produced it', () => {
     render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
-    expect(screen.getByRole('table', { name: 'Results for query: SELECT 1' })).toBeInstanceOf(HTMLTableElement)
+    expect(screen.getByRole('table', { name: 'Results for query: SELECT 1' })).toBeInstanceOf(
+      HTMLTableElement,
+    )
   })
 
   it('renders one row per result', () => {
@@ -163,13 +172,14 @@ describe('describeNode', () => {
   })
 })
 
-
 describe('AccessibilityTree', () => {
   const tree = { role: 'document', name: 'Page', children: [{ role: 'heading', name: 'Title' }] }
 
   it('names the region by the page it describes', () => {
     render(<AccessibilityTree url="https://x.test" tree={tree} />)
-    expect(screen.getByRole('region', { name: 'Accessibility tree for https://x.test' })).toBeInstanceOf(HTMLElement)
+    expect(screen.getByRole('region', { name: 'Accessibility tree for https://x.test' })).toBeInstanceOf(
+      HTMLElement,
+    )
   })
 
   it('renders the hierarchy as nested lists, not a flat dump', () => {

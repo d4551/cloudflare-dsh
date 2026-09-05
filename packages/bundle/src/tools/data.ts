@@ -54,7 +54,8 @@ export function apply(ctx: Context): void {
           additionalProperties: true,
           description: 'Namespaces with their ids and titles.',
         },
-        render: (_args, value) => listing((value as { namespaces: unknown[] }).namespaces.length, 'namespace', value),
+        render: (_args, value) =>
+          listing((value as { namespaces: unknown[] }).namespaces.length, 'namespace', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
@@ -67,8 +68,7 @@ export function apply(ctx: Context): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_kv_list_keys',
-      description:
-        'List keys in a Workers KV namespace. Returns a cursor for paging when more keys remain.',
+      description: 'List keys in a Workers KV namespace. Returns a cursor for paging when more keys remain.',
       parameters: {
         namespaceId: { type: 'string', required: true, description: 'KV namespace id.' },
         prefix: { type: 'string', description: 'Only list keys starting with this prefix.' },
@@ -115,8 +115,7 @@ export function apply(ctx: Context): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_kv_put',
-      description:
-        'Write one or more key/value pairs to a Workers KV namespace. Values are stored as text.',
+      description: 'Write one or more key/value pairs to a Workers KV namespace. Values are stored as text.',
       parameters: {
         namespaceId: { type: 'string', required: true, description: 'KV namespace id.' },
         entries: {
@@ -164,7 +163,10 @@ export function apply(ctx: Context): void {
       },
       async execute(args) {
         const keys = args.keys as readonly string[]
-        const spec = keys.length === 1 ? kvDeleteSpec(args.namespaceId, keys[0]!) : kvBulkDeleteSpec(args.namespaceId, keys)
+        const spec =
+          keys.length === 1
+            ? kvDeleteSpec(args.namespaceId, keys[0]!)
+            : kvBulkDeleteSpec(args.namespaceId, keys)
         await cf.accountRequest<JsonValue>(spec)
         return { deleted: keys.length }
       },
@@ -178,7 +180,8 @@ export function apply(ctx: Context): void {
       parameters: { perPage: { type: 'integer', description: 'Databases per page (default 50).' } },
       output: {
         schema: { type: 'object', additionalProperties: true, description: 'Databases with ids and names.' },
-        render: (_args, value) => listing((value as { databases: unknown[] }).databases.length, 'database', value),
+        render: (_args, value) =>
+          listing((value as { databases: unknown[] }).databases.length, 'database', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
@@ -203,7 +206,11 @@ export function apply(ctx: Context): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Result sets with rows and metadata.' },
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Result sets with rows and metadata.',
+        },
         render: (_args, value) => json(value),
       },
       async execute(args) {
@@ -265,8 +272,13 @@ export function apply(ctx: Context): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Pulled messages with lease ids.' },
-        render: (_args, value) => listing((value as { messages: unknown[] }).messages.length, 'message', value),
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Pulled messages with lease ids.',
+        },
+        render: (_args, value) =>
+          listing((value as { messages: unknown[] }).messages.length, 'message', value),
       },
       async execute(args) {
         const result = await cf.accountRequest<{ messages?: JsonValue[] }>(
@@ -288,7 +300,11 @@ export function apply(ctx: Context): void {
         retries: { type: 'array', description: 'Lease ids to retry.', items: { type: 'string' } },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Counts acknowledged and retried.' },
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Counts acknowledged and retried.',
+        },
         render: (_args, value) => {
           const v = value as { acked: number; retried: number }
           return text(`Acknowledged ${v.acked}, retried ${v.retried}.`)
@@ -309,12 +325,18 @@ export function apply(ctx: Context): void {
       description: 'List the R2 buckets in the Cloudflare account.',
       parameters: { perPage: { type: 'integer', description: 'Buckets per page (default 50).' } },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Buckets with names and creation dates.' },
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Buckets with names and creation dates.',
+        },
         render: (_args, value) => listing((value as { buckets: unknown[] }).buckets.length, 'bucket', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const result = await cf.accountRequest<{ buckets?: JsonValue[] }>(r2BucketListSpec(args.perPage ?? 50))
+        const result = await cf.accountRequest<{ buckets?: JsonValue[] }>(
+          r2BucketListSpec(args.perPage ?? 50),
+        )
         return { buckets: result.buckets ?? [] }
       },
     }),

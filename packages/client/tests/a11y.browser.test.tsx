@@ -80,9 +80,7 @@ const PROVIDED_CHROMIUM = '/opt/pw-browsers/chromium'
 let browser: Browser
 
 beforeAll(async () => {
-  browser = await chromium.launch(
-    existsSync(PROVIDED_CHROMIUM) ? { executablePath: PROVIDED_CHROMIUM } : {},
-  )
+  browser = await chromium.launch(existsSync(PROVIDED_CHROMIUM) ? { executablePath: PROVIDED_CHROMIUM } : {})
 }, 60_000)
 
 afterAll(async () => {

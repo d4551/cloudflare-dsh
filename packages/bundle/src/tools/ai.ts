@@ -55,7 +55,11 @@ export function apply(ctx: Context): void {
       description:
         'Run a Workers AI model. The model is a slug such as @cf/meta/llama-3.1-8b-instruct; use cloudflare_ai_models_search to find one and cloudflare_ai_model_schema for its exact input shape.',
       parameters: {
-        model: { type: 'string', required: true, description: 'Model slug, e.g. @cf/meta/llama-3.1-8b-instruct.' },
+        model: {
+          type: 'string',
+          required: true,
+          description: 'Model slug, e.g. @cf/meta/llama-3.1-8b-instruct.',
+        },
         input: { type: 'json', required: true, description: 'Model input, matching that model’s schema.' },
       },
       output: {
@@ -100,7 +104,11 @@ export function apply(ctx: Context): void {
         'Fetch the JSON schema Cloudflare publishes for one Workers AI model, so cloudflare_ai_run can be called with the right input shape.',
       parameters: { model: { type: 'string', required: true, description: 'Model slug.' } },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'The model’s published JSON schema.' },
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'The model’s published JSON schema.',
+        },
         render: (_args, value) => json((value as { schema: JsonValue }).schema),
       },
       isConcurrencySafe: () => true,
@@ -117,8 +125,13 @@ export function apply(ctx: Context): void {
       description: 'List the AI Gateways in the Cloudflare account.',
       parameters: { perPage: { type: 'integer', description: 'Gateways per page (default 50).' } },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Gateways with their ids and settings.' },
-        render: (_args, value) => listing((value as { gateways: unknown[] }).gateways.length, 'gateway', value),
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Gateways with their ids and settings.',
+        },
+        render: (_args, value) =>
+          listing((value as { gateways: unknown[] }).gateways.length, 'gateway', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
@@ -173,7 +186,11 @@ export function apply(ctx: Context): void {
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Matching log entries and the page they came from.' },
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Matching log entries and the page they came from.',
+        },
         render: (_args, value) => listing((value as { logs: unknown[] }).logs.length, 'log entry', value),
       },
       isConcurrencySafe: () => true,
@@ -407,7 +424,12 @@ export function apply(ctx: Context): void {
       async execute(args) {
         const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
         const walk = await cf.accountListAll<JsonValue>(
-          gatewayLogsSpec(args.gatewayId, 1, perPage, sessionLogFilters(args.sessionId, SESSION_METADATA_KEY)),
+          gatewayLogsSpec(
+            args.gatewayId,
+            1,
+            perPage,
+            sessionLogFilters(args.sessionId, SESSION_METADATA_KEY),
+          ),
           nextPageQuery,
         )
         // The server filter is sent, and every row is re-checked here against
@@ -487,7 +509,9 @@ export function toLogFilters(raw: unknown): readonly GatewayLogFilter[] {
     const { key: rawKey, operator: rawOperator, value } = entry as Record<string, unknown>
     const key = LOG_FILTER_KEYS.get(rawKey)
     if (key === undefined) {
-      throw new GatewayLogFilterError(`filters[${index}].key ${JSON.stringify(rawKey)} is not a filterable field`)
+      throw new GatewayLogFilterError(
+        `filters[${index}].key ${JSON.stringify(rawKey)} is not a filterable field`,
+      )
     }
     const operator = LOG_FILTER_OPERATORS.get(rawOperator)
     if (operator === undefined) {

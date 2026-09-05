@@ -65,7 +65,9 @@ describe('KV specs', () => {
   })
 
   it('drops extra fields from bulk-write entries', () => {
-    const spec = kvBulkPutSpec('ns1', [{ key: 'a', value: '1', extra: 'x' } as { key: string; value: string }])
+    const spec = kvBulkPutSpec('ns1', [
+      { key: 'a', value: '1', extra: 'x' } as { key: string; value: string },
+    ])
     expect(spec.body).toEqual([{ key: 'a', value: '1' }])
   })
 

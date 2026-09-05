@@ -13,7 +13,12 @@ function options(over: Partial<GenerateOptions> = {}): GenerateOptions {
 
 describe('textOf', () => {
   it('concatenates text blocks', () => {
-    expect(textOf([{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }])).toBe('ab')
+    expect(
+      textOf([
+        { type: 'text', text: 'a' },
+        { type: 'text', text: 'b' },
+      ]),
+    ).toBe('ab')
   })
 
   it('ignores non-text blocks', () => {
@@ -108,7 +113,10 @@ describe('toWireTools', () => {
       { name: 'f', description: 'does f', parameters: { type: 'object', properties: {} } },
     ] as unknown as ToolSchema[]
     expect(toWireTools(tools)).toEqual([
-      { type: 'function', function: { name: 'f', description: 'does f', parameters: { type: 'object', properties: {} } } },
+      {
+        type: 'function',
+        function: { name: 'f', description: 'does f', parameters: { type: 'object', properties: {} } },
+      },
     ])
   })
 

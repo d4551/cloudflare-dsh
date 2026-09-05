@@ -12,6 +12,8 @@
     "build": "bun run --filter '*' build",
     "typecheck": "tsc -b --pretty false",
     "lint": "oxlint --deny-warnings .",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -28,10 +30,11 @@
     "@types/node": "^22.15.0",
     "@vitest/coverage-v8": "4.1.11",
     "knip": "^5.66.0",
+    "oxfmt": "0.66.0",
     "oxlint": "^1.81.0",
     "publint": "^0.3.14",
+    "tsdown": "^0.23.0",
     "typescript": "^5.9.0",
-    "vitest": "4.1.11",
-    "tsdown": "^0.23.0"
+    "vitest": "4.1.11"
   }
 }

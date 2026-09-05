@@ -28,6 +28,11 @@ const json = <T>(file: string): T => JSON.parse(read(file)) as T
 /** The gate configuration this suite polices, typed so a missing key is an error. */
 interface PackageJson {
   readonly scripts: Readonly<Record<string, string>>
+  readonly devDependencies: Readonly<Record<string, string>>
+}
+interface OxfmtConfig {
+  readonly ignorePatterns?: readonly string[]
+  readonly overrides?: readonly unknown[]
 }
 interface StrykerConfig {
   readonly mutate: readonly string[]
@@ -125,27 +130,37 @@ describe('tests speak in user-visible copy', () => {
 const COLLECTION_TIMEOUT_MS = 120_000
 
 describe('every test is uniquely addressable', () => {
-  it('gives no two tests the same full name, which per-test mutation filtering selects by', { timeout: COLLECTION_TIMEOUT_MS }, () => {
-    // Asked of vitest itself rather than parsed from source, so `it.each`
-    // expansions and nested describes are seen exactly as the runner sees them.
-    // A duplicate name has twice made a mutant that tests kill report as
-    // surviving, because the filter could not address the test that killed it.
-    const listed = JSON.parse(
-      execFileSync('bunx', ['vitest', 'list', '--config', 'vitest.config.ts', '--json'], {
-        cwd: root('..'),
-        encoding: 'utf8',
-        // A vitest run inherits the outer worker's environment; the listing must
-        // not believe it is one of this run's workers.
-        env: { ...process.env, VITEST: undefined, VITEST_MODE: undefined, VITEST_POOL_ID: undefined, VITEST_WORKER_ID: undefined },
-      }),
-    ) as readonly { readonly name: string; readonly file: string }[]
-    const counts = new Map<string, number>()
-    for (const test of listed) {
-      const key = `${relative(root('..'), test.file)} > ${test.name}`
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-    expect([...counts].filter(([, n]) => n > 1).map(([key]) => key)).toEqual([])
-  })
+  it(
+    'gives no two tests the same full name, which per-test mutation filtering selects by',
+    { timeout: COLLECTION_TIMEOUT_MS },
+    () => {
+      // Asked of vitest itself rather than parsed from source, so `it.each`
+      // expansions and nested describes are seen exactly as the runner sees them.
+      // A duplicate name has twice made a mutant that tests kill report as
+      // surviving, because the filter could not address the test that killed it.
+      const listed = JSON.parse(
+        execFileSync('bunx', ['vitest', 'list', '--config', 'vitest.config.ts', '--json'], {
+          cwd: root('..'),
+          encoding: 'utf8',
+          // A vitest run inherits the outer worker's environment; the listing must
+          // not believe it is one of this run's workers.
+          env: {
+            ...process.env,
+            VITEST: undefined,
+            VITEST_MODE: undefined,
+            VITEST_POOL_ID: undefined,
+            VITEST_WORKER_ID: undefined,
+          },
+        }),
+      ) as readonly { readonly name: string; readonly file: string }[]
+      const counts = new Map<string, number>()
+      for (const test of listed) {
+        const key = `${relative(root('..'), test.file)} > ${test.name}`
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+      expect([...counts].filter(([, n]) => n > 1).map(([key]) => key)).toEqual([])
+    },
+  )
 })
 
 describe('no type escape hatch in source', () => {
@@ -235,6 +250,33 @@ describe('linting cannot be softened', () => {
   })
 })
 
+describe('formatting cannot drift', () => {
+  // A formatter run across the tree once rewrote 23 files while every other
+  // gate stayed green. A canonical style is only a rule if something fails
+  // when a file departs from it.
+  it('checks formatting rather than applying it', () => {
+    expect(json<PackageJson>('package.json').scripts['format:check']).toBe('oxfmt --check')
+  })
+
+  it('ignores only what git ignores, so no source can be excused from the check', () => {
+    const gitignored = read('.gitignore')
+      .split('\n')
+      .filter((line) => line.endsWith('/'))
+      .map((line) => line.slice(0, -1))
+    for (const pattern of json<OxfmtConfig>('.oxfmtrc.json').ignorePatterns ?? []) {
+      expect(gitignored).toContain(pattern)
+    }
+  })
+
+  it('has no per-file overrides', () => {
+    expect(json<OxfmtConfig>('.oxfmtrc.json').overrides).toBeUndefined()
+  })
+
+  it('pins the formatter exactly, since a new version can change what canonical means', () => {
+    expect(json<PackageJson>('package.json').devDependencies['oxfmt']).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+})
+
 describe('type checking cannot be skipped', () => {
   it.each([
     ['strict', true],
@@ -312,6 +354,7 @@ describe('every gate runs in CI', () => {
   it.each([
     'bun run typecheck',
     'bun run lint',
+    'bun run format:check',
     'bun run test:coverage',
     'bun run test:invariants',
     'bun run test:dist',

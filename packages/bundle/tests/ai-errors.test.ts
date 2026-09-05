@@ -39,9 +39,9 @@ describe('classifyProviderCode', () => {
   })
 
   it('recognises an exhausted quota', () => {
-    expect(classifyProviderCode({ status: 400, detail: 'insufficient_quota: you exceeded your current quota' })).toBe(
-      QUOTA_EXCEEDED_CODE,
-    )
+    expect(
+      classifyProviderCode({ status: 400, detail: 'insufficient_quota: you exceeded your current quota' }),
+    ).toBe(QUOTA_EXCEEDED_CODE)
   })
 
   it('classifies a 429 as a rate limit', () => {

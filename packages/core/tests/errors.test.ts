@@ -23,10 +23,12 @@ describe('formatErrorEntries', () => {
   })
 
   it('joins multiple entries with a semicolon', () => {
-    expect(formatErrorEntries([
-      { code: 1, message: 'a' },
-      { code: 2, message: 'b' },
-    ])).toBe('[1] a; [2] b')
+    expect(
+      formatErrorEntries([
+        { code: 1, message: 'a' },
+        { code: 2, message: 'b' },
+      ]),
+    ).toBe('[1] a; [2] b')
   })
 })
 

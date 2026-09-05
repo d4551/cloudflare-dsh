@@ -102,7 +102,9 @@ describe('cloudflare_ai_run', () => {
 
   it('surfaces a model error', async () => {
     const h = makeHarness(aiTools, async () => failure(5006, 'model not found', 404))
-    await expect(h.run('cloudflare_ai_run', { model: '@cf/nope', input: {} })).rejects.toThrow('model not found')
+    await expect(h.run('cloudflare_ai_run', { model: '@cf/nope', input: {} })).rejects.toThrow(
+      'model not found',
+    )
   })
 })
 
@@ -177,7 +179,9 @@ describe('gateway tools', () => {
 
   it('renders a gateway config as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
-    expect(h.tool('cloudflare_aigateway_get').output.render({ gatewayId: 'g' }, { gateway: { id: 'g' } })).toEqual(json({ id: 'g' }))
+    expect(
+      h.tool('cloudflare_aigateway_get').output.render({ gatewayId: 'g' }, { gateway: { id: 'g' } }),
+    ).toEqual(json({ id: 'g' }))
   })
 
   it('queries logs by page, reporting which page it read', async () => {
@@ -247,10 +251,9 @@ describe('gateway tools', () => {
   it('renders a stored body as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
-      h.tool('cloudflare_aigateway_log_body').output.render(
-        { gatewayId: 'g', logId: 'l', part: 'request' },
-        { body: { a: 1 } },
-      ),
+      h
+        .tool('cloudflare_aigateway_log_body')
+        .output.render({ gatewayId: 'g', logId: 'l', part: 'request' }, { body: { a: 1 } }),
     ).toEqual(json({ a: 1 }))
   })
 
@@ -268,14 +271,17 @@ describe('gateway tools', () => {
     ])
   })
 
-  it.each(['credit-balance', 'usage-history', 'invoice-preview'] as const)('reads the %s billing view', async (view) => {
-    const h = makeHarness(aiTools, async () => envelope({ amount: 1 }))
-    await expect(h.run('cloudflare_aigateway_cost', { view })).resolves.toEqual({
-      view,
-      billing: { amount: 1 },
-    })
-    expect(h.requests[0]!.url).toBe(`https://api.test/v4/accounts/a1/ai-gateway/billing/${view}`)
-  })
+  it.each(['credit-balance', 'usage-history', 'invoice-preview'] as const)(
+    'reads the %s billing view',
+    async (view) => {
+      const h = makeHarness(aiTools, async () => envelope({ amount: 1 }))
+      await expect(h.run('cloudflare_aigateway_cost', { view })).resolves.toEqual({
+        view,
+        billing: { amount: 1 },
+      })
+      expect(h.requests[0]!.url).toBe(`https://api.test/v4/accounts/a1/ai-gateway/billing/${view}`)
+    },
+  )
 
   it('rejects a billing view outside the supported set', async () => {
     const h = makeHarness(aiTools, async () => envelope({}))
@@ -288,7 +294,9 @@ describe('gateway tools', () => {
   it('renders the billing view as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
-      h.tool('cloudflare_aigateway_cost').output.render({ view: 'credit-balance' }, { view: 'credit-balance', billing: { a: 1 } }),
+      h
+        .tool('cloudflare_aigateway_cost')
+        .output.render({ view: 'credit-balance' }, { view: 'credit-balance', billing: { a: 1 } }),
     ).toEqual(json({ a: 1 }))
   })
 })
@@ -385,9 +393,11 @@ describe('cloudflare_aigateway_session_cost', () => {
 
   it('reports an incomplete page when the page came back full', async () => {
     const h = makeHarness(aiTools, async () => envelope([{ id: 'a' }]))
-    await expect(h.run('cloudflare_aigateway_logs', { gatewayId: 'gw1', perPage: 1 })).resolves.toMatchObject({
-      complete: false,
-    })
+    await expect(h.run('cloudflare_aigateway_logs', { gatewayId: 'gw1', perPage: 1 })).resolves.toMatchObject(
+      {
+        complete: false,
+      },
+    )
   })
 
   it('filters the gateway logs with the two-clause metadata form', async () => {
@@ -429,7 +439,10 @@ describe('cloudflare_aigateway_session_cost', () => {
     expect(
       h
         .tool('cloudflare_aigateway_session_cost')
-        .output.render({ gatewayId: 'g', sessionId: 's1' }, { requests: 1, cost: 1, cached: 0, truncated: true }),
+        .output.render(
+          { gatewayId: 'g', sessionId: 's1' },
+          { requests: 1, cost: 1, cached: 0, truncated: true },
+        ),
     ).toEqual([{ type: 'text', text: expect.stringContaining('partial') }])
   })
 
@@ -462,10 +475,12 @@ describe('cloudflare_aigateway_session_cost', () => {
   it('renders a one-line session summary', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
     expect(
-      h.tool('cloudflare_aigateway_session_cost').output.render(
-        { gatewayId: 'g', sessionId: 's1' },
-        { requests: 3, cost: 1.25, tokensIn: 0, tokensOut: 0, cached: 2 },
-      ),
+      h
+        .tool('cloudflare_aigateway_session_cost')
+        .output.render(
+          { gatewayId: 'g', sessionId: 's1' },
+          { requests: 3, cost: 1.25, tokensIn: 0, tokensOut: 0, cached: 2 },
+        ),
     ).toEqual([{ type: 'text', text: 'Session s1: 3 requests, 2 served from cache, cost 1.25.' }])
   })
 })
@@ -492,7 +507,9 @@ describe('AI Search and Vectorize tools', () => {
   it('renders search results as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
     expect(
-      h.tool('cloudflare_aisearch_search').output.render({ instanceId: 'i', query: 'q' }, { results: { a: 1 } }),
+      h
+        .tool('cloudflare_aisearch_search')
+        .output.render({ instanceId: 'i', query: 'q' }, { results: { a: 1 } }),
     ).toEqual(json({ a: 1 }))
   })
 
@@ -530,12 +547,16 @@ describe('AI Search and Vectorize tools', () => {
 
   it('renders the sync job as JSON', () => {
     const h = makeHarness(aiTools, async () => envelope({}))
-    expect(h.tool('cloudflare_aisearch_sync').output.render({ instanceId: 'i' }, { job: { id: 'j' } })).toEqual(json({ id: 'j' }))
+    expect(
+      h.tool('cloudflare_aisearch_sync').output.render({ instanceId: 'i' }, { job: { id: 'j' } }),
+    ).toEqual(json({ id: 'j' }))
   })
 
   it('lists vectorize indexes', async () => {
     const h = makeHarness(aiTools, async () => envelope([{ name: 'idx' }]))
-    await expect(h.run('cloudflare_vectorize_index_list', {})).resolves.toEqual({ indexes: [{ name: 'idx' }] })
+    await expect(h.run('cloudflare_vectorize_index_list', {})).resolves.toEqual({
+      indexes: [{ name: 'idx' }],
+    })
     expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/vectorize/v2/indexes')
   })
 
@@ -602,7 +623,9 @@ describe('toLogFilters', () => {
   })
 
   it.each(['eq', 'neq', 'contains', 'lt', 'gt'])('accepts the %s comparison', (operator) => {
-    expect(toLogFilters([{ key: 'model', operator, value: 'x' }])).toEqual([{ key: 'model', operator, value: 'x' }])
+    expect(toLogFilters([{ key: 'model', operator, value: 'x' }])).toEqual([
+      { key: 'model', operator, value: 'x' },
+    ])
   })
 
   it('accepts a well-formed clause', () => {
@@ -621,7 +644,11 @@ describe('toLogFilters', () => {
     ['a primitive entry', ['model'], /must be an object/],
     ['an unfilterable field', [{ key: 'nope', operator: 'eq', value: 'x' }], /not a filterable field/],
     ['a missing key', [{ operator: 'eq', value: 'x' }], /not a filterable field/],
-    ['an unsupported comparison', [{ key: 'model', operator: 'like', value: 'x' }], /not a supported comparison/],
+    [
+      'an unsupported comparison',
+      [{ key: 'model', operator: 'like', value: 'x' }],
+      /not a supported comparison/,
+    ],
     ['a non-string key', [{ key: 7, operator: 'eq', value: 'x' }], /not a filterable field/],
     ['a non-string operator', [{ key: 'model', operator: 7, value: 'x' }], /not a supported comparison/],
     ['a non-string value', [{ key: 'model', operator: 'eq', value: { a: 1 } }], /value must be a string/],
@@ -633,7 +660,11 @@ describe('toLogFilters', () => {
 
   it.each([
     ['a null entry', [null], 'filters[0] must be an object'],
-    ['a bad key', [{ key: 'nope', operator: 'eq', value: 'x' }], 'filters[0].key "nope" is not a filterable field'],
+    [
+      'a bad key',
+      [{ key: 'nope', operator: 'eq', value: 'x' }],
+      'filters[0].key "nope" is not a filterable field',
+    ],
     [
       'a bad operator',
       [{ key: 'model', operator: 'like', value: 'x' }],

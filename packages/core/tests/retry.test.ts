@@ -1,12 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CloudflareError, CloudflareRateLimitError } from '../src/errors.ts'
-import {
-  type RetryPolicy,
-  backoffDelayMs,
-  nextDelayMs,
-  runWithRetry,
-  shouldRetry,
-} from '../src/retry.ts'
+import { type RetryPolicy, backoffDelayMs, nextDelayMs, runWithRetry, shouldRetry } from '../src/retry.ts'
 
 const policy: RetryPolicy = { maxRetries: 3, baseDelayMs: 100, maxDelayMs: 5000 }
 const statusOf = (e: unknown) => (e instanceof CloudflareError ? e.status : 0)

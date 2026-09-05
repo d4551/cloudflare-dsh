@@ -52,7 +52,10 @@ describe('readErrorDetail', () => {
 
   it('reads an OpenAI-style error object', () => {
     expect(
-      readErrorDetail(429, JSON.stringify({ error: { code: 'rate_limit', type: 'requests', message: 'slow' } })),
+      readErrorDetail(
+        429,
+        JSON.stringify({ error: { code: 'rate_limit', type: 'requests', message: 'slow' } }),
+      ),
     ).toBe('HTTP 429 rate_limit requests slow')
   })
 
@@ -253,8 +256,7 @@ describe('stream', () => {
 
   it('raises a classified provider error for a failed response', async () => {
     const { adapter } = makeAdapter(
-      async () =>
-        new Response(JSON.stringify({ error: { message: 'nope' } }), { status: 500 }),
+      async () => new Response(JSON.stringify({ error: { message: 'nope' } }), { status: 500 }),
     )
     await expect(collect(adapter.stream(options()))).rejects.toMatchObject({ code: PROVIDER_ERROR_CODE })
   })
@@ -375,7 +377,9 @@ describe('stream', () => {
   it('rejects an unsupported option before issuing any request', async () => {
     const fetchImpl = vi.fn(async () => sse(STOP))
     const { adapter } = makeAdapter(fetchImpl)
-    await expect(collect(adapter.stream(options({ reasoningEffort: 'high' })))).rejects.toMatchObject({ code: 'UNSUPPORTED_OPTION' })
+    await expect(collect(adapter.stream(options({ reasoningEffort: 'high' })))).rejects.toMatchObject({
+      code: 'UNSUPPORTED_OPTION',
+    })
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 })

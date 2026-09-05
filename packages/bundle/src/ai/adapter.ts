@@ -50,7 +50,10 @@ const PROVIDER_LABELS: Readonly<Record<string, string>> = {
 
 /** Read the error detail a provider returned, tolerating any body shape. */
 export function readErrorDetail(status: number, body: string): string {
-  const read = parseEventData<{ errors?: { code?: number; message?: string }[]; error?: { message?: string; code?: string; type?: string } }>(body)
+  const read = parseEventData<{
+    errors?: { code?: number; message?: string }[]
+    error?: { message?: string; code?: string; type?: string }
+  }>(body)
   if (!read.ok) return joinDetail([`HTTP ${status}`, body])
   const parsed = read.value
   const envelope = parsed.errors
@@ -174,7 +177,10 @@ export class CloudflareAiAdapter extends LlmAdapter {
     )
 
     if (!response.ok) {
-      throw providerError({ status: response.status, detail: readErrorDetail(response.status, await response.text()) })
+      throw providerError({
+        status: response.status,
+        detail: readErrorDetail(response.status, await response.text()),
+      })
     }
     if (response.body === null) throw emptyResponse()
 

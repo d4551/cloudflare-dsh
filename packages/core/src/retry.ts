@@ -38,12 +38,7 @@ export function backoffDelayMs(attempt: number, policy: RetryPolicy, random: num
  * A server-supplied `Retry-After` wins over computed backoff, but is still
  * capped so a hostile or mistaken header cannot stall the agent indefinitely.
  */
-export function nextDelayMs(
-  error: unknown,
-  attempt: number,
-  policy: RetryPolicy,
-  random: number,
-): number {
+export function nextDelayMs(error: unknown, attempt: number, policy: RetryPolicy, random: number): number {
   if (error instanceof CloudflareRateLimitError && error.retryAfterMs !== null) {
     return Math.min(error.retryAfterMs, policy.maxDelayMs)
   }

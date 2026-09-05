@@ -11,401 +11,366 @@ import { envelope, makeHarness } from './harness.ts'
  * purpose: changing one has to be a deliberate edit visible in review.
  */
 const CONTRACT: Record<string, { description: string; parameters: unknown; output: unknown }> = {
-  "cloudflare_ai_model_schema": {
-    description: "Fetch the JSON schema Cloudflare publishes for one Workers AI model, so cloudflare_ai_run can be called with the right input shape.",
+  cloudflare_ai_model_schema: {
+    description:
+      'Fetch the JSON schema Cloudflare publishes for one Workers AI model, so cloudflare_ai_run can be called with the right input shape.',
     parameters: {
-        "type": "object",
-        "properties": {
-          "model": {
-            "type": "string",
-            "description": "Model slug."
-          }
+      type: 'object',
+      properties: {
+        model: {
+          type: 'string',
+          description: 'Model slug.',
         },
-        "required": [
-          "model"
-        ]
       },
+      required: ['model'],
+    },
     output: {
-        "type": "object",
-        "description": "The model\u2019s published JSON schema.",
-        "additionalProperties": true
-      },
+      type: 'object',
+      description: 'The model\u2019s published JSON schema.',
+      additionalProperties: true,
+    },
   },
-  "cloudflare_ai_models_search": {
-    description: "Search the Workers AI model catalogue by name or task.",
+  cloudflare_ai_models_search: {
+    description: 'Search the Workers AI model catalogue by name or task.',
     parameters: {
-        "type": "object",
-        "properties": {
-          "search": {
-            "type": "string",
-            "description": "Substring to match against model names."
-          },
-          "task": {
-            "type": "string",
-            "description": "Task filter, e.g. \"Text Generation\"."
-          },
-          "perPage": {
-            "type": "integer",
-            "description": "Models per page (default 50)."
-          }
-        }
-      },
-    output: {
-        "type": "object",
-        "description": "Matching models.",
-        "additionalProperties": true
-      },
-  },
-  "cloudflare_ai_run": {
-    description: "Run a Workers AI model. The model is a slug such as @cf/meta/llama-3.1-8b-instruct; use cloudflare_ai_models_search to find one and cloudflare_ai_model_schema for its exact input shape.",
-    parameters: {
-        "type": "object",
-        "properties": {
-          "model": {
-            "type": "string",
-            "description": "Model slug, e.g. @cf/meta/llama-3.1-8b-instruct."
-          },
-          "input": {
-            "description": "Model input, matching that model\u2019s schema."
-          }
+      type: 'object',
+      properties: {
+        search: {
+          type: 'string',
+          description: 'Substring to match against model names.',
         },
-        "required": [
-          "model",
-          "input"
-        ]
-      },
-    output: {
-        "type": "object",
-        "description": "The model output.",
-        "additionalProperties": true
-      },
-  },
-  "cloudflare_aigateway_cost": {
-    description: "Read AI Gateway billing: the prepaid credit balance, usage history, or the current invoice preview.",
-    parameters: {
-        "type": "object",
-        "properties": {
-          "view": {
-            "type": "string",
-            "description": "Which billing view to read.",
-            "enum": [
-              "credit-balance",
-              "usage-history",
-              "invoice-preview"
-            ]
-          }
+        task: {
+          type: 'string',
+          description: 'Task filter, e.g. "Text Generation".',
         },
-        "required": [
-          "view"
-        ]
-      },
-    output: {
-        "type": "object",
-        "description": "The requested billing view.",
-        "additionalProperties": true
-      },
-  },
-  "cloudflare_aigateway_get": {
-    description: "Fetch one AI Gateway\u2019s configuration.",
-    parameters: {
-        "type": "object",
-        "properties": {
-          "gatewayId": {
-            "type": "string",
-            "description": "Gateway id."
-          }
+        perPage: {
+          type: 'integer',
+          description: 'Models per page (default 50).',
         },
-        "required": [
-          "gatewayId"
-        ]
       },
+    },
     output: {
-        "type": "object",
-        "description": "The gateway configuration.",
-        "additionalProperties": true
-      },
+      type: 'object',
+      description: 'Matching models.',
+      additionalProperties: true,
+    },
   },
-  "cloudflare_aigateway_list": {
-    description: "List the AI Gateways in the Cloudflare account.",
+  cloudflare_ai_run: {
+    description:
+      'Run a Workers AI model. The model is a slug such as @cf/meta/llama-3.1-8b-instruct; use cloudflare_ai_models_search to find one and cloudflare_ai_model_schema for its exact input shape.',
     parameters: {
-        "type": "object",
-        "properties": {
-          "perPage": {
-            "type": "integer",
-            "description": "Gateways per page (default 50)."
-          }
-        }
-      },
-    output: {
-        "type": "object",
-        "description": "Gateways with their ids and settings.",
-        "additionalProperties": true
-      },
-  },
-  "cloudflare_aigateway_log_body": {
-    description: "Fetch the stored request or response body for one AI Gateway log entry.",
-    parameters: {
-        "type": "object",
-        "properties": {
-          "gatewayId": {
-            "type": "string",
-            "description": "Gateway id."
-          },
-          "logId": {
-            "type": "string",
-            "description": "Log entry id."
-          },
-          "part": {
-            "type": "string",
-            "description": "Which body to fetch.",
-            "enum": [
-              "request",
-              "response"
-            ]
-          }
+      type: 'object',
+      properties: {
+        model: {
+          type: 'string',
+          description: 'Model slug, e.g. @cf/meta/llama-3.1-8b-instruct.',
         },
-        "required": [
-          "gatewayId",
-          "logId",
-          "part"
-        ]
+        input: {
+          description: 'Model input, matching that model\u2019s schema.',
+        },
       },
+      required: ['model', 'input'],
+    },
     output: {
-        "type": "object",
-        "description": "The stored body.",
-        "additionalProperties": true
-      },
+      type: 'object',
+      description: 'The model output.',
+      additionalProperties: true,
+    },
   },
-  "cloudflare_aigateway_logs": {
-    description: "Query AI Gateway request logs. Filter by metadata to isolate one harness session: requests made through the Cloudflare model provider carry the session id in cf-aig-metadata.",
+  cloudflare_aigateway_cost: {
+    description:
+      'Read AI Gateway billing: the prepaid credit balance, usage history, or the current invoice preview.',
     parameters: {
-        "type": "object",
-        "properties": {
-          "gatewayId": {
-            "type": "string",
-            "description": "Gateway id."
-          },
-          "page": {
-            "type": "integer",
-            "description": "1-based page number (default 1)."
-          },
-          "perPage": {
-            "type": "integer",
-            "description": "Log entries per page, 1-50 (default 50)."
-          },
-          "filters": {
-            "type": "array",
-            "description": "Filter clauses. Metadata is filtered as two clauses — {\"key\":\"metadata.key\",\"operator\":\"eq\",\"value\":\"sessionId\"} and {\"key\":\"metadata.value\",\"operator\":\"eq\",\"value\":\"<id>\"} — because the endpoint exposes key and value as separate fields.",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "key": {
-                  "type": "string"
-                },
-                "operator": {
-                  "type": "string"
-                },
-                "value": {
-                  "type": "string"
-                }
+      type: 'object',
+      properties: {
+        view: {
+          type: 'string',
+          description: 'Which billing view to read.',
+          enum: ['credit-balance', 'usage-history', 'invoice-preview'],
+        },
+      },
+      required: ['view'],
+    },
+    output: {
+      type: 'object',
+      description: 'The requested billing view.',
+      additionalProperties: true,
+    },
+  },
+  cloudflare_aigateway_get: {
+    description: 'Fetch one AI Gateway\u2019s configuration.',
+    parameters: {
+      type: 'object',
+      properties: {
+        gatewayId: {
+          type: 'string',
+          description: 'Gateway id.',
+        },
+      },
+      required: ['gatewayId'],
+    },
+    output: {
+      type: 'object',
+      description: 'The gateway configuration.',
+      additionalProperties: true,
+    },
+  },
+  cloudflare_aigateway_list: {
+    description: 'List the AI Gateways in the Cloudflare account.',
+    parameters: {
+      type: 'object',
+      properties: {
+        perPage: {
+          type: 'integer',
+          description: 'Gateways per page (default 50).',
+        },
+      },
+    },
+    output: {
+      type: 'object',
+      description: 'Gateways with their ids and settings.',
+      additionalProperties: true,
+    },
+  },
+  cloudflare_aigateway_log_body: {
+    description: 'Fetch the stored request or response body for one AI Gateway log entry.',
+    parameters: {
+      type: 'object',
+      properties: {
+        gatewayId: {
+          type: 'string',
+          description: 'Gateway id.',
+        },
+        logId: {
+          type: 'string',
+          description: 'Log entry id.',
+        },
+        part: {
+          type: 'string',
+          description: 'Which body to fetch.',
+          enum: ['request', 'response'],
+        },
+      },
+      required: ['gatewayId', 'logId', 'part'],
+    },
+    output: {
+      type: 'object',
+      description: 'The stored body.',
+      additionalProperties: true,
+    },
+  },
+  cloudflare_aigateway_logs: {
+    description:
+      'Query AI Gateway request logs. Filter by metadata to isolate one harness session: requests made through the Cloudflare model provider carry the session id in cf-aig-metadata.',
+    parameters: {
+      type: 'object',
+      properties: {
+        gatewayId: {
+          type: 'string',
+          description: 'Gateway id.',
+        },
+        page: {
+          type: 'integer',
+          description: '1-based page number (default 1).',
+        },
+        perPage: {
+          type: 'integer',
+          description: 'Log entries per page, 1-50 (default 50).',
+        },
+        filters: {
+          type: 'array',
+          description:
+            'Filter clauses. Metadata is filtered as two clauses — {"key":"metadata.key","operator":"eq","value":"sessionId"} and {"key":"metadata.value","operator":"eq","value":"<id>"} — because the endpoint exposes key and value as separate fields.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              key: {
+                type: 'string',
               },
-              "required": [
-                "key",
-                "operator",
-                "value"
-              ]
-            }
-          }
+              operator: {
+                type: 'string',
+              },
+              value: {
+                type: 'string',
+              },
+            },
+            required: ['key', 'operator', 'value'],
+          },
         },
-        "required": [
-          "gatewayId"
-        ]
       },
+      required: ['gatewayId'],
+    },
     output: {
-        "type": "object",
-        "description": "Matching log entries and the page they came from.",
-        "additionalProperties": true
-      },
+      type: 'object',
+      description: 'Matching log entries and the page they came from.',
+      additionalProperties: true,
+    },
   },
-  "cloudflare_aigateway_routes": {
-    description: "List the dynamic routing rules configured on an AI Gateway.",
+  cloudflare_aigateway_routes: {
+    description: 'List the dynamic routing rules configured on an AI Gateway.',
     parameters: {
-        "type": "object",
-        "properties": {
-          "gatewayId": {
-            "type": "string",
-            "description": "Gateway id."
-          }
+      type: 'object',
+      properties: {
+        gatewayId: {
+          type: 'string',
+          description: 'Gateway id.',
         },
-        "required": [
-          "gatewayId"
-        ]
       },
+      required: ['gatewayId'],
+    },
     output: {
-        "type": "object",
-        "description": "Dynamic routes.",
-        "additionalProperties": true
-      },
+      type: 'object',
+      description: 'Dynamic routes.',
+      additionalProperties: true,
+    },
   },
-  "cloudflare_aigateway_session_cost": {
-    description: "Summarise what one harness session cost through AI Gateway, by reading the gateway logs tagged with that session id.",
+  cloudflare_aigateway_session_cost: {
+    description:
+      'Summarise what one harness session cost through AI Gateway, by reading the gateway logs tagged with that session id.',
     parameters: {
-        "type": "object",
-        "properties": {
-          "gatewayId": {
-            "type": "string",
-            "description": "Gateway id."
-          },
-          "sessionId": {
-            "type": "string",
-            "description": "Harness session id."
-          },
-          "perPage": {
-            "type": "integer",
-            "description": "Log entries per page while scanning, 1-50 (default 50)."
-          }
+      type: 'object',
+      properties: {
+        gatewayId: {
+          type: 'string',
+          description: 'Gateway id.',
         },
-        "required": [
-          "gatewayId",
-          "sessionId"
-        ]
-      },
-    output: {
-        "type": "object",
-        "description": "Request count, total cost, tokens, and cache hits for the session.",
-        "additionalProperties": true
-      },
-  },
-  "cloudflare_aisearch_chat": {
-    description: "Ask an AI Search instance a question and get an answer grounded in its indexed content.",
-    parameters: {
-        "type": "object",
-        "properties": {
-          "instanceId": {
-            "type": "string",
-            "description": "AI Search instance id."
-          },
-          "query": {
-            "type": "string",
-            "description": "Question to answer."
-          },
-          "model": {
-            "type": "string",
-            "description": "Override the generating model."
-          }
+        sessionId: {
+          type: 'string',
+          description: 'Harness session id.',
         },
-        "required": [
-          "instanceId",
-          "query"
-        ]
-      },
-    output: {
-        "type": "object",
-        "description": "The grounded completion.",
-        "additionalProperties": true
-      },
-  },
-  "cloudflare_aisearch_search": {
-    description: "Search an AI Search instance (formerly AutoRAG) and return the matching chunks, without generating an answer.",
-    parameters: {
-        "type": "object",
-        "properties": {
-          "instanceId": {
-            "type": "string",
-            "description": "AI Search instance id."
-          },
-          "query": {
-            "type": "string",
-            "description": "Search query."
-          },
-          "maxResults": {
-            "type": "integer",
-            "description": "Maximum chunks to return (default 10)."
-          }
+        perPage: {
+          type: 'integer',
+          description: 'Log entries per page while scanning, 1-50 (default 50).',
         },
-        "required": [
-          "instanceId",
-          "query"
-        ]
       },
+      required: ['gatewayId', 'sessionId'],
+    },
     output: {
-        "type": "object",
-        "description": "Matching chunks.",
-        "additionalProperties": true
-      },
+      type: 'object',
+      description: 'Request count, total cost, tokens, and cache hits for the session.',
+      additionalProperties: true,
+    },
   },
-  "cloudflare_aisearch_sync": {
-    description: "Trigger an indexing job for an AI Search instance so new source content is picked up.",
+  cloudflare_aisearch_chat: {
+    description: 'Ask an AI Search instance a question and get an answer grounded in its indexed content.',
     parameters: {
-        "type": "object",
-        "properties": {
-          "instanceId": {
-            "type": "string",
-            "description": "AI Search instance id."
-          }
+      type: 'object',
+      properties: {
+        instanceId: {
+          type: 'string',
+          description: 'AI Search instance id.',
         },
-        "required": [
-          "instanceId"
-        ]
-      },
-    output: {
-        "type": "object",
-        "description": "The created sync job.",
-        "additionalProperties": true
-      },
-  },
-  "cloudflare_vectorize_index_list": {
-    description: "List the Vectorize indexes in the Cloudflare account.",
-    parameters: {
-        "type": "object",
-        "properties": {}
-      },
-    output: {
-        "type": "object",
-        "description": "Vectorize indexes.",
-        "additionalProperties": true
-      },
-  },
-  "cloudflare_vectorize_query": {
-    description: "Query a Vectorize index by vector and return the nearest matches.",
-    parameters: {
-        "type": "object",
-        "properties": {
-          "indexName": {
-            "type": "string",
-            "description": "Index name."
-          },
-          "vector": {
-            "type": "array",
-            "description": "Query vector.",
-            "items": {
-              "type": "number"
-            }
-          },
-          "topK": {
-            "type": "integer",
-            "description": "How many matches to return (default 5)."
-          },
-          "returnValues": {
-            "type": "boolean",
-            "description": "Include stored vectors in the response."
-          },
-          "returnMetadata": {
-            "type": "boolean",
-            "description": "Include stored metadata in the response."
-          }
+        query: {
+          type: 'string',
+          description: 'Question to answer.',
         },
-        "required": [
-          "indexName",
-          "vector"
-        ]
+        model: {
+          type: 'string',
+          description: 'Override the generating model.',
+        },
       },
+      required: ['instanceId', 'query'],
+    },
     output: {
-        "type": "object",
-        "description": "Nearest matches.",
-        "additionalProperties": true
+      type: 'object',
+      description: 'The grounded completion.',
+      additionalProperties: true,
+    },
+  },
+  cloudflare_aisearch_search: {
+    description:
+      'Search an AI Search instance (formerly AutoRAG) and return the matching chunks, without generating an answer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        instanceId: {
+          type: 'string',
+          description: 'AI Search instance id.',
+        },
+        query: {
+          type: 'string',
+          description: 'Search query.',
+        },
+        maxResults: {
+          type: 'integer',
+          description: 'Maximum chunks to return (default 10).',
+        },
       },
+      required: ['instanceId', 'query'],
+    },
+    output: {
+      type: 'object',
+      description: 'Matching chunks.',
+      additionalProperties: true,
+    },
+  },
+  cloudflare_aisearch_sync: {
+    description: 'Trigger an indexing job for an AI Search instance so new source content is picked up.',
+    parameters: {
+      type: 'object',
+      properties: {
+        instanceId: {
+          type: 'string',
+          description: 'AI Search instance id.',
+        },
+      },
+      required: ['instanceId'],
+    },
+    output: {
+      type: 'object',
+      description: 'The created sync job.',
+      additionalProperties: true,
+    },
+  },
+  cloudflare_vectorize_index_list: {
+    description: 'List the Vectorize indexes in the Cloudflare account.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+    output: {
+      type: 'object',
+      description: 'Vectorize indexes.',
+      additionalProperties: true,
+    },
+  },
+  cloudflare_vectorize_query: {
+    description: 'Query a Vectorize index by vector and return the nearest matches.',
+    parameters: {
+      type: 'object',
+      properties: {
+        indexName: {
+          type: 'string',
+          description: 'Index name.',
+        },
+        vector: {
+          type: 'array',
+          description: 'Query vector.',
+          items: {
+            type: 'number',
+          },
+        },
+        topK: {
+          type: 'integer',
+          description: 'How many matches to return (default 5).',
+        },
+        returnValues: {
+          type: 'boolean',
+          description: 'Include stored vectors in the response.',
+        },
+        returnMetadata: {
+          type: 'boolean',
+          description: 'Include stored metadata in the response.',
+        },
+      },
+      required: ['indexName', 'vector'],
+    },
+    output: {
+      type: 'object',
+      description: 'Nearest matches.',
+      additionalProperties: true,
+    },
   },
 }
 

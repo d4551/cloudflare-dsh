@@ -24,15 +24,13 @@ describe('SettingsCard', () => {
     expect(screen.getByRole('region', { name: 'Cloudflare' })).toBeInstanceOf(HTMLElement)
   })
 
-  it.each([
-    'API token reference',
-    'API token',
-    'Account ID',
-    'AI Gateway ID',
-  ])('gives %s a programmatic label', (label) => {
-    setup()
-    expect(screen.getByLabelText(label)).toBeInstanceOf(HTMLElement)
-  })
+  it.each(['API token reference', 'API token', 'Account ID', 'AI Gateway ID'])(
+    'gives %s a programmatic label',
+    (label) => {
+      setup()
+      expect(screen.getByLabelText(label)).toBeInstanceOf(HTMLElement)
+    },
+  )
 
   it('keeps the token field write-only', () => {
     setup()
@@ -75,7 +73,10 @@ describe('SettingsCard', () => {
   })
 
   it.each([
-    ['API token reference', 'The environment variable name holding the token, for example CLOUDFLARE_API_TOKEN.'],
+    [
+      'API token reference',
+      'The environment variable name holding the token, for example CLOUDFLARE_API_TOKEN.',
+    ],
     ['AI Gateway ID', 'Required to route the harness\u2019s own model calls through a gateway.'],
   ])('describes the %s field with the hint a user needs', (label, hint) => {
     const { container } = setup()
@@ -96,7 +97,10 @@ describe('SettingsCard', () => {
     const ids = described?.split(' ') ?? []
     expect(ids).toHaveLength(2)
     const texts = ids.map((id) => container.ownerDocument.getElementById(id)?.textContent)
-    expect(texts).toEqual(['Write-only. Leave blank to keep the stored value.', 'A token is stored for this reference.'])
+    expect(texts).toEqual([
+      'Write-only. Leave blank to keep the stored value.',
+      'A token is stored for this reference.',
+    ])
   })
 
   // Without preventDefault the form would navigate, losing the page.
