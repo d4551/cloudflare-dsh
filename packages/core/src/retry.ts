@@ -68,18 +68,17 @@ export async function runWithRetry<T>(
   policy: RetryPolicy,
   deps: RetryDeps,
 ): Promise<T> {
-  // `shouldRetry` is the sole authority on the budget. Bounding the loop as
-  // well would duplicate that decision, and the two copies could disagree.
-  for (let i = 0; ; i += 1) {
+  // Recursive rather than iterative, so one attempt is one `await` in one call.
+  // `shouldRetry` stays the sole authority on the budget: there is no second
+  // bound here that could disagree with it.
+  const runAttempt = async (index: number): Promise<T> => {
     try {
-      // Attempts are sequential by definition: each one depends on the
-      // previous having failed, so these awaits cannot be batched.
-      // eslint-disable-next-line no-await-in-loop
-      return await attempt(i)
+      return await attempt(index)
     } catch (error) {
-      if (!shouldRetry(statusOf(error), i, policy)) throw error
-      // eslint-disable-next-line no-await-in-loop
-      await deps.sleep(nextDelayMs(error, i, policy, deps.random()))
+      if (!shouldRetry(statusOf(error), index, policy)) throw error
+      await deps.sleep(nextDelayMs(error, index, policy, deps.random()))
+      return runAttempt(index + 1)
     }
   }
+  return runAttempt(0)
 }

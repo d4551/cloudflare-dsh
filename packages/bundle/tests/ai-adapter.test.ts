@@ -197,6 +197,37 @@ describe('stream', () => {
     expect(texts).toEqual(['hi'])
   })
 
+  it('delivers a final event the provider left without a trailing newline', async () => {
+    // Only the end-of-transport flush can produce this event, and only a real
+    // wire finish reason distinguishes it: a stream that simply stops also
+    // finishes, but as 'stop'.
+    const length = JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })
+    const { adapter } = makeAdapter(
+      async () => new Response(`data: ${TEXT}\n\ndata: ${length}`, { status: 200 }),
+    )
+    const chunks = await collect(adapter.stream(options()))
+    expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'max-tokens' } })
+  })
+
+  it('stops reading at [DONE] even while the provider holds the connection open', async () => {
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${TEXT}\n\ndata: [DONE]\n\n`))
+        // Deliberately never closed: the sentinel, not the socket, ends the turn.
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const { adapter } = makeAdapter(async () => new Response(body, { status: 200 }), {
+      streamIdleTimeoutMs: 50,
+    })
+    const chunks = await collect(adapter.stream(options()))
+    expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
+    expect(cancelled).toBe(true)
+  })
+
   it('closes a stream that ends without a finish reason', async () => {
     const { adapter } = makeAdapter(async () => sse(TEXT))
     const chunks = await collect(adapter.stream(options()))

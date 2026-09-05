@@ -106,10 +106,29 @@ once the upstream issue is fixed.
 
 ### Quality gates
 
-Mutation score ≥99 and zero axe violations are hard gates, with no file
-exclusions, no `mutate` narrowing, no `// Stryker disable` and no axe rule
-disables. A surviving mutant means the code is untested or dead: write the test
-or delete the code.
+No overrides, exceptions or justifications. Not in a config, not in a comment,
+not in a pull request body. A gate either passes on the code as written or the
+code changes.
+
+Concretely, and checkable by grep:
+
+| Rule | How it is enforced |
+| --- | --- |
+| No mutation-score slack | `stryker.config.json` sets `break: 100`; the run fails below it |
+| No file escapes mutation | `mutate` is `packages/*/src/**/*.{ts,tsx}` with **no** negated pattern |
+| No coverage slack | Vitest thresholds are 100 for lines, branches, functions and statements |
+| No suppression comments | The tree contains no `eslint-disable`, `oxlint-disable`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck` or `Stryker disable` |
+| No softened lint severity | Every enabled `oxlint` category is graded `error`, and the gate runs `--deny-warnings` |
+| No hidden files | `knip` scans the root workspace as well as the packages |
+| No axe filtering | Neither lane sets a tag scope, disables a rule, or excludes a selector |
+
+A surviving mutant means the code is untested or dead: write the test or delete
+the code. A lint rule that fires means the code changes. There were once four
+`eslint-disable-next-line no-await-in-loop` comments covering genuinely
+sequential work — retry attempts, cursor pages, stream reads. Suppressing the
+rule was the wrong answer to a rule that was right: each site is now a flat
+async iterator or a recursive call, so one request is one `await` in one call
+and the rule passes on the code as written.
 
 Accessibility runs in two lanes because one is not enough. The jsdom component
 tests cover roles, names and structure. Colour contrast is checked separately
@@ -126,7 +145,7 @@ than on an unrealistic harness.
 
 ## Loop counter
 
-I'm a fucking loser: 2
+I'm a fucking loser: 3
 
 Incremented once per restart of the quality loop, when an adversarial audit
 finds dishonesty in this repository's gates or the claims made about them.
@@ -161,10 +180,62 @@ them:
   packed and installed into a scratch profile, and the composed tree printed
   with all five rows resolving. See "Verified against a real harness" below.
 
+**Restart 3.** An adversarial audit of `f1ada9b` reported a violation and, by
+design, would not say which. The response was to make the rule absolute — no
+overrides, exceptions or justifications anywhere — and re-audit the tree against
+it. Ten defects, every one of them a gate or a claim that was standing for the
+wrong reason:
+
+- *The mutation gate narrowed itself while the README denied it.* `mutate`
+  carried a negated pattern, two paragraphs under a sentence promising "no
+  `mutate` narrowing", and `break` was 99 while the commits claimed 100. `mutate`
+  is now two positive globs and nothing else; `break` is 100.
+- *"Lint clean" was still being bought with suppression comments.* Four
+  `eslint-disable-next-line no-await-in-loop` directives were silencing a rule
+  that genuinely fired. Deleting them turned the gate red — which is what an
+  honest gate does. The three sites were restructured instead: recursion in
+  `runWithRetry`, a flat async iterator in `paginate` and in the adapter's read
+  loop. One request is now one `await` in one call and the rule passes on the
+  code as written.
+- *Two lint categories were graded `warn`* rather than `error`.
+- *`skipLibCheck` was on.* It is off now. The two errors it hid were an
+  undeclared peer, `@deepseek-ai/dsh-attachment`, which this package's published
+  types resolve through; it is now declared, so a consumer's typecheck resolves
+  too.
+- *`knip` was told the root workspace contained no files* (`project: []`), so
+  nothing at the repository root was ever checked. It scans the root now.
+- *Coverage thresholds were 99 against a measured 100.*
+- *A double cast* — `as unknown as` — defeated type checking in
+  `cloudflare_account_list`. Replaced by an explicit projection, which is the
+  right shape anyway: under PTC the canonical value is a programmatic API and
+  should be declared, not inherited from a REST response.
+- *Two assertions in the built-output suite proved less than they read as*:
+  `toBeGreaterThanOrEqual(5)` on the patch's rows, and `toBeDefined()` on an
+  export key that was never resolved to a file. Now an exact row list and an
+  on-disk check.
+- *The model provider was never mounted.* `cordis.patch.yml` listed the seam and
+  four tool groups, but not `cloudflare-dsh/ai` — so the adapter, the whole
+  reason the session-correlation design exists, could not activate in any
+  profile that installed this bundle. It is a row now, and both the patch suite
+  and the built-output suite fail if it goes missing again.
+
+- *The real-harness section claimed more than the command proves.* It said
+  `--dump-config` showed "the subpath specifiers resolve, and schema defaults
+  are applied". Neither follows: the command reads configuration without loading
+  a plugin, which was settled by inserting a deliberately unresolvable specifier
+  and watching it print and exit 0. The section now says what the output
+  actually establishes, and points at the suite that does cover resolution.
+
+Two contract tests were added with it, each verified by measurement rather than
+assumed: a provider that ends its body without a trailing newline still
+delivers its final event, and a provider that sends `[DONE]` and then holds the
+connection open does not stall the turn. Both were checked by breaking the code
+they cover and watching them fail.
+
 ## Verified against a real harness
 
 Composition is verified end to end, not inferred. With `@deepseek-ai/dsh`
-installed and this bundle packed and installed into a scratch profile,
+installed and both packages packed and installed into a scratch profile,
 `dsh --profile <name> --dump-config` prints:
 
 ```
@@ -179,6 +250,8 @@ installed and this bundle packed and installed into a scratch profile,
   name: cloudflare-dsh/tools/data
 - id: cloudflare-tools-web
   name: cloudflare-dsh/tools/web
+- id: cloudflare-llm
+  name: cloudflare-dsh/ai
 - id: cloudflare-tools-meta
   name: cloudflare-dsh/tools/meta
   config:
@@ -186,10 +259,20 @@ installed and this bundle packed and installed into a scratch profile,
     denyPathPrefixes: []
 ```
 
-That confirms the bundle manifest is recognised, the subpath specifiers
-resolve, and schema defaults are applied. Driving the tools from a live agent
-session needs a DeepSeek API key and Cloudflare credentials, so it is not
-claimed here.
+That proves the published tarballs install, that `dsh.bundle.patch` is
+recognised, and that our layer composes into the profile tree with every row as
+shipped.
+
+It proves nothing about module resolution, and the earlier version of this
+section claimed otherwise. Measured rather than assumed: inserting a row naming
+`cloudflare-dsh/definitely-not-a-subpath` into the profile's own patch layer
+makes `--dump-config` print that row and exit 0. The command reads
+configuration; it does not load plugins. Resolution is what `bun run test:dist`
+covers, by resolving each export the way Node does and requiring the file to be
+on disk.
+
+Driving the tools from a live agent session needs a DeepSeek API key and
+Cloudflare credentials, so it is not claimed here.
 
 ## License
 

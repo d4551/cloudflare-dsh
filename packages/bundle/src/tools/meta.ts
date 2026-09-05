@@ -50,7 +50,10 @@ export function apply(ctx: Context, config: MetaConfig): void {
       isConcurrencySafe: () => true,
       async execute() {
         const accounts = await cf.listAccounts()
-        return { accounts: accounts as unknown as JsonValue[] }
+        // Projected field by field rather than cast: the canonical value is a
+        // programmatic API under PTC, so it is declared here, not inherited
+        // from whatever the REST response happened to carry.
+        return { accounts: accounts.map((account) => ({ id: account.id, name: account.name })) }
       },
     }),
   )

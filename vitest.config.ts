@@ -20,7 +20,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['packages/*/src/**/*.ts', 'packages/*/src/**/*.tsx'],
-      thresholds: { lines: 99, branches: 99, functions: 99, statements: 99 },
+      thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },
 })

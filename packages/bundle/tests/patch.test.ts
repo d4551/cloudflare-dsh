@@ -44,6 +44,10 @@ describe('cordis.patch.yml', () => {
     }
   })
 
+  it('mounts the model provider, without which the adapter never activates', () => {
+    expect(patch).toContain("name: 'cloudflare-dsh/ai'")
+  })
+
   it('names the credential by reference rather than embedding a secret', () => {
     expect(patch).toContain('apiTokenRef: CLOUDFLARE_API_TOKEN')
     expect(patch).not.toMatch(/apiToken:\s*\S/)

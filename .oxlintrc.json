@@ -1,7 +1,25 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc"],
-  "categories": { "correctness": "error", "suspicious": "warn", "perf": "warn" },
-  "env": { "es2024": true, "node": true },
-  "ignorePatterns": ["node_modules", "lib", "dist", "coverage", "reports", ".stryker-tmp"]
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "env": {
+    "es2024": true,
+    "node": true
+  },
+  "ignorePatterns": [
+    "node_modules",
+    "lib",
+    "dist",
+    "coverage",
+    "reports",
+    ".stryker-tmp"
+  ]
 }

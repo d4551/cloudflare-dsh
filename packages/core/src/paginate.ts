@@ -56,11 +56,25 @@ export async function* paginate<T>(
 ): AsyncGenerator<T, void, undefined> {
   let query: NextPageQuery = initialQuery
   let seen = 0
-  for (let page = 0; page < maxPages && query !== null; page += 1) {
-    // Each page's query is derived from the previous page's response, so the
-    // walk is inherently sequential and cannot be parallelised.
-    // eslint-disable-next-line no-await-in-loop
-    const envelope = await fetchPage(query)
+  let page = 0
+
+  // The walk is expressed as an async iterator rather than an awaiting loop so
+  // that each request is one `await` in one call, and the outer `for await`
+  // stays flat: page depth costs nothing, however many pages a walk covers.
+  // `query` is shared with the loop below, which is what lets the stepper see
+  // the running count *after* a page's items have been yielded.
+  const pages: AsyncIterable<CloudflareEnvelope<readonly T[]>> = {
+    [Symbol.asyncIterator]: () => ({
+      async next() {
+        const current = query
+        if (page >= maxPages || current === null) return { done: true as const, value: undefined }
+        page += 1
+        return { done: false as const, value: await fetchPage(current) }
+      },
+    }),
+  }
+
+  for await (const envelope of pages) {
     for (const item of envelope.result) {
       seen += 1
       yield item

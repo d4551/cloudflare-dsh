@@ -17,7 +17,7 @@ import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, StreamChunk } from
 import { emptyResponse, idleTimeout, joinDetail, providerError } from './errors.ts'
 import { type GatewayHeaderOptions, buildGatewayHeaders } from './headers.ts'
 import { buildWireRequest } from './request.ts'
-import { SseDecoder, parseEventData } from './sse.ts'
+import { SseDecoder, type SseEvent, parseEventData } from './sse.ts'
 import { StreamTransducer, type WireChunk } from './transducer.ts'
 
 /** Where and how to reach the provider for one call. */
@@ -84,6 +84,44 @@ async function withIdleTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   }
 }
 
+/**
+ * The response body as a flat stream of SSE events.
+ *
+ * A read is one `await` in one call rather than an await inside a loop: the
+ * iterator hands out the events already decoded, refilling by recursion when a
+ * read produced none (a partial line, or a keep-alive comment). The generator
+ * consuming this therefore has a single loop, whose body holds nothing but the
+ * chunk contract.
+ *
+ * `decoder.end()` flushes whatever the last read left buffered, so a provider
+ * that omits the trailing blank line still delivers its final event.
+ */
+function readEvents(
+  reader: ReadableStreamDefaultReader<string>,
+  decoder: SseDecoder,
+  idleTimeoutMs: number,
+): AsyncIterable<SseEvent> {
+  // Undefined rather than an empty batch: "nothing decoded yet" and "this read
+  // decoded nothing" are the same state, and giving it one representation
+  // leaves no unobservable initial value behind.
+  let pending: SseEvent[] | undefined
+  let ended = false
+
+  return {
+    [Symbol.asyncIterator]: () => ({
+      async next(): Promise<IteratorResult<SseEvent, undefined>> {
+        const buffered = pending?.shift()
+        if (buffered !== undefined) return { done: false, value: buffered }
+        if (ended) return { done: true, value: undefined }
+        const { done, value } = await withIdleTimeout(reader.read(), idleTimeoutMs)
+        pending = done === true ? decoder.end() : decoder.push(value)
+        ended = done === true
+        return this.next()
+      },
+    }),
+  }
+}
+
 export class CloudflareAiAdapter extends LlmAdapter {
   private readonly deps: CloudflareAiAdapterDeps
 
@@ -143,28 +181,21 @@ export class CloudflareAiAdapter extends LlmAdapter {
     const decoder = new SseDecoder()
     const transducer = new StreamTransducer()
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+    const events = readEvents(reader, decoder, this.deps.streamIdleTimeoutMs)
     let produced = false
 
     try {
-      for (;;) {
-        // Sequential by nature: each read depends on the previous completing.
-        // eslint-disable-next-line no-await-in-loop
-        const { done, value } = await withIdleTimeout(reader.read(), this.deps.streamIdleTimeoutMs)
-        const events = done ? decoder.end() : decoder.push(value)
-
-        for (const event of events) {
-          if (event.kind === 'done') {
-            yield* transducer.end()
-            return
-          }
-          const read = parseEventData<WireChunk>(event.data)
-          if (!read.ok) continue
-          for (const chunk of transducer.push(read.value)) {
-            produced = true
-            yield chunk
-          }
+      for await (const event of events) {
+        if (event.kind === 'done') {
+          yield* transducer.end()
+          return
         }
-        if (done) break
+        const read = parseEventData<WireChunk>(event.data)
+        if (!read.ok) continue
+        for (const chunk of transducer.push(read.value)) {
+          produced = true
+          yield chunk
+        }
       }
     } finally {
       // Cancel rather than merely release the lock: when a consumer abandons

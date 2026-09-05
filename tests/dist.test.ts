@@ -98,8 +98,15 @@ describe('cordis.patch.yml', () => {
   /** Every module specifier the patch asks the loader to resolve. */
   const specifiers = [...patch.matchAll(/name:\s*'([^']+)'/g)].map((m) => m[1]!)
 
-  it('names at least the seam and every tool group', () => {
-    expect(specifiers.length).toBeGreaterThanOrEqual(5)
+  it('names exactly the seam, the model provider and the four tool groups', () => {
+    expect(specifiers).toEqual([
+      '@d4551/dsh-cloudflare-core',
+      'cloudflare-dsh/tools/ai',
+      'cloudflare-dsh/tools/data',
+      'cloudflare-dsh/tools/web',
+      'cloudflare-dsh/ai',
+      'cloudflare-dsh/tools/meta',
+    ])
   })
 
   it.each([
@@ -107,10 +114,13 @@ describe('cordis.patch.yml', () => {
     'cloudflare-dsh/tools/data',
     'cloudflare-dsh/tools/web',
     'cloudflare-dsh/tools/meta',
+    'cloudflare-dsh/ai',
   ])('%s is a subpath the bundle actually exports', (specifier) => {
     expect(specifiers).toContain(specifier)
     const subpath = specifier.replace('cloudflare-dsh', '.')
-    expect(manifest('bundle').exports[subpath]).toBeDefined()
+    // A declared subpath proves nothing on its own: resolve it the way Node
+    // would and require the file to be on disk.
+    expect(existsSync(resolveExport('bundle', subpath))).toBe(true)
   })
 
   it('names the core package by the name it publishes under', () => {

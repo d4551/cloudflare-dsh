@@ -3,9 +3,13 @@
   "workspaces": {
     ".": {
       "entry": [
-        "stryker.config.json"
+        "stryker.config.json",
+        "tests/**/*.test.ts"
       ],
-      "project": []
+      "project": [
+        "*.ts",
+        "tests/**/*.ts"
+      ]
     },
     "packages/core": {
       "project": [
