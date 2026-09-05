@@ -78,7 +78,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
   },
   cloudflare_ai_run: {
     description:
-      'Run a Workers AI model. The model is a slug such as @cf/meta/llama-3.1-8b-instruct; use cloudflare_ai_models_search to find one and cloudflare_ai_model_schema for its exact input shape.',
+      'Run a Workers AI model and return its complete response. The model is a slug such as @cf/meta/llama-3.1-8b-instruct; use cloudflare_ai_models_search to find one and cloudflare_ai_model_schema for its exact input shape. Streaming belongs to the cloudflare-workers-ai model provider, so an input with stream: true is refused.',
     parameters: {
       type: 'object',
       properties: {

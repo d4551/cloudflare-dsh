@@ -58,6 +58,16 @@ export interface AiToolsConfig {
   inferenceTimeoutMs: number
 }
 
+/** Raised when cloudflare_ai_run is asked to stream, which its single JSON response cannot carry. */
+export class AiRunStreamError extends TypeError {
+  override readonly name = 'AiRunStreamError'
+  constructor() {
+    super(
+      'cloudflare_ai_run returns one complete response; a streamed completion comes from the cloudflare-workers-ai model provider instead',
+    )
+  }
+}
+
 export const Config: Schema<Partial<AiToolsConfig>, AiToolsConfig> = Schema.object({
   pageSize: Schema.natural().min(1).default(50),
   searchMaxResults: Schema.natural().min(1).default(10),
@@ -72,7 +82,7 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
     defineTool({
       name: 'cloudflare_ai_run',
       description:
-        'Run a Workers AI model. The model is a slug such as @cf/meta/llama-3.1-8b-instruct; use cloudflare_ai_models_search to find one and cloudflare_ai_model_schema for its exact input shape.',
+        'Run a Workers AI model and return its complete response. The model is a slug such as @cf/meta/llama-3.1-8b-instruct; use cloudflare_ai_models_search to find one and cloudflare_ai_model_schema for its exact input shape. Streaming belongs to the cloudflare-workers-ai model provider, so an input with stream: true is refused.',
       parameters: {
         model: {
           type: 'string',
@@ -99,6 +109,9 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       },
       timeoutMs: config.inferenceTimeoutMs,
       async execute(args, exec) {
+        // A streamed response is SSE, not the envelope this tool reads; refusing
+        // it names the alternative instead of failing on the body shape.
+        if (isObject(args.input) && args.input.stream === true) throw new AiRunStreamError()
         const output = await cf.accountRequest<JsonValue>({
           ...aiRunSpec(args.model, args.input),
           signal: exec.signal,

@@ -42,11 +42,6 @@ export function kvListKeysSpec(
   }
 }
 
-/** Delete one key. */
-export function kvDeleteSpec(namespaceId: string, key: string): RequestSpec {
-  return { method: 'DELETE', path: kvValuePath(namespaceId, key) }
-}
-
 /** Bulk write. Cloudflare accepts up to 10 000 pairs per call. */
 export function kvBulkPutSpec(
   namespaceId: string,

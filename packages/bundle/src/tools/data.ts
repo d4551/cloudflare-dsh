@@ -14,7 +14,6 @@ import {
   d1QuerySpec,
   kvBulkDeleteSpec,
   kvBulkPutSpec,
-  kvDeleteSpec,
   kvListKeysSpec,
   kvNamespaceListSpec,
   kvValuePath,
@@ -26,7 +25,7 @@ import {
   r2BucketListSpec,
 } from '../specs/data.ts'
 import type { JsonValue } from './_shared/json.ts'
-import { json, listing, text, truncate } from './_shared/render.ts'
+import { json, listing, plural, text, truncate } from './_shared/render.ts'
 
 /** Context shape these tools require. */
 interface CloudflareContext extends Context {
@@ -49,6 +48,17 @@ export interface DataToolsConfig {
   queueBatchSize: number
   /** Default time pulled messages stay invisible to other consumers. */
   queueVisibilityTimeoutMs: number
+}
+
+/** What the KV bulk endpoints report back: the count they accepted and the keys they did not. */
+interface KvBulkOutcome {
+  readonly successful_key_count: number
+  readonly unsuccessful_keys: string[]
+}
+
+/** The keys a bulk operation could not apply, for the rendered summary. */
+function failedNote(keys: readonly string[]): string {
+  return keys.length === 0 ? '' : ` ${plural(keys.length, 'key')} failed: ${keys.join(', ')}.`
 }
 
 /** Raised when a bulk operation names nothing: the request would do nothing and report success. */
@@ -219,21 +229,30 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'How many pairs were written.',
+          description: 'How many pairs were written, and which were not.',
           properties: {
-            written: { type: 'integer', required: true, description: 'Key/value pairs written.' },
+            written: { type: 'integer', required: true, description: 'Key/value pairs the API wrote.' },
+            failed: {
+              type: 'array',
+              required: true,
+              description: 'Keys the API reported as not written.',
+              items: { type: 'string' },
+            },
           },
         },
-        render: (_args, value) => text(`Wrote ${value.written} key/value pairs.`),
+        render: (_args, value) =>
+          text(`Wrote ${plural(value.written, 'key/value pair')}.${failedNote(value.failed)}`),
       },
       async execute(args, exec) {
         const entries = args.entries
         if (entries.length === 0) throw new EmptyBatchError('entries')
-        await cf.accountRequest<JsonValue>({
+        // The count comes from the API, which reports the keys it did not
+        // write, rather than from the size of the request.
+        const outcome = await cf.accountRequest<KvBulkOutcome>({
           ...kvBulkPutSpec(args.namespaceId, entries),
           signal: exec.signal,
         })
-        return { written: entries.length }
+        return { written: outcome.successful_key_count, failed: outcome.unsuccessful_keys }
       },
     }),
   )
@@ -255,20 +274,29 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'How many keys were deleted.',
-          properties: { deleted: { type: 'integer', required: true, description: 'Keys deleted.' } },
+          description: 'How many keys were deleted, and which were not.',
+          properties: {
+            deleted: { type: 'integer', required: true, description: 'Keys the API deleted.' },
+            failed: {
+              type: 'array',
+              required: true,
+              description: 'Keys the API reported as not deleted.',
+              items: { type: 'string' },
+            },
+          },
         },
-        render: (_args, value) => text(`Deleted ${value.deleted} keys.`),
+        render: (_args, value) => text(`Deleted ${plural(value.deleted, 'key')}.${failedNote(value.failed)}`),
       },
       async execute(args, exec) {
         const keys = args.keys
         if (keys.length === 0) throw new EmptyBatchError('keys')
-        const spec =
-          keys.length === 1
-            ? kvDeleteSpec(args.namespaceId, keys[0]!)
-            : kvBulkDeleteSpec(args.namespaceId, keys)
-        await cf.accountRequest<JsonValue>({ ...spec, signal: exec.signal })
-        return { deleted: keys.length }
+        // Always the bulk endpoint, even for one key: it is the one that reports
+        // which keys it did and did not delete.
+        const outcome = await cf.accountRequest<KvBulkOutcome>({
+          ...kvBulkDeleteSpec(args.namespaceId, keys),
+          signal: exec.signal,
+        })
+        return { deleted: outcome.successful_key_count, failed: outcome.unsuccessful_keys }
       },
     }),
   )

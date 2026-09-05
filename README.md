@@ -383,19 +383,19 @@ profile takes only the groups it wants.
 
 ### AI — `cloudflare-dsh/tools/ai` (15)
 
-| Tool                                             | Purpose                                        |
-| ------------------------------------------------ | ---------------------------------------------- |
-| `cloudflare_ai_run`                              | Run any Workers AI model                       |
-| `cloudflare_ai_models_search`                    | Search the model catalogue                     |
-| `cloudflare_ai_model_schema`                     | Fetch a model's live JSON schema               |
-| `cloudflare_aigateway_list` / `_get`             | Enumerate and inspect gateways                 |
-| `cloudflare_aigateway_logs`                      | Page gateway request logs                      |
-| `cloudflare_aigateway_log_body`                  | Fetch a logged request or response body        |
-| `cloudflare_aigateway_routes`                    | Dynamic routing configuration                  |
-| `cloudflare_aigateway_cost`                      | Credit balance, usage history, invoice preview |
-| `cloudflare_aigateway_session_cost`              | Usage and cost for one harness session         |
-| `cloudflare_aisearch_search` / `_chat` / `_sync` | AI Search query, chat completion, index sync   |
-| `cloudflare_vectorize_index_list` / `_query`     | Vector index listing and similarity query      |
+| Tool                                             | Purpose                                         |
+| ------------------------------------------------ | ----------------------------------------------- |
+| `cloudflare_ai_run`                              | Run any Workers AI model, one complete response |
+| `cloudflare_ai_models_search`                    | Search the model catalogue                      |
+| `cloudflare_ai_model_schema`                     | Fetch a model's live JSON schema                |
+| `cloudflare_aigateway_list` / `_get`             | Enumerate and inspect gateways                  |
+| `cloudflare_aigateway_logs`                      | Page gateway request logs                       |
+| `cloudflare_aigateway_log_body`                  | Fetch a logged request or response body         |
+| `cloudflare_aigateway_routes`                    | Dynamic routing configuration                   |
+| `cloudflare_aigateway_cost`                      | Credit balance, usage history, invoice preview  |
+| `cloudflare_aigateway_session_cost`              | Usage and cost for one harness session          |
+| `cloudflare_aisearch_search` / `_chat` / `_sync` | AI Search query, chat completion, index sync    |
+| `cloudflare_vectorize_index_list` / `_query`     | Vector index listing and similarity query       |
 
 ### Data — `cloudflare-dsh/tools/data` (13)
 

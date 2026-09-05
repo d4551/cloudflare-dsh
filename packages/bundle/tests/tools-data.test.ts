@@ -189,25 +189,54 @@ describe('cloudflare_kv_put', () => {
     expect(h.requests).toHaveLength(0)
   })
 
-  it('writes pairs through the bulk endpoint and reports the count', async () => {
-    const h = makeHarness(dataTools, async () => envelope(null))
+  it('writes pairs through the bulk endpoint and reports what the API accepted', async () => {
+    const h = makeHarness(dataTools, async () => envelope({ successful_key_count: 1, unsuccessful_keys: [] }))
     await expect(
       h.run('cloudflare_kv_put', { namespaceId: 'n1', entries: [{ key: 'a', value: '1' }] }),
-    ).resolves.toEqual({ written: 1 })
+    ).resolves.toEqual({ written: 1, failed: [] })
     expect(h.requests[0]!.method).toBe('PUT')
     expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/storage/kv/namespaces/n1/bulk')
   })
 
+  it('reports the keys the API could not write, rather than the size of the request', async () => {
+    const h = makeHarness(dataTools, async () =>
+      envelope({ successful_key_count: 1, unsuccessful_keys: ['b'] }),
+    )
+    await expect(
+      h.run('cloudflare_kv_put', {
+        namespaceId: 'n1',
+        entries: [
+          { key: 'a', value: '1' },
+          { key: 'b', value: '2' },
+        ],
+      }),
+    ).resolves.toEqual({ written: 1, failed: ['b'] })
+  })
+
   it('sends the pairs as the request body', async () => {
-    const h = makeHarness(dataTools, async () => envelope(null))
+    const h = makeHarness(dataTools, async () => envelope({ successful_key_count: 1, unsuccessful_keys: [] }))
     await h.run('cloudflare_kv_put', { namespaceId: 'n1', entries: [{ key: 'a', value: '1' }] })
     await expect(h.requests[0]!.text()).resolves.toBe('[{"key":"a","value":"1"}]')
   })
 
   it('renders how many pairs were written', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    const blocks = h.render('cloudflare_kv_put', { namespaceId: 'n', entries: [] }, { written: 3 })
+    const blocks = h.render(
+      'cloudflare_kv_put',
+      { namespaceId: 'n', entries: [] },
+      { written: 3, failed: [] },
+    )
     expect(blocks).toEqual([{ type: 'text', text: 'Wrote 3 key/value pairs.' }])
+  })
+
+  it('names the keys that failed in the rendered summary', () => {
+    const h = makeHarness(dataTools, async () => envelope(null))
+    const blocks = h.render(
+      'cloudflare_kv_put',
+      { namespaceId: 'n', entries: [] },
+      { written: 1, failed: ['b', 'c'] },
+    )
+    expect(blocks).toEqual([{ type: 'text', text: 'Wrote 1 key/value pair. 2 keys failed: b, c.' }])
   })
 })
 
@@ -220,28 +249,45 @@ describe('cloudflare_kv_delete', () => {
     expect(h.requests).toHaveLength(0)
   })
 
-  it('uses the single-key endpoint for one key', async () => {
-    const h = makeHarness(dataTools, async () => envelope(null))
+  it('uses the bulk endpoint even for one key, so the API reports the outcome', async () => {
+    const h = makeHarness(dataTools, async () => envelope({ successful_key_count: 1, unsuccessful_keys: [] }))
     await expect(h.run('cloudflare_kv_delete', { namespaceId: 'n1', keys: ['a'] })).resolves.toEqual({
       deleted: 1,
-    })
-    expect(h.requests[0]!.method).toBe('DELETE')
-    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/storage/kv/namespaces/n1/values/a')
-  })
-
-  it('uses the bulk endpoint for several keys', async () => {
-    const h = makeHarness(dataTools, async () => envelope(null))
-    await expect(h.run('cloudflare_kv_delete', { namespaceId: 'n1', keys: ['a', 'b'] })).resolves.toEqual({
-      deleted: 2,
+      failed: [],
     })
     expect(h.requests[0]!.method).toBe('POST')
     expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/storage/kv/namespaces/n1/bulk/delete')
+    await expect(h.requests[0]!.text()).resolves.toBe('["a"]')
+  })
+
+  it('reports the keys the API could not delete', async () => {
+    const h = makeHarness(dataTools, async () =>
+      envelope({ successful_key_count: 1, unsuccessful_keys: ['b'] }),
+    )
+    await expect(h.run('cloudflare_kv_delete', { namespaceId: 'n1', keys: ['a', 'b'] })).resolves.toEqual({
+      deleted: 1,
+      failed: ['b'],
+    })
   })
 
   it('renders how many keys were deleted', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    const blocks = h.render('cloudflare_kv_delete', { namespaceId: 'n', keys: [] }, { deleted: 2 })
+    const blocks = h.render(
+      'cloudflare_kv_delete',
+      { namespaceId: 'n', keys: [] },
+      { deleted: 2, failed: [] },
+    )
     expect(blocks).toEqual([{ type: 'text', text: 'Deleted 2 keys.' }])
+  })
+
+  it('names the key that failed in the rendered summary', () => {
+    const h = makeHarness(dataTools, async () => envelope(null))
+    const blocks = h.render(
+      'cloudflare_kv_delete',
+      { namespaceId: 'n', keys: [] },
+      { deleted: 1, failed: ['b'] },
+    )
+    expect(blocks).toEqual([{ type: 'text', text: 'Deleted 1 key. 1 key failed: b.' }])
   })
 })
 

@@ -101,11 +101,18 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
       properties: {
         deleted: {
           type: 'integer',
-          description: 'Keys deleted.',
+          description: 'Keys the API deleted.',
+        },
+        failed: {
+          type: 'array',
+          description: 'Keys the API reported as not deleted.',
+          items: {
+            type: 'string',
+          },
         },
       },
-      required: ['deleted'],
-      description: 'How many keys were deleted.',
+      required: ['deleted', 'failed'],
+      description: 'How many keys were deleted, and which were not.',
     },
   },
   cloudflare_kv_get: {
@@ -251,11 +258,18 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
       properties: {
         written: {
           type: 'integer',
-          description: 'Key/value pairs written.',
+          description: 'Key/value pairs the API wrote.',
+        },
+        failed: {
+          type: 'array',
+          description: 'Keys the API reported as not written.',
+          items: {
+            type: 'string',
+          },
         },
       },
-      required: ['written'],
-      description: 'How many pairs were written.',
+      required: ['written', 'failed'],
+      description: 'How many pairs were written, and which were not.',
     },
   },
   cloudflare_queue_ack: {

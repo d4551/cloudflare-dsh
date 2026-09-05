@@ -4,7 +4,6 @@ import {
   d1QuerySpec,
   kvBulkDeleteSpec,
   kvBulkPutSpec,
-  kvDeleteSpec,
   kvListKeysSpec,
   kvNamespaceListSpec,
   kvValuePath,
@@ -47,13 +46,6 @@ describe('KV specs', () => {
 
   it('includes the prefix filter only when one is given', () => {
     expect(kvListKeysSpec('ns1', 'user:', 10, undefined).query).toEqual({ limit: 10, prefix: 'user:' })
-  })
-
-  it('deletes a key', () => {
-    expect(kvDeleteSpec('ns1', 'k')).toEqual({
-      method: 'DELETE',
-      path: '/storage/kv/namespaces/ns1/values/k',
-    })
   })
 
   it('bulk-writes key/value pairs', () => {

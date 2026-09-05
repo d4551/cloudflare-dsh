@@ -65,6 +65,20 @@ describe('ai plugin shape', () => {
 })
 
 describe('cloudflare_ai_run', () => {
+  it('refuses a streaming request, which its single response could not carry', async () => {
+    const h = makeHarness(aiTools, async () => envelope({}))
+    await expect(
+      h.run('cloudflare_ai_run', { model: '@cf/meta/m', input: { prompt: 'hi', stream: true } }),
+    ).rejects.toThrow(
+      'cloudflare_ai_run returns one complete response; a streamed completion comes from the cloudflare-workers-ai model provider instead',
+    )
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('names the streaming refusal so a caller can tell it from a provider failure', () => {
+    expect(new aiTools.AiRunStreamError()).toMatchObject({ name: 'AiRunStreamError' })
+  })
+
   it('runs a model and returns its output', async () => {
     const h = makeHarness(aiTools, async () => envelope({ response: 'hi' }))
     await expect(

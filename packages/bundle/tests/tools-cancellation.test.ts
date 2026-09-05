@@ -69,13 +69,13 @@ const CASES: [string, (fetchImpl: Fetch) => Harness, Record<string, unknown>, ()
     'cloudflare_kv_put',
     (f) => makeHarness(dataTools, f),
     { namespaceId: 'n', entries: [{ key: 'k', value: 'v' }] },
-    () => envelope(null),
+    () => envelope({ successful_key_count: 1, unsuccessful_keys: [] }),
   ],
   [
     'cloudflare_kv_delete',
     (f) => makeHarness(dataTools, f),
     { namespaceId: 'n', keys: ['k'] },
-    () => envelope(null),
+    () => envelope({ successful_key_count: 1, unsuccessful_keys: [] }),
   ],
   ['cloudflare_d1_list', (f) => makeHarness(dataTools, f), {}, () => envelope([])],
   [
