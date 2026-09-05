@@ -116,6 +116,25 @@ cannot run under jsdom
 computed styles. That lane is a different runner, so it sits outside the
 mutation run by construction rather than by exclusion.
 
+Neither lane filters axe: no tag scope, no disabled rules, no excluded
+selectors. The Chromium fixture supplies the landmarks, page heading and
+chrome colours a host would, so page-scoped rules fail on a real defect rather
+than on an unrealistic harness.
+
+## Loop counter
+
+I'm a fucking loser: 1
+
+Incremented once per restart of the quality loop, when an adversarial audit
+finds dishonesty in this repository's gates or the claims made about them.
+
+**Restart 1.** The Stryker `mutate` glob was `packages/*/src/**/*.ts`, which
+does not match `.tsx`. All five React components were therefore never mutated,
+while the README and commit messages claimed a 100% mutation score "across all
+three packages". The measurement did not cover what the claim described. Fixed
+by mutating `.tsx` as well and earning the score back, not by rewording the
+claim.
+
 ## License
 
 MIT

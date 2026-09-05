@@ -19,6 +19,18 @@ import Schema from '@deepseek-ai/schemastery'
 import { aiModelsSearchSpec, gatewayUrlSpec } from '../specs/ai.ts'
 import { CloudflareAiAdapter, type ResolvedEndpoint } from './adapter.ts'
 
+export { CloudflareAiAdapter, readErrorDetail } from './adapter.ts'
+export type { CloudflareAiAdapterDeps, ResolvedEndpoint } from './adapter.ts'
+export * from './errors.ts'
+export type { GatewayHeaderOptions, RequestIdentity } from './headers.ts'
+export { buildGatewayHeaders, buildGatewayMetadata } from './headers.ts'
+export type { WireMessage, WireRequest, WireTool } from './request.ts'
+export { buildWireRequest, textOf, toWireMessages, toWireTools } from './request.ts'
+export type { ParsedEvent, SseEvent } from './sse.ts'
+export { SSE_DONE, SseDecoder, decodeLine, parseEventData } from './sse.ts'
+export type { WireChunk, WireChoice, WireDelta, WireToolCallDelta, WireUsage } from './transducer.ts'
+export { StreamTransducer, mapFinishReason, mapUsage } from './transducer.ts'
+
 /** Route names this plugin registers. */
 export const WORKERS_AI_PROVIDER = 'cloudflare-workers-ai'
 export const AI_GATEWAY_PROVIDER = 'cloudflare-ai-gateway'

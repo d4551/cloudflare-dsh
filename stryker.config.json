@@ -16,6 +16,7 @@
   "coverageAnalysis": "perTest",
   "mutate": [
     "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.tsx",
     "!packages/*/src/**/*.d.ts"
   ],
   "thresholds": {

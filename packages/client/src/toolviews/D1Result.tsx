@@ -63,7 +63,6 @@ export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element 
         <tbody>
           {rows.map((row, index) => (
             // Result rows have no stable identity, so the index is the key.
-            // eslint-disable-next-line react/no-array-index-key
             <tr key={index}>
               {columns.map((column) => (
                 <td key={column}>{cellText(row[column])}</td>

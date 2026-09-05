@@ -101,10 +101,17 @@ async function open(
 ): Promise<{ page: Page; context: BrowserContext }> {
   const context = await browser.newContext({ colorScheme: scheme })
   const page = await context.newPage()
+  // These are fragments that live inside a host page, so the fixture supplies
+  // what a host would: landmarks, a page heading, and readable chrome colours.
+  // Page-scoped rules must fail on a real defect, not on an unrealistic
+  // harness — and the fix for that is a better fixture, not a filtered rule set.
+  const fg = scheme === 'dark' ? '#f2f3f5' : '#16181d'
+  const bg = scheme === 'dark' ? '#16181d' : '#ffffff'
   await page.setContent(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>surface</title>` +
-      `<style>body{margin:0;background:${scheme === 'dark' ? '#16181d' : '#ffffff'}}${css}</style>` +
-      `</head><body><main>${markup}</main></body></html>`,
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Cloudflare surfaces</title>` +
+      `<style>body{margin:0;color:${fg};background:${bg}}${css}</style>` +
+      `</head><body><header><h1>Cloudflare surfaces</h1></header>` +
+      `<main>${markup}</main></body></html>`,
   )
   return { page, context }
 }
@@ -115,11 +122,15 @@ describe('accessibility in Chromium', () => {
       it(`${surface.name} has no violations in ${theme.name}`, async () => {
         const { page, context } = await open(surface.markup, theme.scheme)
         try {
-          const results = await new AxeBuilder({ page })
-            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-            .analyze()
+          // No tag filter and no disabled rules: every axe rule runs, which is
+          // strictly stronger than scoping to the conformance target.
+          const results = await new AxeBuilder({ page }).analyze()
           const detail = results.violations
-            .map((v) => `[${v.impact ?? 'unknown'}] ${v.id}: ${v.help}`)
+            .map(
+              (v) =>
+                `[${v.impact ?? 'unknown'}] ${v.id}: ${v.help}\n` +
+                v.nodes.map((n) => `      ${n.html}\n      ${n.failureSummary ?? ''}`).join('\n'),
+            )
             .join('\n')
           expect(results.violations, detail).toEqual([])
         } finally {

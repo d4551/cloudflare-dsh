@@ -13,12 +13,12 @@ import axe, { type AxeResults, type RunOptions } from 'axe-core'
 import { expect } from 'vitest'
 
 /** Run axe against a container and return its results. */
-export async function runAxe(container: Element, options: RunOptions = {}): Promise<AxeResults> {
+async function runAxe(container: Element, options: RunOptions = {}): Promise<AxeResults> {
   return axe.run(container, options)
 }
 
 /** Format violations so a failure names the rule and the offending nodes. */
-export function formatViolations(results: AxeResults): string {
+function formatViolations(results: AxeResults): string {
   return results.violations
     .map((v) => {
       const nodes = v.nodes.map((n) => `      ${n.html}`).join('\n')

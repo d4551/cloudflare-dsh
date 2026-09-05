@@ -41,7 +41,6 @@ function TreeNode({ node }: { readonly node: AxNode }): React.JSX.Element {
         <ul>
           {children.map((child, index) => (
             // Accessibility nodes carry no stable id, so position is the key.
-            // eslint-disable-next-line react/no-array-index-key
             <TreeNode key={index} node={child} />
           ))}
         </ul>

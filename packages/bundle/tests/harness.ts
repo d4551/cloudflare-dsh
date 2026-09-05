@@ -8,7 +8,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { expect } from 'vitest'
 
 /** A minimal execution context; tools under test only read `signal`. */
-export const runContext = { signal: undefined } as unknown as ToolRunContext
+const runContext = { signal: undefined } as unknown as ToolRunContext
 
 /** JSON response helper matching the Cloudflare envelope. */
 export function envelope<T>(result: T, status = 200): Response {
@@ -26,7 +26,7 @@ export function failure(code: number, message: string, status = 400): Response {
   )
 }
 
-export interface Harness {
+interface Harness {
   readonly tools: Map<string, ToolDefinition>
   readonly requests: Request[]
   readonly ctx: Context
