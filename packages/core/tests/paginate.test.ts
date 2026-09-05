@@ -10,7 +10,9 @@ function page<T>(result: readonly T[], info?: CloudflareEnvelope['result_info'])
 
 describe('nextCursorQuery', () => {
   it('returns the cursor overlay when one is present', () => {
-    expect(nextCursorQuery({ result_info: { cursor: 'abc' } })).toEqual({ cursor: 'abc' })
+    expect(nextCursorQuery({ result_info: { cursor: 'abc' } })).toEqual({
+      cursor: 'abc',
+    })
   })
 
   it('stops on an empty cursor', () => {
@@ -74,11 +76,13 @@ describe('nextPageQuery', () => {
 })
 
 describe('paginate', () => {
-  it('yields items from a single page', async () => {
+  it('collects items from a single page', async () => {
     const fetchPage = vi.fn(async () => page(['a', 'b']))
-    const items: string[] = []
-    for await (const item of paginate(fetchPage, () => null, 10)) items.push(item)
-    expect(items).toEqual(['a', 'b'])
+    await expect(paginate(fetchPage, () => null, 10)).resolves.toEqual({
+      items: ['a', 'b'],
+      pages: 1,
+      truncated: false,
+    })
     expect(fetchPage).toHaveBeenCalledTimes(1)
   })
 
@@ -86,24 +90,44 @@ describe('paginate', () => {
     const pages = [page(['a'], { cursor: 'c1' }), page(['b'], { cursor: '' })]
     let i = 0
     const fetchPage = vi.fn(async () => pages[i++]!)
-    const items: string[] = []
-    for await (const item of paginate(fetchPage, nextCursorQuery, 10)) items.push(item)
-    expect(items).toEqual(['a', 'b'])
+    await expect(paginate(fetchPage, nextCursorQuery, 10)).resolves.toMatchObject({ items: ['a', 'b'] })
     expect(fetchPage).toHaveBeenNthCalledWith(2, { cursor: 'c1' })
   })
 
-  it('passes the initial query to the first fetch', async () => {
+  it('starts from an empty overlay, letting the spec carry the first page', async () => {
     const fetchPage = vi.fn(async () => page<string>([]))
-    for await (const _ of paginate(fetchPage, () => null, 5, { per_page: 100 })) void _
-    expect(fetchPage).toHaveBeenCalledWith({ per_page: 100 })
+    await paginate(fetchPage, () => null, 5)
+    expect(fetchPage).toHaveBeenCalledWith({})
   })
 
-  it('stops at maxPages even when the server keeps offering a cursor', async () => {
+  it('reports truncation when the ceiling stops a walk the server would continue', async () => {
     const fetchPage = vi.fn(async () => page(['x'], { cursor: 'always' }))
-    const items: string[] = []
-    for await (const item of paginate(fetchPage, nextCursorQuery, 3)) items.push(item)
-    expect(items).toEqual(['x', 'x', 'x'])
-    expect(fetchPage).toHaveBeenCalledTimes(3)
+    await expect(paginate(fetchPage, nextCursorQuery, 3)).resolves.toEqual({
+      items: ['x', 'x', 'x'],
+      pages: 3,
+      truncated: true,
+    })
+  })
+
+  it('reports no truncation when the data simply ran out', async () => {
+    const pages = [page(['a'], { cursor: 'c1' }), page(['b'], { cursor: '' })]
+    let i = 0
+    await expect(paginate(async () => pages[i++]!, nextCursorQuery, 10)).resolves.toEqual({
+      items: ['a', 'b'],
+      pages: 2,
+      truncated: false,
+    })
+  })
+
+  it('reports no truncation when the ceiling and the end coincide', async () => {
+    // `pages === maxPages` alone is not truncation: the walk has to have been
+    // offered a further page for the result to be partial.
+    const pages = [page(['a'], { cursor: 'c1' }), page(['b'], { cursor: '' })]
+    let i = 0
+    await expect(paginate(async () => pages[i++]!, nextCursorQuery, 2)).resolves.toMatchObject({
+      pages: 2,
+      truncated: false,
+    })
   })
 
   it('reports the running count to the stepper', async () => {
@@ -114,13 +138,11 @@ describe('paginate', () => {
       seen.push(count)
       return nextCursorQuery(env)
     }
-    for await (const _ of paginate(async () => pages[i++]!, stepper, 10)) void _
+    await paginate(async () => pages[i++]!, stepper, 10)
     expect(seen).toEqual([2, 3])
   })
 
-  it('yields nothing for an empty first page', async () => {
-    const items: unknown[] = []
-    for await (const item of paginate(async () => page([]), () => null, 5)) items.push(item)
-    expect(items).toEqual([])
+  it('collects nothing from an empty first page', async () => {
+    await expect(paginate(async () => page([]), () => null, 5)).resolves.toMatchObject({ items: [] })
   })
 })

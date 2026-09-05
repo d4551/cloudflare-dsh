@@ -1,7 +1,7 @@
 /**
  * Pure helpers for the account and generic-API tools.
  */
-import { assertSafePath, type HttpMethod, type RequestSpec } from '@d4551/dsh-cloudflare-core'
+import { assertSafePath, decodePath, type HttpMethod, type RequestSpec } from '@d4551/dsh-cloudflare-core'
 
 /** Methods that only read. The generic tool is limited to these by default. */
 const READ_ONLY: ReadonlySet<HttpMethod> = new Set<HttpMethod>(['GET', 'HEAD'])
@@ -39,8 +39,13 @@ export function buildGenericSpec(
         'Set `allowMutations: true` on the cloudflare-tools-meta plugin to permit it.',
     )
   }
+  // Compared against the decoded spelling as well as the literal one. The
+  // server decodes before routing, so `/accounts/x/%74okens` reaches the same
+  // resource as `/accounts/x/tokens` while failing a raw prefix comparison —
+  // the denylist has to see what the server will see.
+  const decoded = decodePath(safe)
   for (const prefix of options.denyPathPrefixes) {
-    if (safe.startsWith(prefix)) {
+    if (safe.startsWith(prefix) || decoded.startsWith(prefix)) {
       throw new CloudflareApiDeniedError(`path ${safe} is blocked by the configured denylist (${prefix})`)
     }
   }

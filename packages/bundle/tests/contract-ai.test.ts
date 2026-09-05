@@ -185,14 +185,37 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
             "type": "string",
             "description": "Gateway id."
           },
+          "page": {
+            "type": "integer",
+            "description": "1-based page number (default 1)."
+          },
           "perPage": {
             "type": "integer",
-            "description": "Log entries per page (default 50)."
+            "description": "Log entries per page, 1-50 (default 50)."
           },
           "filters": {
-            "type": "object",
-            "description": "Extra query filters, e.g. { \"metadata.sessionId\": \"...\" }.",
-            "additionalProperties": true
+            "type": "array",
+            "description": "Filter clauses. Metadata is filtered as two clauses — {\"key\":\"metadata.key\",\"operator\":\"eq\",\"value\":\"sessionId\"} and {\"key\":\"metadata.value\",\"operator\":\"eq\",\"value\":\"<id>\"} — because the endpoint exposes key and value as separate fields.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "operator": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "operator",
+                "value"
+              ]
+            }
           }
         },
         "required": [
@@ -201,7 +224,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
       },
     output: {
         "type": "object",
-        "description": "Matching log entries.",
+        "description": "Matching log entries and the page they came from.",
         "additionalProperties": true
       },
   },
@@ -240,7 +263,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           },
           "perPage": {
             "type": "integer",
-            "description": "Log entries to scan (default 100)."
+            "description": "Log entries per page while scanning, 1-50 (default 50)."
           }
         },
         "required": [

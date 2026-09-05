@@ -346,7 +346,10 @@ describe('stream', () => {
   it('never retries internally', async () => {
     const fetchImpl = vi.fn(async () => new Response('{}', { status: 500 }))
     const { adapter } = makeAdapter(fetchImpl)
-    await expect(collect(adapter.stream(options()))).rejects.toThrow()
+    await expect(collect(adapter.stream(options()))).rejects.toMatchObject({
+      code: PROVIDER_ERROR_CODE,
+      failure: { status: 500 },
+    })
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 

@@ -44,12 +44,23 @@ export type HttpMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 /** Query parameter values accepted by the request builder. */
 export type QueryValue = string | number | boolean | readonly (string | number | boolean)[]
 
+/**
+ * One query parameter in a positional list.
+ *
+ * A record cannot express interleaved repeats: Cloudflare's own SDKs serialize
+ * an array of filter objects as `filters.key=…&filters.operator=…&filters.value=…`
+ * repeated per clause, and grouping by key would reorder those bytes.
+ */
+export type QueryPair = readonly [key: string, value: string | number | boolean]
+
 /** A description of one Cloudflare REST call, before dispatch. */
 export interface RequestSpec {
   readonly method: HttpMethod
   /** Path under `/client/v4`, with a leading slash. */
   readonly path: string
   readonly query?: Readonly<Record<string, QueryValue | undefined>>
+  /** Parameters whose order and repetition are significant; appended after `query`. */
+  readonly orderedQuery?: readonly QueryPair[]
   readonly body?: unknown
   readonly headers?: Readonly<Record<string, string>>
   /** Caller cancellation, fused with the client's own request timeout. */

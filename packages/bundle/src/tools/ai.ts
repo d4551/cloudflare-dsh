@@ -8,8 +8,15 @@
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { nextPageQuery } from '@d4551/dsh-cloudflare-core'
+import { SESSION_METADATA_KEY } from '../ai/headers.ts'
 import {
+  GATEWAY_LOG_MAX_PAGE_SIZE,
+  GATEWAY_LOG_MIN_PAGE_SIZE,
   type BillingView,
+  type GatewayLogFilter,
+  type GatewayLogFilterKey,
+  type GatewayLogFilterOperator,
   aiModelSchemaSpec,
   aiModelsSearchSpec,
   aiRunSpec,
@@ -22,6 +29,7 @@ import {
   gatewayLogBodySpec,
   gatewayLogsSpec,
   gatewayRouteListSpec,
+  sessionLogFilters,
   vectorizeIndexListSpec,
   vectorizeQuerySpec,
 } from '../specs/ai.ts'
@@ -144,24 +152,38 @@ export function apply(ctx: Context): void {
         'Query AI Gateway request logs. Filter by metadata to isolate one harness session: requests made through the Cloudflare model provider carry the session id in cf-aig-metadata.',
       parameters: {
         gatewayId: { type: 'string', required: true, description: 'Gateway id.' },
-        perPage: { type: 'integer', description: 'Log entries per page (default 50).' },
+        page: { type: 'integer', description: '1-based page number (default 1).' },
+        perPage: {
+          type: 'integer',
+          description: `Log entries per page, ${GATEWAY_LOG_MIN_PAGE_SIZE}-${GATEWAY_LOG_MAX_PAGE_SIZE} (default ${GATEWAY_LOG_MAX_PAGE_SIZE}).`,
+        },
         filters: {
-          type: 'object',
-          additionalProperties: true,
-          description: 'Extra query filters, e.g. { "metadata.sessionId": "..." }.',
+          type: 'array',
+          description:
+            'Filter clauses. Metadata is filtered as two clauses — {"key":"metadata.key","operator":"eq","value":"sessionId"} and {"key":"metadata.value","operator":"eq","value":"<id>"} — because the endpoint exposes key and value as separate fields.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              key: { type: 'string', required: true },
+              operator: { type: 'string', required: true },
+              value: { type: 'string', required: true },
+            },
+          },
         },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Matching log entries.' },
+        schema: { type: 'object', additionalProperties: true, description: 'Matching log entries and the page they came from.' },
         render: (_args, value) => listing((value as { logs: unknown[] }).logs.length, 'log entry', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const filters = (args.filters ?? {}) as Record<string, string | undefined>
+        const page = args.page ?? 1
+        const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
         const logs = await cf.accountRequest<JsonValue[]>(
-          gatewayLogsSpec(args.gatewayId, args.perPage ?? 50, filters),
+          gatewayLogsSpec(args.gatewayId, page, perPage, toLogFilters(args.filters)),
         )
-        return { logs }
+        return { logs, page, perPage, complete: logs.length < perPage }
       },
     }),
   )
@@ -362,7 +384,10 @@ export function apply(ctx: Context): void {
       parameters: {
         gatewayId: { type: 'string', required: true, description: 'Gateway id.' },
         sessionId: { type: 'string', required: true, description: 'Harness session id.' },
-        perPage: { type: 'integer', description: 'Log entries to scan (default 100).' },
+        perPage: {
+          type: 'integer',
+          description: `Log entries per page while scanning, ${GATEWAY_LOG_MIN_PAGE_SIZE}-${GATEWAY_LOG_MAX_PAGE_SIZE} (default ${GATEWAY_LOG_MAX_PAGE_SIZE}).`,
+        },
       },
       output: {
         schema: {
@@ -371,23 +396,110 @@ export function apply(ctx: Context): void {
           description: 'Request count, total cost, tokens, and cache hits for the session.',
         },
         render: (args, value) => {
-          const v = value as { requests: number; cost: number; cached: number }
+          const v = value as { requests: number; cost: number; cached: number; truncated: boolean }
+          const partial = v.truncated ? ' (partial: the page ceiling stopped the scan)' : ''
           return text(
-            `Session ${args.sessionId}: ${v.requests} requests, ${v.cached} served from cache, cost ${v.cost}.`,
+            `Session ${args.sessionId}: ${v.requests} requests, ${v.cached} served from cache, cost ${v.cost}${partial}.`,
           )
         },
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const logs = await cf.accountRequest<JsonValue[]>(
-          gatewayLogsSpec(args.gatewayId, args.perPage ?? 100, {
-            'metadata.sessionId': args.sessionId,
-          }),
+        const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
+        const walk = await cf.accountListAll<JsonValue>(
+          gatewayLogsSpec(args.gatewayId, 1, perPage, sessionLogFilters(args.sessionId, SESSION_METADATA_KEY)),
+          nextPageQuery,
         )
-        return summariseSessionLogs(logs)
+        // The server filter is sent, and every row is re-checked here against
+        // the metadata it actually carries. Cloudflare's schema does not
+        // document how positional filter repeats are paired, so a filter the
+        // server ignores would return every session's logs — and the failure
+        // that repair exists for is one session being billed another's cost.
+        // Verifying locally makes the result correct either way.
+        const matched = walk.items.filter((row) => sessionOf(row) === args.sessionId)
+        return {
+          ...summariseSessionLogs(matched),
+          scanned: walk.items.length,
+          pages: walk.pages,
+          truncated: walk.truncated,
+        }
       },
     }),
   )
+}
+
+/**
+ * Build a lookup that both validates an unknown value and narrows it.
+ *
+ * A `Set<string>` cannot be queried with an `unknown`, which is what forces the
+ * redundant `typeof` guard this replaces; a map keyed by `unknown` can, and its
+ * value type carries the narrowing.
+ */
+function lookup<T extends string>(...members: readonly T[]): ReadonlyMap<unknown, T> {
+  const map = new Map<unknown, T>()
+  for (const member of members) map.set(member, member)
+  return map
+}
+
+/** Filter keys the logs endpoint accepts, for validating caller input. */
+const LOG_FILTER_KEYS = lookup<GatewayLogFilterKey>(
+  'id',
+  'created_at',
+  'request_type',
+  'success',
+  'cached',
+  'provider',
+  'model',
+  'model_type',
+  'cost',
+  'tokens',
+  'tokens_in',
+  'tokens_out',
+  'duration',
+  'feedback',
+  'event_id',
+  'metadata.key',
+  'metadata.value',
+)
+
+/** Comparisons the logs endpoint accepts. */
+const LOG_FILTER_OPERATORS = lookup<GatewayLogFilterOperator>('eq', 'neq', 'contains', 'lt', 'gt')
+
+/** Raised when a caller supplies a filter the endpoint cannot express. */
+export class GatewayLogFilterError extends TypeError {
+  override readonly name = 'GatewayLogFilterError'
+}
+
+/**
+ * Validate caller-supplied filter clauses.
+ *
+ * Checked rather than cast: the previous shape was a free-form object cast to
+ * `Record<string, string>`, so a non-string value reached `String(value)` and
+ * went on the wire as `"[object Object]"`.
+ */
+export function toLogFilters(raw: unknown): readonly GatewayLogFilter[] {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw)) throw new GatewayLogFilterError('filters must be an array of clauses')
+  return raw.map((entry, index) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new GatewayLogFilterError(`filters[${index}] must be an object`)
+    }
+    const { key: rawKey, operator: rawOperator, value } = entry as Record<string, unknown>
+    const key = LOG_FILTER_KEYS.get(rawKey)
+    if (key === undefined) {
+      throw new GatewayLogFilterError(`filters[${index}].key ${JSON.stringify(rawKey)} is not a filterable field`)
+    }
+    const operator = LOG_FILTER_OPERATORS.get(rawOperator)
+    if (operator === undefined) {
+      throw new GatewayLogFilterError(
+        `filters[${index}].operator ${JSON.stringify(rawOperator)} is not a supported comparison`,
+      )
+    }
+    if (typeof value !== 'string') {
+      throw new GatewayLogFilterError(`filters[${index}].value must be a string`)
+    }
+    return { key, operator, value }
+  })
 }
 
 /** One gateway log entry, in the shape the summary reads. */
@@ -396,6 +508,55 @@ export interface GatewayLogEntry {
   readonly tokens_in?: number
   readonly tokens_out?: number
   readonly cached?: boolean
+  /** Request metadata, which the API returns as a JSON string. */
+  readonly metadata?: unknown
+}
+
+/** Raised when a log entry carries a field the summary cannot add up. */
+export class GatewayLogShapeError extends TypeError {
+  override readonly name = 'GatewayLogShapeError'
+  constructor(field: string, value: unknown) {
+    super(
+      `gateway log field ${field} must be a number, got ${typeof value} (${JSON.stringify(value)}). ` +
+        'Summing it would produce a total that is silently wrong.',
+    )
+  }
+}
+
+/** Read one numeric field, refusing a value that would corrupt the total. */
+function numericField(log: GatewayLogEntry, field: 'cost' | 'tokens_in' | 'tokens_out'): number {
+  const value = log[field]
+  if (value === undefined) return 0
+  // `cost += "0.004"` concatenates and turns the running total into a string.
+  // A decimal returned as a string is a plausible API shape, so it is rejected
+  // rather than added. `Number.isFinite` does not coerce, so it rejects every
+  // non-number as well as NaN and the infinities — no separate `typeof` arm.
+  if (!Number.isFinite(value)) throw new GatewayLogShapeError(field, value)
+  return value
+}
+
+/**
+ * The session id a log entry actually carries.
+ *
+ * The API returns `metadata` as a JSON string, so this parses it rather than
+ * trusting the server-side filter to have been applied.
+ */
+export function sessionOf(entry: JsonValue): string | undefined {
+  const metadata = (entry as GatewayLogEntry).metadata
+  let parsed: unknown
+  try {
+    // No separate string guard: `JSON.parse` coerces its argument, and every
+    // non-string value either throws here or fails the object check below, so
+    // a guard would be a branch nothing could observe.
+    parsed = JSON.parse(String(metadata))
+  } catch {
+    return undefined
+  }
+  // Only `null` needs guarding: indexing a number or a string yields
+  // `undefined`, which the string check below rejects anyway.
+  if (parsed === null) return undefined
+  const value = (parsed as Record<string, unknown>)[SESSION_METADATA_KEY]
+  return typeof value === 'string' ? value : undefined
 }
 
 /**
@@ -417,9 +578,9 @@ export function summariseSessionLogs(logs: readonly JsonValue[]): {
   let cached = 0
   for (const entry of logs) {
     const log = entry as GatewayLogEntry
-    cost += log.cost ?? 0
-    tokensIn += log.tokens_in ?? 0
-    tokensOut += log.tokens_out ?? 0
+    cost += numericField(log, 'cost')
+    tokensIn += numericField(log, 'tokens_in')
+    tokensOut += numericField(log, 'tokens_out')
     if (log.cached === true) cached += 1
   }
   return { requests: logs.length, cost, tokensIn, tokensOut, cached }

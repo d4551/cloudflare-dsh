@@ -60,8 +60,12 @@ function makeClient(fetchImpl: (req: Request) => Promise<Response>, over: Partia
  */
 function hang(request: Request): Promise<Response> {
   return new Promise((_resolve, reject) => {
+    // A real fetch rejects with the signal's own reason, which is what
+    // distinguishes a timeout (`TimeoutError`, transient) from a caller
+    // cancelling (`AbortError`, final). Inventing an error here would have hid
+    // that distinction from every test below.
     const fail = (): void => {
-      reject(new DOMException('aborted', 'AbortError'))
+      reject(request.signal.reason)
     }
     if (request.signal.aborted) fail()
     else request.signal.addEventListener('abort', fail)
@@ -128,12 +132,39 @@ describe('requestText failure classification', () => {
   })
 })
 
+describe('requestText retry', () => {
+  it('retries a transient failure, since a KV value read is a request like any other', () => {
+    // `requestText` called `#send` directly, so `maxRetries` governed `request`
+    // alone and `cloudflare_kv_get` had no retries at all.
+    let call = 0
+    const { client } = makeClient(async () => {
+      call += 1
+      if (call === 1) return new Response('busy', { status: 503 })
+      return new Response('stored-value', { status: 200 })
+    })
+    return expect(client.requestText({ method: 'GET', path: '/x' })).resolves.toBe('stored-value')
+  })
+})
+
 describe('request cancellation', () => {
   it('aborts an attempt that outruns the configured budget', async () => {
     // Without this the request hangs for as long as the connection does, and
     // `requestTimeoutMs` is a setting that does nothing.
     const { client } = makeClient(hang, { requestTimeoutMs: 10 })
-    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow('aborted')
+    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      name: 'TimeoutError',
+    })
+  })
+
+  it('retries a timed-out attempt, because a deadline is a transient failure', async () => {
+    // The budget is per attempt. A timeout that ends the whole operation would
+    // make the per-attempt deadline a cap on the operation instead.
+    const fetchImpl = vi.fn(hang)
+    const { client } = makeClient(fetchImpl, { requestTimeoutMs: 10 })
+    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      name: 'TimeoutError',
+    })
+    expect(fetchImpl.mock.calls.length).toBeGreaterThan(1)
   })
 
   it('aborts an attempt when the caller cancels', async () => {
@@ -144,20 +175,29 @@ describe('request cancellation', () => {
     })
     await expect(
       client.request({ method: 'GET', path: '/x', signal: controller.signal }),
-    ).rejects.toThrow('aborted')
+    ).rejects.toMatchObject({ name: 'AbortError' })
   })
 
-  it('does not retry an abort', async () => {
-    const fetchImpl = vi.fn(hang)
-    const { client } = makeClient(fetchImpl, { requestTimeoutMs: 10 })
-    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow('aborted')
+  it('does not retry a caller abort, which is a decision rather than a failure', async () => {
+    const controller = new AbortController()
+    const fetchImpl = vi.fn((request: Request) => {
+      controller.abort()
+      return hang(request)
+    })
+    const { client } = makeClient(fetchImpl)
+    await expect(
+      client.request({ method: 'GET', path: '/x', signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('readEnvelope', () => {
   it('parses a JSON envelope', async () => {
-    await expect(readEnvelope(json(ok({ a: 1 })))).resolves.toEqual({ ok: true, envelope: ok({ a: 1 }) })
+    await expect(readEnvelope(json(ok({ a: 1 })))).resolves.toEqual({
+      ok: true,
+      envelope: ok({ a: 1 }),
+    })
   })
 
   it('reports failure for an empty body', async () => {
@@ -206,7 +246,11 @@ describe('CloudflareClient.request', () => {
 
   it('builds the URL from base, path and query', async () => {
     const { client, requests } = makeClient(async () => json(ok(null)))
-    await client.request({ method: 'GET', path: '/accounts', query: { per_page: 5 } })
+    await client.request({
+      method: 'GET',
+      path: '/accounts',
+      query: { per_page: 5 },
+    })
     expect(requests[0]!.url).toBe('https://api.test/client/v4/accounts?per_page=5')
   })
 
@@ -283,7 +327,12 @@ describe('CloudflareClient.request', () => {
 
   it('throws when success is false on a 2xx status', async () => {
     const { client } = makeClient(async () =>
-      json({ success: false, errors: [{ code: 1, message: 'soft fail' }], messages: [], result: null }),
+      json({
+        success: false,
+        errors: [{ code: 1, message: 'soft fail' }],
+        messages: [],
+        result: null,
+      }),
     )
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow('[1] soft fail')
   })
@@ -455,7 +504,15 @@ describe('CloudflareClient.requestEnvelope', () => {
 
   it('throws on an error envelope', async () => {
     const { client } = makeClient(async () =>
-      json({ success: false, errors: [{ code: 9, message: 'nope' }], messages: [], result: null }, { status: 400 }),
+      json(
+        {
+          success: false,
+          errors: [{ code: 9, message: 'nope' }],
+          messages: [],
+          result: null,
+        },
+        { status: 400 },
+      ),
     )
     await expect(client.requestEnvelope({ method: 'GET', path: '/x' })).rejects.toThrow('[9] nope')
   })
@@ -483,7 +540,11 @@ describe('CloudflareClient.list', () => {
     const pages = [json(ok(['a'], { cursor: 'c1' })), json(ok(['b'], { cursor: '' }))]
     let i = 0
     const { client, requests } = makeClient(async () => pages[i++]!)
-    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toEqual(['a', 'b'])
+    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toEqual({
+      items: ['a', 'b'],
+      truncated: false,
+      pages: 2,
+    })
     expect(requests[1]!.url).toBe('https://api.test/client/v4/x?cursor=c1')
   })
 
@@ -498,17 +559,45 @@ describe('CloudflareClient.list', () => {
 
   it('honours the maxPages ceiling', async () => {
     const { client, requests } = makeClient(async () => json(ok(['x'], { cursor: 'always' })), { maxPages: 3 })
-    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toEqual(['x', 'x', 'x'])
+    // Truncated: the server still offered a cursor when the ceiling hit.
+    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toEqual({
+      items: ['x', 'x', 'x'],
+      truncated: true,
+      pages: 3,
+    })
     expect(requests).toHaveLength(3)
   })
 
-  it('propagates an error mid-walk', async () => {
-    const pages = [
-      json(ok(['a'], { cursor: 'c1' })),
-      json({ success: false, errors: [{ code: 2, message: 'mid' }], messages: [], result: null }, { status: 500 }),
-    ]
-    let i = 0
-    const { client } = makeClient(async () => pages[i++]!)
+  it('propagates an error mid-walk once the retry budget is spent', async () => {
+    // A fresh Response per call: a walk now retries, so a fixed queue of two
+    // would run out and fail for the wrong reason.
+    const failure = (): Response =>
+      json(
+        {
+          success: false,
+          errors: [{ code: 2, message: 'mid' }],
+          messages: [],
+          result: null,
+        },
+        { status: 500 },
+      )
+    let call = 0
+    const { client } = makeClient(async () => (call++ === 0 ? json(ok(['a'], { cursor: 'c1' })) : failure()))
     await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).rejects.toThrow('[2] mid')
+  })
+
+  it('retries a transient failure mid-walk instead of abandoning the page', async () => {
+    // `listAll` used to bypass the retry policy entirely, so a single 500 on
+    // page two ended the walk while the seam advertised retry.
+    let call = 0
+    const { client } = makeClient(async () => {
+      call += 1
+      if (call === 1) return json(ok(['a'], { cursor: 'c1' }))
+      if (call === 2) return json({ success: false, errors: [], messages: [], result: null }, { status: 503 })
+      return json(ok(['b'], { cursor: '' }))
+    })
+    await expect(client.listAll({ method: 'GET', path: '/x' }, nextCursorQuery)).resolves.toMatchObject({
+      items: ['a', 'b'],
+    })
   })
 })

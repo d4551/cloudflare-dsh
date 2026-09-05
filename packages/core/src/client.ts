@@ -8,8 +8,8 @@
  */
 import { type CredentialResolver, requireCredential } from './credentials.ts'
 import { CloudflareError, classifyFailure } from './errors.ts'
-import { type NextPageQuery, paginate } from './paginate.ts'
-import { DEFAULT_BASE_URL, buildRequest } from './request.ts'
+import { paginate, type NextPageQuery, type PageWalk } from './paginate.ts'
+import { DEFAULT_BASE_URL, assertSafeBaseUrl, buildRequest } from './request.ts'
 import { type RetryPolicy, runWithRetry } from './retry.ts'
 import { makeScope } from './scope.ts'
 import type { CloudflareEnvelope, QueryValue, RequestSpec, Scope } from './types.ts'
@@ -43,6 +43,10 @@ export interface CloudflareClientOptions {
 export function statusOfError(error: unknown): number {
   if (error instanceof CloudflareError) return error.status
   if (error instanceof TypeError) return TRANSPORT_FAILURE_STATUS
+  // `AbortSignal.timeout` aborts with a `TimeoutError`; a caller cancelling
+  // aborts with an `AbortError`. The first is the transient condition retrying
+  // exists for, the second is a decision to stop and must never be retried.
+  if (error instanceof DOMException && error.name === 'TimeoutError') return TRANSPORT_FAILURE_STATUS
   return 0
 }
 
@@ -103,7 +107,9 @@ export class CloudflareClient {
 
   constructor(options: CloudflareClientOptions) {
     this.#options = options
-    this.#baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+    // Validated here so a bad REST root fails at plugin load, not at the
+    // first call — and so path containment has a known origin to contain to.
+    this.#baseUrl = assertSafeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL)
   }
 
   /** The credential reference this client authenticates with. */
@@ -165,17 +171,24 @@ export class CloudflareClient {
     return read.envelope
   }
 
+  /**
+   * Run one operation under the configured retry policy.
+   *
+   * Every entry point goes through here. Three of them used to call `#send`
+   * directly, so `maxRetries` governed `request` alone while the seam
+   * advertised retry as a property of the client — a KV value read and every
+   * paginated walk got no retries at all.
+   */
+  #withRetry<T>(attempt: () => Promise<T>): Promise<T> {
+    return runWithRetry(attempt, statusOfError, this.#options.retry, {
+      sleep: this.#options.sleep ?? realSleep,
+      random: this.#options.random ?? Math.random,
+    })
+  }
+
   /** Issue a request, retrying transient failures per the configured policy. */
   async request<T>(spec: RequestSpec): Promise<T> {
-    const envelope = await runWithRetry(
-      () => this.#send<T>(spec),
-      statusOfError,
-      this.#options.retry,
-      {
-        sleep: this.#options.sleep ?? realSleep,
-        random: this.#options.random ?? Math.random,
-      },
-    )
+    const envelope = await this.#withRetry(() => this.#send<T>(spec))
     return envelope.result
   }
 
@@ -187,6 +200,11 @@ export class CloudflareClient {
    * classified from the status and any envelope the error path did return.
    */
   async requestText(spec: RequestSpec): Promise<string> {
+    return this.#withRetry(() => this.#sendText(spec))
+  }
+
+  /** One attempt at a non-envelope response. */
+  async #sendText(spec: RequestSpec): Promise<string> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
     const response = await this.#options.fetch(this.#buildRequest(spec, token))
@@ -208,7 +226,7 @@ export class CloudflareClient {
 
   /** Issue a request and return the whole envelope, for pagination callers. */
   async requestEnvelope<T>(spec: RequestSpec): Promise<CloudflareEnvelope<T>> {
-    return this.#send<T>(spec)
+    return this.#withRetry(() => this.#send<T>(spec))
   }
 
   /**
@@ -216,10 +234,17 @@ export class CloudflareClient {
    *
    * The step function decides how the endpoint paginates; see `paginate.ts`.
    */
-  list<T>(
+  /**
+   * Collect every page of a list endpoint.
+   *
+   * Returns the walk's outcome with the items: stopping at the page ceiling is
+   * not the same as running out of data, and a caller that cannot tell them
+   * apart reports a partial result as a total.
+   */
+  async listAll<T>(
     spec: RequestSpec,
     step: (envelope: CloudflareEnvelope<readonly unknown[]>, seen: number) => NextPageQuery,
-  ): AsyncGenerator<T, void, undefined> {
+  ): Promise<PageWalk<T>> {
     return paginate<T>(
       (query) => {
         const merged: Record<string, QueryValue | undefined> = { ...spec.query, ...query }
@@ -230,15 +255,6 @@ export class CloudflareClient {
     )
   }
 
-  /** Collect every page of a list endpoint into an array. */
-  async listAll<T>(
-    spec: RequestSpec,
-    step: (envelope: CloudflareEnvelope<readonly unknown[]>, seen: number) => NextPageQuery,
-  ): Promise<T[]> {
-    const items: T[] = []
-    for await (const item of this.list<T>(spec, step)) items.push(item)
-    return items
-  }
 }
 
 /** Convenience: build an account scope from a resolved account id. */

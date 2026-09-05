@@ -45,6 +45,16 @@ export function nextPageQuery(
 /** Fetches one page given a query overlay. */
 export type PageFetcher<T> = (query: Readonly<Record<string, QueryValue>>) => Promise<CloudflareEnvelope<readonly T[]>>
 
+/** Everything one walk produced. */
+export interface PageWalk<T> {
+  /** Items from every page, in order. */
+  readonly items: T[]
+  /** Pages actually fetched. */
+  readonly pages: number
+  /** True when the page ceiling stopped the walk before the data ran out. */
+  readonly truncated: boolean
+}
+
 /** Chooses the next overlay from the envelope just received. */
 export type PageStepper = (envelope: CloudflareEnvelope<readonly unknown[]>, seen: number) => NextPageQuery
 
@@ -54,21 +64,19 @@ export type PageStepper = (envelope: CloudflareEnvelope<readonly unknown[]>, see
  * `maxPages` is a hard stop so a server that keeps returning the same cursor
  * cannot spin forever.
  */
-export async function* paginate<T>(
+export async function paginate<T>(
   fetchPage: PageFetcher<T>,
   step: PageStepper,
   maxPages: number,
-  initialQuery: Readonly<Record<string, QueryValue>> = {},
-): AsyncGenerator<T, void, undefined> {
-  let query: NextPageQuery = initialQuery
+): Promise<PageWalk<T>> {
+  let query: NextPageQuery = {}
   let seen = 0
   let page = 0
+  const items: T[] = []
 
   // The walk is expressed as an async iterator rather than an awaiting loop so
-  // that each request is one `await` in one call, and the outer `for await`
-  // stays flat: page depth costs nothing, however many pages a walk covers.
-  // `query` is shared with the loop below, which is what lets the stepper see
-  // the running count *after* a page's items have been yielded.
+  // that each request is one `await` in one call, and the loop below stays
+  // flat: page depth costs nothing, however many pages a walk covers.
   const pages: AsyncIterable<CloudflareEnvelope<readonly T[]>> = {
     [Symbol.asyncIterator]: () => ({
       async next(): Promise<IteratorResult<CloudflareEnvelope<readonly T[]>, undefined>> {
@@ -83,8 +91,13 @@ export async function* paginate<T>(
   for await (const envelope of pages) {
     for (const item of envelope.result) {
       seen += 1
-      yield item
+      items.push(item)
     }
     query = step(envelope, seen)
   }
+
+  // Stopping at the ceiling with a next page still offered is a different
+  // outcome from running out of data. A caller that cannot tell them apart
+  // reports a partial result as a total.
+  return { items, pages: page, truncated: page >= maxPages && query !== null }
 }

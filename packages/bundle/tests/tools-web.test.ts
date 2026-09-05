@@ -99,7 +99,10 @@ describe('cloudflare_browser_render', () => {
 
   it('rejects a format outside the supported set', async () => {
     const h = makeHarness(webTools, async () => envelope(''))
-    await expect(h.run('cloudflare_browser_render', { url: 'https://x.test', format: 'exe' })).rejects.toThrow()
+    await expect(h.run('cloudflare_browser_render', { url: 'https://x.test', format: 'exe' })).rejects.toThrow(
+      'invalid arguments: "format" must be one of ["markdown","content","links","screenshot","pdf","scrape","json"]',
+    )
+    expect(h.requests).toHaveLength(0)
   })
 })
 

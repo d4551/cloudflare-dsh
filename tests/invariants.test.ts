@@ -11,6 +11,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
@@ -87,8 +88,46 @@ describe('no test evasions', () => {
     ['conditional skip', `skip${'If('}`],
     ['conditional run', `run${'If('}`],
     ['soft assertion', `expect.so${'ft'}`],
+    // A throw assertion with no argument passes for any error at all — a network
+    // failure, a typo in a fixture — so it proves only that something went wrong.
+    ['bare throw assertion', `toThrow${'()'}`],
+    ['bare throw-error assertion', `toThrowError${'()'}`],
   ])('no %s appears in a test file', (_label, needle) => {
     expect(containing(tests, needle)).toEqual([])
+  })
+})
+
+describe('every test is uniquely addressable', () => {
+  it('gives no two tests the same full name, which per-test mutation filtering selects by', () => {
+    // Asked of vitest itself rather than parsed from source, so `it.each`
+    // expansions and nested describes are seen exactly as the runner sees them.
+    // A duplicate name has twice made a mutant that tests kill report as
+    // surviving, because the filter could not address the test that killed it.
+    const listed = JSON.parse(
+      execFileSync('bunx', ['vitest', 'list', '--config', 'vitest.config.ts', '--json'], {
+        cwd: root('..'),
+        encoding: 'utf8',
+        // A vitest run inherits the outer worker's environment; the listing must
+        // not believe it is one of this run's workers.
+        env: { ...process.env, VITEST: undefined, VITEST_MODE: undefined, VITEST_POOL_ID: undefined, VITEST_WORKER_ID: undefined },
+      }),
+    ) as readonly { readonly name: string; readonly file: string }[]
+    const counts = new Map<string, number>()
+    for (const test of listed) {
+      const key = `${relative(root('..'), test.file)} > ${test.name}`
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    expect([...counts].filter(([, n]) => n > 1).map(([key]) => key)).toEqual([])
+  })
+})
+
+describe('no type escape hatch in source', () => {
+  it.each([
+    ['double cast', `as unk${'nown as'}`],
+    ['explicit any', `: a${'ny'}`],
+    ['any cast', `as a${'ny'}`],
+  ])('no %s appears under src', (_label, needle) => {
+    expect(containing(sources, needle)).toEqual([])
   })
 })
 

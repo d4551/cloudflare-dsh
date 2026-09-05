@@ -62,16 +62,96 @@ export function gatewayUrlSpec(gatewayId: string, provider: string): RequestSpec
 }
 
 /** Query gateway request logs. */
+/** Fields the gateway logs endpoint can filter on. */
+export type GatewayLogFilterKey =
+  | 'id'
+  | 'created_at'
+  | 'request_type'
+  | 'success'
+  | 'cached'
+  | 'provider'
+  | 'model'
+  | 'model_type'
+  | 'cost'
+  | 'tokens'
+  | 'tokens_in'
+  | 'tokens_out'
+  | 'duration'
+  | 'feedback'
+  | 'event_id'
+  | 'metadata.key'
+  | 'metadata.value'
+
+/** Comparisons the gateway logs endpoint accepts. */
+export type GatewayLogFilterOperator = 'eq' | 'neq' | 'contains' | 'lt' | 'gt'
+
+/** One filter clause. */
+export interface GatewayLogFilter {
+  readonly key: GatewayLogFilterKey
+  readonly operator: GatewayLogFilterOperator
+  readonly value: string
+}
+
+/**
+ * Page-size bounds the endpoint documents.
+ *
+ * Protocol facts, not tunables: sending a larger page is rejected by the
+ * server, so clamping here would hide a caller's mistake rather than surface it.
+ */
+export const GATEWAY_LOG_MIN_PAGE_SIZE = 1
+export const GATEWAY_LOG_MAX_PAGE_SIZE = 50
+
+/** Raised when a caller asks for a page the endpoint will not serve. */
+export class GatewayLogPageSizeError extends RangeError {
+  override readonly name = 'GatewayLogPageSizeError'
+  constructor(perPage: number) {
+    super(
+      `perPage must be between ${GATEWAY_LOG_MIN_PAGE_SIZE} and ${GATEWAY_LOG_MAX_PAGE_SIZE}, got ${perPage}`,
+    )
+  }
+}
+
+/**
+ * Read one page of gateway logs.
+ *
+ * The endpoint is page-numbered, not cursor-paginated, and its `filters`
+ * parameter is an array of clauses. Cloudflare's own SDKs serialize that array
+ * as dotted positional repeats —
+ * `filters.key=…&filters.operator=…&filters.value=…` once per clause — so the
+ * clauses go through `orderedQuery`, where repetition and order survive.
+ */
 export function gatewayLogsSpec(
   gatewayId: string,
+  page: number,
   perPage: number,
-  filters: Readonly<Record<string, string | undefined>>,
+  filters: readonly GatewayLogFilter[],
 ): RequestSpec {
-  const query: Record<string, string | number> = { per_page: perPage }
-  for (const [key, value] of Object.entries(filters)) {
-    if (value !== undefined) query[key] = value
+  if (perPage < GATEWAY_LOG_MIN_PAGE_SIZE || perPage > GATEWAY_LOG_MAX_PAGE_SIZE) {
+    throw new GatewayLogPageSizeError(perPage)
   }
-  return { method: 'GET', path: `/ai-gateway/gateways/${seg(gatewayId)}/logs`, query }
+  return {
+    method: 'GET',
+    path: `/ai-gateway/gateways/${seg(gatewayId)}/logs`,
+    query: { page, per_page: perPage },
+    orderedQuery: filters.flatMap((filter) => [
+      ['filters.key', filter.key],
+      ['filters.operator', filter.operator],
+      ['filters.value', filter.value],
+    ]),
+  }
+}
+
+/**
+ * The clauses that select one harness session's requests.
+ *
+ * Two clauses because the endpoint exposes `metadata.key` and `metadata.value`
+ * as separate filterable fields — there is no `metadata.sessionId` field.
+ */
+export function sessionLogFilters(sessionId: string, metadataKey: string): readonly GatewayLogFilter[] {
+  return [
+    { key: 'metadata.key', operator: 'eq', value: metadataKey },
+    { key: 'metadata.value', operator: 'eq', value: sessionId },
+  ]
 }
 
 /** Fetch a single log's request or response body. */

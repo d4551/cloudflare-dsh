@@ -56,6 +56,12 @@ export interface AiConfig {
   collectLog: boolean
   /** Static tags merged into cf-aig-metadata alongside the session id. */
   tags: Record<string, string>
+  /** Per-token cost override recorded by the gateway; zero means do not send one. */
+  customCostPerTokenIn: number
+  /** Per-token output cost override; paired with `customCostPerTokenIn`. */
+  customCostPerTokenOut: number
+  /** Gateway-side request timeout in milliseconds; zero leaves the gateway default. */
+  gatewayRequestTimeoutMs: number
   /** How long a stream may go quiet before it is failed. */
   streamIdleTimeoutMs: number
   /** Models advertised by listModels; empty means query the catalogue. */
@@ -71,6 +77,9 @@ export const Config: Schema<Partial<AiConfig>, AiConfig> = Schema.object({
   skipCache: Schema.boolean().default(false),
   collectLog: Schema.boolean().default(true),
   tags: Schema.dict(Schema.string()).default({}),
+  customCostPerTokenIn: Schema.number().default(0),
+  customCostPerTokenOut: Schema.number().default(0),
+  gatewayRequestTimeoutMs: Schema.number().default(0),
   streamIdleTimeoutMs: Schema.number().default(300_000),
   models: Schema.array(Schema.string()).default([]),
 })
@@ -167,6 +176,18 @@ export function apply(ctx: Context, config: AiConfig): () => void {
       skipCache: config.skipCache,
       collectLog: config.collectLog,
       tags: config.tags,
+      gatewayId: config.gatewayId,
+      requestTimeoutMs: config.gatewayRequestTimeoutMs,
+      // Only sent when a real override is configured: a zero-cost pair would
+      // tell the gateway every request was free.
+      ...(config.customCostPerTokenIn > 0 || config.customCostPerTokenOut > 0
+        ? {
+            customCost: {
+              perTokenIn: config.customCostPerTokenIn,
+              perTokenOut: config.customCostPerTokenOut,
+            },
+          }
+        : {}),
     },
     streamIdleTimeoutMs: config.streamIdleTimeoutMs,
   })

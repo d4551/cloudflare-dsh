@@ -42,6 +42,60 @@ describe('buildGenericSpec', () => {
     )
   })
 
+  describe('the denylist sees what the server sees', () => {
+    const DENIED = {
+      allowMutations: false,
+      denyPathPrefixes: ['/accounts/x/tokens'],
+    }
+
+    it('blocks the literal path', () => {
+      expect(() => buildGenericSpec('GET', '/accounts/x/tokens', undefined, undefined, DENIED)).toThrow(
+        CloudflareApiDeniedError,
+      )
+    })
+
+    it.each([
+      ['single-encoded', '/accounts/x/%74okens'],
+      ['double-encoded', '/accounts/x/%2574okens'],
+      ['mixed case escape', '/accounts/x/%74oken%73'],
+    ])('blocks a %s spelling of the same resource', (_label, path) => {
+      // The server percent-decodes before it routes, so these all reach
+      // `/accounts/x/tokens`. Comparing the raw text alone let them through.
+      expect(() => buildGenericSpec('GET', path, undefined, undefined, DENIED)).toThrow(CloudflareApiDeniedError)
+    })
+
+    it('blocks a path that merely starts with the prefix', () => {
+      // `startsWith`, not `endsWith`: a denied prefix covers everything beneath
+      // it, so the child resource must be blocked too.
+      expect(() => buildGenericSpec('GET', '/accounts/x/tokens/abc123', undefined, undefined, DENIED)).toThrow(
+        CloudflareApiDeniedError,
+      )
+    })
+
+    it('names the offending prefix so the denial is explicable', () => {
+      expect(() => buildGenericSpec('GET', '/accounts/x/tokens', undefined, undefined, DENIED)).toThrow(
+        'path /accounts/x/tokens is blocked by the configured denylist (/accounts/x/tokens)',
+      )
+    })
+
+    it('still allows a path the denylist does not name', () => {
+      expect(buildGenericSpec('GET', '/accounts/x/members', undefined, undefined, DENIED).path).toBe(
+        '/accounts/x/members',
+      )
+    })
+
+    it('allows a legitimately encoded segment that is not denied', () => {
+      // `seg()` percent-encodes every id, so encoding itself must stay legal.
+      expect(buildGenericSpec('GET', '/accounts/a%2Fb/members', undefined, undefined, DENIED).path).toBe(
+        '/accounts/a%2Fb/members',
+      )
+    })
+  })
+
+  it('rejects an encoded traversal, which decodes to a real one', () => {
+    expect(() => buildGenericSpec('GET', '/a/%2e%2e/%2e%2e/x', undefined, undefined, READ_ONLY)).toThrow(TypeError)
+  })
+
   it('explains how to permit mutations', () => {
     expect(() => buildGenericSpec('POST', '/x', undefined, undefined, READ_ONLY)).toThrow(
       'POST is a mutating request and this plugin is configured read-only. Set `allowMutations: true` on the cloudflare-tools-meta plugin to permit it.',

@@ -19,7 +19,10 @@ describe('meta plugin shape', () => {
   })
 
   it('defaults to refusing mutations and to an empty denylist', () => {
-    expect(metaTools.Config({})).toStrictEqual({ allowMutations: false, denyPathPrefixes: [] })
+    expect(metaTools.Config({})).toStrictEqual({
+      allowMutations: false,
+      denyPathPrefixes: [],
+    })
   })
 
   it('accepts overrides', () => {
@@ -39,6 +42,7 @@ describe('cloudflare_account_list', () => {
     const h = harness({}, async () => envelope([{ id: 'a1', name: 'One' }]))
     await expect(h.run('cloudflare_account_list', {})).resolves.toEqual({
       accounts: [{ id: 'a1', name: 'One' }],
+      truncated: false,
     })
   })
 
@@ -57,7 +61,12 @@ describe('cloudflare_account_list', () => {
 describe('cloudflare_api', () => {
   it('performs a read and returns the unwrapped result', async () => {
     const h = harness({}, async () => envelope({ configs: [] }))
-    await expect(h.run('cloudflare_api', { method: 'GET', path: '/accounts/a1/hyperdrive/configs' })).resolves.toEqual({
+    await expect(
+      h.run('cloudflare_api', {
+        method: 'GET',
+        path: '/accounts/a1/hyperdrive/configs',
+      }),
+    ).resolves.toEqual({
       result: { configs: [] },
     })
   })
@@ -70,7 +79,11 @@ describe('cloudflare_api', () => {
 
   it('passes query parameters through', async () => {
     const h = harness({}, async () => envelope(null))
-    await h.run('cloudflare_api', { method: 'GET', path: '/zones', query: { per_page: '5' } })
+    await h.run('cloudflare_api', {
+      method: 'GET',
+      path: '/zones',
+      query: { per_page: '5' },
+    })
     expect(h.requests[0]!.url).toBe('https://api.test/v4/zones?per_page=5')
   })
 
@@ -92,7 +105,11 @@ describe('cloudflare_api', () => {
 
   it('sends a body on a permitted write', async () => {
     const h = harness({ allowMutations: true }, async () => envelope(null))
-    await h.run('cloudflare_api', { method: 'POST', path: '/zones', body: { name: 'x.test' } })
+    await h.run('cloudflare_api', {
+      method: 'POST',
+      path: '/zones',
+      body: { name: 'x.test' },
+    })
     await expect(h.requests[0]!.text()).resolves.toBe('{"name":"x.test"}')
   })
 
@@ -104,19 +121,56 @@ describe('cloudflare_api', () => {
 
   it('cannot be redirected to another host', async () => {
     const h = harness({})
-    await expect(h.run('cloudflare_api', { method: 'GET', path: 'https://evil.test/x' })).rejects.toThrow()
+    await expect(h.run('cloudflare_api', { method: 'GET', path: 'https://evil.test/x' })).rejects.toThrow(
+      /must start with "\/"/,
+    )
     expect(h.requests).toHaveLength(0)
   })
 
   it('cannot traverse out of the api root', async () => {
     const h = harness({})
-    await expect(h.run('cloudflare_api', { method: 'GET', path: '/a/../../x' })).rejects.toThrow()
+    await expect(h.run('cloudflare_api', { method: 'GET', path: '/a/../../x' })).rejects.toThrow(
+      /must not contain "\.\."/,
+    )
     expect(h.requests).toHaveLength(0)
   })
 
   it('rejects a method outside the advertised set', async () => {
     const h = harness({ allowMutations: true })
-    await expect(h.run('cloudflare_api', { method: 'TRACE', path: '/zones' })).rejects.toThrow()
+    await expect(h.run('cloudflare_api', { method: 'TRACE', path: '/zones' })).rejects.toThrow(/method/i)
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('cannot reach another host through an encoded denylist bypass', async () => {
+    const h = harness({ denyPathPrefixes: ['/accounts/x/tokens'] })
+    await expect(h.run('cloudflare_api', { method: 'GET', path: '/accounts/x/%74okens' })).rejects.toThrow(/denylist/)
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('blocks a descendant of a denylisted prefix reached by encoding', async () => {
+    // The prefix is a *prefix*, not the whole path: the encoded spelling has to
+    // be blocked for everything under it, not only for an exact match.
+    const h = harness({ denyPathPrefixes: ['/accounts/x/tokens'] })
+    await expect(
+      h.run('cloudflare_api', {
+        method: 'GET',
+        path: '/accounts/x/%74okens/verify',
+      }),
+    ).rejects.toThrow('path /accounts/x/%74okens/verify is blocked by the configured denylist (/accounts/x/tokens)')
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('blocks a descendant of a denylisted prefix that is itself written encoded', async () => {
+    // Mirror of the case above: here the literal spelling matches and the
+    // decoded one does not, so the raw comparison is the load-bearing one.
+    const h = harness({ denyPathPrefixes: ['/accounts/x/%74okens'] })
+    await expect(
+      h.run('cloudflare_api', {
+        method: 'GET',
+        path: '/accounts/x/%74okens/verify',
+      }),
+    ).rejects.toThrow(/denylist/)
+    expect(h.requests).toHaveLength(0)
   })
 
   it('renders the result as JSON', () => {

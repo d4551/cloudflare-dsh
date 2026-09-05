@@ -11,9 +11,22 @@ import { expect } from 'vitest'
 const runContext = { signal: undefined } as unknown as ToolRunContext
 
 /** JSON response helper matching the Cloudflare envelope. */
-export function envelope<T>(result: T, status = 200): Response {
-  return new Response(JSON.stringify({ success: true, errors: [], messages: [], result }), {
-    status,
+export function envelope<T>(result: T, resultInfo?: Record<string, number | string>): Response {
+  // `result_info` is optional so an existing fixture stays a single page, but
+  // it has to be expressible: without it no test could exercise a paged walk
+  // at all.
+  const body =
+    resultInfo === undefined
+      ? { success: true, errors: [], messages: [], result }
+      : {
+          success: true,
+          errors: [],
+          messages: [],
+          result,
+          result_info: resultInfo,
+        }
+  return new Response(JSON.stringify(body), {
+    status: 200,
     headers: { 'content-type': 'application/json' },
   })
 }
@@ -21,7 +34,12 @@ export function envelope<T>(result: T, status = 200): Response {
 /** An error envelope. */
 export function failure(code: number, message: string, status = 400): Response {
   return new Response(
-    JSON.stringify({ success: false, errors: [{ code, message }], messages: [], result: null }),
+    JSON.stringify({
+      success: false,
+      errors: [{ code, message }],
+      messages: [],
+      result: null,
+    }),
     { status, headers: { 'content-type': 'application/json' } },
   )
 }
@@ -57,7 +75,11 @@ export function makeHarness(
   // providing it again would be a duplicate registration.
   const service = new CloudflareService(
     ctx,
-    CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4', ...config }),
+    CloudflareConfig({
+      accountId: 'a1',
+      baseUrl: 'https://api.test/v4',
+      ...config,
+    }),
     {
       credentials,
       fetch: async (request) => {

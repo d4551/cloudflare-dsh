@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { CloudflareNotFoundError } from '@d4551/dsh-cloudflare-core'
 import * as dataTools from '../src/tools/data.ts'
 import { envelope, failure, makeHarness } from './harness.ts'
 
@@ -147,7 +148,7 @@ describe('cloudflare_kv_get', () => {
 
   it('surfaces a missing key as an error', async () => {
     const h = makeHarness(dataTools, async () => new Response('not found', { status: 404 }))
-    await expect(h.run('cloudflare_kv_get', { namespaceId: 'n1', key: 'nope' })).rejects.toThrow()
+    await expect(h.run('cloudflare_kv_get', { namespaceId: 'n1', key: 'nope' })).rejects.toThrow(CloudflareNotFoundError)
   })
 })
 

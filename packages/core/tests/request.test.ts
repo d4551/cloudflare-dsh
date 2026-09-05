@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_BASE_URL,
+  assertSafeBaseUrl,
   assertSafePath,
   buildHeaders,
   buildQueryString,
   buildRequest,
   buildUrl,
+  decodePath,
   isBodyless,
 } from '../src/request.ts'
 
@@ -73,7 +75,14 @@ describe('assertSafePath', () => {
   })
 
   it('rejects traversal', () => {
-    expect(() => assertSafePath('/accounts/../../etc')).toThrow(/\.\./)
+    expect(() => assertSafePath('/accounts/../../etc')).toThrow('path must not contain ".."')
+  })
+
+  it('names the decoded spelling when only that one breaks the rules', () => {
+    // The label is the whole diagnostic value here: `/accounts/%2e%2e/x` looks
+    // clean literally, so a message saying only "must not contain .." would
+    // send a caller looking at a path that plainly does not contain it.
+    expect(() => assertSafePath('/accounts/%2e%2e/x')).toThrow('decoded path must not contain ".."')
   })
 
   it('rejects an absolute URL', () => {
@@ -118,7 +127,11 @@ describe('buildHeaders', () => {
   })
 
   it('never lets an extra header displace the resolved credential', () => {
-    const h = buildHeaders({ token: 'real', hasBody: false, extra: { authorization: 'Bearer spoofed' } })
+    const h = buildHeaders({
+      token: 'real',
+      hasBody: false,
+      extra: { authorization: 'Bearer spoofed' },
+    })
     expect(h.get('authorization')).toBe('Bearer real')
   })
 
@@ -131,7 +144,11 @@ describe('buildRequest', () => {
   const base = 'https://api.test/client/v4'
 
   it('builds a GET with no body', async () => {
-    const req = buildRequest({ baseUrl: base, spec: { method: 'GET', path: '/accounts' }, token: 't' })
+    const req = buildRequest({
+      baseUrl: base,
+      spec: { method: 'GET', path: '/accounts' },
+      token: 't',
+    })
     expect(req.method).toBe('GET')
     expect(req.url).toBe(`${base}/accounts`)
     expect(req.body).toBeNull()
@@ -158,7 +175,11 @@ describe('buildRequest', () => {
   })
 
   it('omits the body when none is supplied on a writable method', async () => {
-    const req = buildRequest({ baseUrl: base, spec: { method: 'DELETE', path: '/x' }, token: 't' })
+    const req = buildRequest({
+      baseUrl: base,
+      spec: { method: 'DELETE', path: '/x' },
+      token: 't',
+    })
     expect(req.body).toBeNull()
     expect(req.headers.get('content-type')).toBeNull()
   })
@@ -179,5 +200,78 @@ describe('buildRequest', () => {
       token: 't',
     })
     expect(req.headers.get('cf-aig-metadata')).toBe('{}')
+  })
+})
+
+describe('decodePath', () => {
+  it('returns a path with no escapes unchanged', () => {
+    expect(decodePath('/accounts/x/tokens')).toBe('/accounts/x/tokens')
+  })
+
+  it('decodes a single-encoded path', () => {
+    expect(decodePath('/accounts/x/%74okens')).toBe('/accounts/x/tokens')
+  })
+
+  it('decodes to a fixed point, since a server may decode more than once', () => {
+    expect(decodePath('/accounts/x/%2574okens')).toBe('/accounts/x/tokens')
+  })
+
+  it('rejects a malformed escape rather than passing it through', () => {
+    expect(() => decodePath('/accounts/%zz')).toThrow('path contains a malformed percent-escape: "/accounts/%zz"')
+  })
+
+  it('refuses a path encoded deeper than it can validate', () => {
+    // Each round strips one layer; beyond the bound the value is refused
+    // rather than assumed safe.
+    // Each `25` inserted after the `%` costs one decoding round: this needs
+    // more rounds than the bound allows, so it is refused rather than assumed
+    // safe. Built from parts so the nesting is legible.
+    // Exactly one layer past what the bound can resolve, so this also pins the
+    // comparison itself: a `<=` here would accept it.
+    const nested = `%${'25'.repeat(3)}2E`
+    expect(() => decodePath(`/x/${nested}`)).toThrow(
+      `path is encoded beyond the depth this can validate: ${JSON.stringify(`/x/${nested}`)}`,
+    )
+  })
+
+  it('decodes right up to the bound without refusing', () => {
+    // One layer fewer than the case above: the deepest value the bound can
+    // resolve must still be accepted, or the guard rejects what it can validate.
+    expect(decodePath(`/x/%${'25'.repeat(2)}2E`)).toBe('/x/.')
+  })
+})
+
+describe('assertSafeBaseUrl', () => {
+  it('accepts the Cloudflare REST root', () => {
+    expect(assertSafeBaseUrl('https://api.cloudflare.com/client/v4')).toBe('https://api.cloudflare.com/client/v4')
+  })
+
+  it('rejects a value that is not an absolute URL', () => {
+    expect(() => assertSafeBaseUrl('/client/v4')).toThrow('baseUrl must be an absolute URL, got "/client/v4"')
+  })
+
+  it('rejects a downgraded scheme, which would send the token in clear text', () => {
+    expect(() => assertSafeBaseUrl('http://api.cloudflare.com/client/v4')).toThrow(
+      'baseUrl must use https:, got "http:"',
+    )
+  })
+
+  it.each(['ftp://api.cloudflare.com', 'file:///etc/passwd'])('rejects %s', (url) => {
+    expect(() => assertSafeBaseUrl(url)).toThrow(/must use https:/)
+  })
+
+  it.each([
+    ['a username and password', 'https://user:pw@api.cloudflare.com/client/v4'],
+    ['a username alone', 'https://user@api.cloudflare.com/client/v4'],
+    ['a password alone', 'https://:pw@api.cloudflare.com/client/v4'],
+  ])('rejects %s', (_label, url) => {
+    expect(() => assertSafeBaseUrl(url)).toThrow(/must not embed credentials/)
+  })
+
+  it.each([
+    ['a query string', 'https://api.cloudflare.com/client/v4?x=1'],
+    ['a fragment', 'https://api.cloudflare.com/client/v4#x'],
+  ])('rejects %s', (_label, url) => {
+    expect(() => assertSafeBaseUrl(url)).toThrow('baseUrl must not carry a query string or fragment')
   })
 })

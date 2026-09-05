@@ -49,11 +49,16 @@ export function apply(ctx: Context, config: MetaConfig): void {
       },
       isConcurrencySafe: () => true,
       async execute() {
-        const accounts = await cf.listAccounts()
+        const { accounts, truncated } = await cf.listAccounts()
         // Projected field by field rather than cast: the canonical value is a
         // programmatic API under PTC, so it is declared here, not inherited
-        // from whatever the REST response happened to carry.
-        return { accounts: accounts.map((account) => ({ id: account.id, name: account.name })) }
+        // from whatever the REST response happened to carry. `truncated` says
+        // when the page ceiling stopped the walk, so a partial list is never
+        // reported as the whole one.
+        return {
+          accounts: accounts.map((account) => ({ id: account.id, name: account.name })),
+          truncated,
+        }
       },
     }),
   )

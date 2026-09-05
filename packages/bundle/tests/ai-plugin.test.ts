@@ -62,6 +62,9 @@ describe('plugin shape', () => {
       cacheTtlSeconds: 0,
       skipCache: false,
       collectLog: true,
+      customCostPerTokenIn: 0,
+      customCostPerTokenOut: 0,
+      gatewayRequestTimeoutMs: 0,
       tags: {},
       streamIdleTimeoutMs: 300_000,
       models: [],
@@ -117,7 +120,11 @@ describe('toModelInfo', () => {
   })
 
   it('omits an absent description rather than emitting undefined', () => {
-    expect(aiPlugin.toModelInfo('p', [{ name: 'a' }])[0]).toStrictEqual({ provider: 'p', id: 'a', name: 'a' })
+    expect(aiPlugin.toModelInfo('p', [{ name: 'a' }])[0]).toStrictEqual({
+      provider: 'p',
+      id: 'a',
+      name: 'a',
+    })
   })
 
   it('skips entries with no usable name', () => {
@@ -142,7 +149,11 @@ describe('listModels', () => {
     const fetchImpl = vi.fn(async () => envelope([]))
     const { registered } = harness({ models: ['@cf/pinned'] }, fetchImpl)
     await expect(registered[0]!.adapter.listModels('cloudflare-workers-ai')).resolves.toEqual([
-      { provider: 'cloudflare-workers-ai', id: '@cf/pinned', name: '@cf/pinned' },
+      {
+        provider: 'cloudflare-workers-ai',
+        id: '@cf/pinned',
+        name: '@cf/pinned',
+      },
     ])
     expect(fetchImpl).not.toHaveBeenCalled()
   })
@@ -215,7 +226,12 @@ describe('endpoint resolution', () => {
   // rather than the adapter being constructed with defaults.
   it('applies configured gateway header options to outbound requests', async () => {
     const { outbound } = await stream(
-      { cacheTtlSeconds: 120, skipCache: true, collectLog: false, tags: { env: 'ci' } },
+      {
+        cacheTtlSeconds: 120,
+        skipCache: true,
+        collectLog: false,
+        tags: { env: 'ci' },
+      },
       'cloudflare-workers-ai',
       async () => envelope(null),
     )
@@ -223,6 +239,44 @@ describe('endpoint resolution', () => {
     expect(outbound[0]!.headers.get('cf-aig-skip-cache')).toBe('true')
     expect(outbound[0]!.headers.get('cf-aig-collect-log')).toBe('false')
     expect(outbound[0]!.headers.get('cf-aig-metadata')).toBe('{"env":"ci"}')
+  })
+
+  it('routes to the configured gateway, which Workers AI models require', async () => {
+    const { outbound } = await stream({ gatewayId: 'gw-7' }, 'cloudflare-workers-ai', async () =>
+      envelope(null),
+    )
+    expect(outbound[0]!.headers.get('cf-aig-gateway-id')).toBe('gw-7')
+  })
+
+  it('applies a configured per-token cost override in the documented shape', async () => {
+    const { outbound } = await stream(
+      { customCostPerTokenIn: 0.001, customCostPerTokenOut: 0.002 },
+      'cloudflare-workers-ai',
+      async () => envelope(null),
+    )
+    expect(outbound[0]!.headers.get('cf-aig-custom-cost')).toBe(
+      '{"per_token_in":0.001,"per_token_out":0.002}',
+    )
+  })
+
+  it('applies a cost override configured on the output side alone', async () => {
+    const { outbound } = await stream({ customCostPerTokenOut: 0.002 }, 'cloudflare-workers-ai', async () =>
+      envelope(null),
+    )
+    expect(outbound[0]!.headers.get('cf-aig-custom-cost')).toBe('{"per_token_in":0,"per_token_out":0.002}')
+  })
+
+  it('sends no cost override when none is configured, rather than declaring everything free', () => {
+    return stream({}, 'cloudflare-workers-ai', async () => envelope(null)).then(({ outbound }) => {
+      expect(outbound[0]!.headers.get('cf-aig-custom-cost')).toBeNull()
+    })
+  })
+
+  it('applies a configured gateway-side request timeout', async () => {
+    const { outbound } = await stream({ gatewayRequestTimeoutMs: 9000 }, 'cloudflare-workers-ai', async () =>
+      envelope(null),
+    )
+    expect(outbound[0]!.headers.get('cf-aig-request-timeout')).toBe('9000')
   })
 
   it('applies the configured stream idle timeout', async () => {
