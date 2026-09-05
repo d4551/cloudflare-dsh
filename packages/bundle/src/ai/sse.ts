@@ -71,17 +71,18 @@ export function decodeLine(line: string): SseEvent | undefined {
   return { kind: 'data', data }
 }
 
-/** Outcome of parsing one event payload. */
-export type ParsedEvent<T> = { readonly ok: true; readonly value: T } | { readonly ok: false }
+/** Outcome of parsing text that may not be JSON. */
+export type ParsedJson<T> = { readonly ok: true; readonly value: T } | { readonly ok: false }
 
 /**
- * Parse an event's data payload as JSON.
+ * Parse text as JSON without throwing.
  *
- * Returns a tagged result rather than `undefined`, so "this frame was not
- * JSON" is a state the caller has to handle explicitly — a malformed frame is
- * skipped rather than aborting an otherwise good stream.
+ * Returns a tagged result rather than `undefined`, so "this was not JSON" is
+ * a state the caller has to handle explicitly: a malformed SSE frame is
+ * skipped rather than aborting an otherwise good stream, and a log entry
+ * whose metadata is not JSON carries no session rather than failing a sum.
  */
-export function parseEventData<T>(data: string): ParsedEvent<T> {
+export function parseJson<T>(data: string): ParsedJson<T> {
   try {
     return { ok: true, value: JSON.parse(data) as T }
   } catch {

@@ -17,7 +17,7 @@ import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, StreamChunk } from
 import { emptyResponse, idleTimeout, joinDetail, providerError } from './errors.ts'
 import { type GatewayHeaderOptions, buildGatewayHeaders } from './headers.ts'
 import { buildWireRequest } from './request.ts'
-import { SseDecoder, type SseEvent, parseEventData } from './sse.ts'
+import { SseDecoder, type SseEvent, parseJson } from './sse.ts'
 import { StreamTransducer, type WireChunk } from './transducer.ts'
 
 /** Where and how to reach the provider for one call. */
@@ -50,7 +50,7 @@ const PROVIDER_LABELS: Readonly<Record<string, string>> = {
 
 /** Read the error detail a provider returned, tolerating any body shape. */
 export function readErrorDetail(status: number, body: string): string {
-  const read = parseEventData<{
+  const read = parseJson<{
     errors?: { code?: number; message?: string }[]
     error?: { message?: string; code?: string; type?: string }
   }>(body)
@@ -196,7 +196,7 @@ export class CloudflareAiAdapter extends LlmAdapter {
           yield* transducer.end()
           return
         }
-        const read = parseEventData<WireChunk>(event.data)
+        const read = parseJson<WireChunk>(event.data)
         if (!read.ok) continue
         for (const chunk of transducer.push(read.value)) {
           produced = true

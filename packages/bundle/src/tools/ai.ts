@@ -11,6 +11,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { nextPageQuery } from '@d4551/dsh-cloudflare-core'
 import { SESSION_METADATA_KEY } from '../ai/headers.ts'
+import { parseJson } from '../ai/sse.ts'
 import {
   GATEWAY_LOG_FILTER_KEYS,
   GATEWAY_LOG_FILTER_OPERATORS,
@@ -691,20 +692,14 @@ function numericField(log: Record<string, JsonValue>, field: 'cost' | 'tokens_in
  * trusting the server-side filter to have been applied.
  */
 export function sessionOf(entry: Record<string, JsonValue>): string | undefined {
-  const metadata = entry.metadata
-  let parsed: unknown
-  try {
-    // No separate string guard: `JSON.parse` coerces its argument, and every
-    // non-string value either throws here or fails the object check below, so
-    // a guard would be a branch nothing could observe.
-    parsed = JSON.parse(String(metadata))
-  } catch {
-    return undefined
-  }
+  // No separate string guard: `JSON.parse` coerces its argument, and every
+  // non-string value either fails to parse or fails the object check below, so
+  // a guard would be a branch nothing could observe.
+  const parsed = parseJson<unknown>(String(entry.metadata))
   // Anything but an object — `null`, a number, a string — carries no session
   // id; the predicate also types the read.
-  if (!isObject(parsed)) return undefined
-  const value = parsed[SESSION_METADATA_KEY]
+  if (!parsed.ok || !isObject(parsed.value)) return undefined
+  const value = parsed.value[SESSION_METADATA_KEY]
   return typeof value === 'string' ? value : undefined
 }
 

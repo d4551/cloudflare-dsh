@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SSE_DONE, SseDecoder, decodeLine, parseEventData } from '../src/ai/sse.ts'
+import { SSE_DONE, SseDecoder, decodeLine, parseJson } from '../src/ai/sse.ts'
 
 describe('decodeLine', () => {
   it('decodes a data line', () => {
@@ -114,16 +114,16 @@ describe('SseDecoder', () => {
   })
 })
 
-describe('parseEventData', () => {
+describe('parseJson', () => {
   it('parses a JSON payload', () => {
-    expect(parseEventData('{"a":1}')).toStrictEqual({ ok: true, value: { a: 1 } })
+    expect(parseJson('{"a":1}')).toStrictEqual({ ok: true, value: { a: 1 } })
   })
 
   it('reports failure for a malformed frame rather than aborting the stream', () => {
-    expect(parseEventData('{oops')).toStrictEqual({ ok: false })
+    expect(parseJson('{oops')).toStrictEqual({ ok: false })
   })
 
   it('parses a JSON scalar payload', () => {
-    expect(parseEventData('12')).toStrictEqual({ ok: true, value: 12 })
+    expect(parseJson('12')).toStrictEqual({ ok: true, value: 12 })
   })
 })

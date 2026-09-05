@@ -192,7 +192,8 @@ describe('gateway tools', () => {
       perPage: 50,
       complete: true,
     })
-    expect(h.requests[0]!.url).toContain('page=1&per_page=50')
+    // The whole query, so a clause sent when none was asked for is visible.
+    expect(new URL(h.requests[0]!.url).search).toBe('?page=1&per_page=50')
   })
 
   it('serializes filter clauses the way the endpoint expects', async () => {

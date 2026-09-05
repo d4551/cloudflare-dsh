@@ -237,6 +237,25 @@ run on replayed values, so the restart continued:
    is gone with its unit tests. The eight double casts in test files are gone
    too, and the escape-hatch invariant now covers tests as well as source.
 
+The mutation run on that tree scored 99.93%: 2,976 mutants, two surviving,
+both in this step's code. `args.filters ?? []` could default to a bogus clause
+unnoticed, because the no-filter test checked that the page parameters were
+present and not that nothing else was; it now pins the whole query string. In
+`sessionOf`, the `catch { return undefined }` had become dead the moment the
+object predicate replaced the null check — the fall-through yields the same
+value — so the metadata now goes through the tagged-result JSON parser the SSE
+decoder already had (renamed `parseJson`, since that is what it is), whose
+failure branch is observable.
+
+CI failed the same commit on the invariant this step had just extended: its
+`as any` needle was a substring match and hit the words "has any" in a
+comment, and it had passed locally because the scan read only tracked files
+and the new test file was not yet added. The scan now reads the syntax tree —
+an `any` in any type position, and the double cast — so `Record<string, any>`
+no longer passes and prose no longer fails; it is proven on snippets before it
+is trusted on the tree, and the file list includes what git would add. Probed
+with an untracked file carrying both hatches: the gate failed, naming it.
+
 </details>
 
 <details>
