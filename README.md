@@ -98,8 +98,11 @@ Stryker vitest runner's per-test name filter matches nothing, so every covered
 mutant is reported as surviving
 ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210) —
 Vitest 5 changed `testNamePattern` to join the describe/test chain with `' > '`).
-Measured here: the same suite scores 1.19% on Vitest 5.0.0 and 100% on 4.1.11.
-This is deterministic, not flaky — unpin once that issue is fixed.
+Observed here when the pin was chosen: on Vitest 5.0.0 the run reported ~0.15
+tests per mutant and a 1.19% score, while the identical suite scored 100% on
+4.1.11. Those figures are from the suite as it stood at that moment, not the
+current one; the behaviour is deterministic, not flaky. Unpin and re-measure
+once the upstream issue is fixed.
 
 ### Quality gates
 

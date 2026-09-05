@@ -41,7 +41,9 @@ export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element 
   const rows = resultSets.flatMap((set) => set.results ?? [])
   const columns = columnsOf(rows)
 
-  if (rows.length === 0 || columns.length === 0) {
+  // No columns means nothing to render: `columnsOf` is empty both for no rows
+  // and for rows that carry no fields, so this one check covers both.
+  if (columns.length === 0) {
     return <p className="cf-d1__empty">{en.toolView.emptyResult}</p>
   }
 

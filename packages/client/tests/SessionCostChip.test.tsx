@@ -95,6 +95,17 @@ describe('SessionCostChip', () => {
     expect(container.ownerDocument.getElementById(controls!)).not.toBeNull()
   })
 
+  it('hides the detail while collapsed', () => {
+    const { container } = render(<SessionCostChip usage={usage} />)
+    expect(container.querySelector<HTMLElement>('.cf-chip__detail')?.hidden).toBe(true)
+  })
+
+  it('reveals the detail once expanded', () => {
+    const { container } = render(<SessionCostChip usage={usage} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(container.querySelector<HTMLElement>('.cf-chip__detail')?.hidden).toBe(false)
+  })
+
   it('shows cached and token detail once expanded', () => {
     render(<SessionCostChip usage={usage} />)
     fireEvent.click(screen.getByRole('button'))

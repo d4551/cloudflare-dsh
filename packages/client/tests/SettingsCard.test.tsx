@@ -64,6 +64,29 @@ describe('SettingsCard', () => {
     expect(container.ownerDocument.getElementById(described!)?.textContent).toBe(en.settings.accountHint)
   })
 
+  it('marks no field invalid before anything is submitted', () => {
+    setup()
+    expect(screen.getByLabelText(en.settings.tokenRefLabel).getAttribute('aria-invalid')).toBe('false')
+  })
+
+  it('describes the token field by both its hint and its stored-state note', () => {
+    const { container } = setup({ tokenStored: true })
+    const described = screen.getByLabelText(en.settings.tokenValueLabel).getAttribute('aria-describedby')
+    const ids = described?.split(' ') ?? []
+    expect(ids).toHaveLength(2)
+    const texts = ids.map((id) => container.ownerDocument.getElementById(id)?.textContent)
+    expect(texts).toEqual([en.settings.tokenValueHint, en.settings.tokenSet])
+  })
+
+  // Without preventDefault the form would navigate, losing the page.
+  it('prevents the browser default form submission', () => {
+    const { container } = setup()
+    const form = container.querySelector('form')!
+    const submit = new Event('submit', { bubbles: true, cancelable: true })
+    fireEvent(form, submit)
+    expect(submit.defaultPrevented).toBe(true)
+  })
+
   it('saves the edited settings', () => {
     const { onSave } = setup()
     fireEvent.change(screen.getByLabelText(en.settings.accountLabel), { target: { value: 'acct-9' } })

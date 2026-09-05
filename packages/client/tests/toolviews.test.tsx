@@ -57,6 +57,17 @@ describe('D1Result', () => {
     expect(screen.getAllByRole('row')).toHaveLength(3)
   })
 
+  it('renders each cell value under its column', () => {
+    render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
+    const cells = screen.getAllByRole('cell').map((c) => c.textContent)
+    expect(cells).toEqual(['1', 'a', '2', 'b'])
+  })
+
+  it('renders an empty cell where a row is missing that column', () => {
+    render(<D1Result sql="s" resultSets={[{ results: [{ a: 1 }, { b: 2 }] }]} />)
+    expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(['1', '', '', '2'])
+  })
+
   it('flattens several result sets into one table', () => {
     render(<D1Result sql="s" resultSets={[{ results: [{ a: 1 }] }, { results: [{ a: 2 }] }]} />)
     expect(screen.getAllByRole('row')).toHaveLength(3)
