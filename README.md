@@ -13,7 +13,8 @@ gateway's logs line up one-to-one with harness sessions.
 | Package | What it is |
 |---|---|
 | `@d4551/dsh-cloudflare-core` | The `ctx.cloudflare` capability seam: auth, scoping, error normalization, pagination, retry |
-| `cloudflare-dsh` | The bundle: tool groups, the AI Gateway preset, MCP rows, and the `cordis.patch.yml` layer |
+| `cloudflare-dsh` | The bundle: tool groups, the model provider, MCP rows, and the `cordis.patch.yml` layer |
+| `@d4551/dsh-cloudflare-client` | Web Client surfaces: settings card, session usage chip, tool views |
 
 ## Install
 
@@ -79,8 +80,13 @@ it gets no session attribution.
 bun install
 bun run typecheck && bun run lint
 bun run test && bun run test:coverage
+bun run test:a11y     # real Chromium, both colour schemes
 bun run stryker
 ```
+
+The client package ships `cloudflare.css`; a host that wants the default look
+imports `@d4551/dsh-cloudflare-client/cloudflare.css`. Colours are CSS custom
+properties, so the host's theme wins where it defines them.
 
 Tests run on Vitest under Node rather than `bun test`, for two reasons:
 Stryker has no official Bun runner, and DSH executes plugins on Node
@@ -101,6 +107,14 @@ Mutation score ≥99 and zero axe violations are hard gates, with no file
 exclusions, no `mutate` narrowing, no `// Stryker disable` and no axe rule
 disables. A surviving mutant means the code is untested or dead: write the test
 or delete the code.
+
+Accessibility runs in two lanes because one is not enough. The jsdom component
+tests cover roles, names and structure. Colour contrast is checked separately
+in real Chromium, in both light and dark, because axe-core's contrast rule
+cannot run under jsdom
+([axe-core#595](https://github.com/dequelabs/axe-core/issues/595)) — it needs
+computed styles. That lane is a different runner, so it sits outside the
+mutation run by construction rather than by exclusion.
 
 ## License
 

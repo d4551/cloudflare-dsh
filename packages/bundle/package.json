@@ -17,20 +17,28 @@
   ],
   "exports": {
     "./tools/ai": {
-      "types": "./lib/types/tools/ai.d.ts",
-      "default": "./lib/tools/ai.js"
+      "types": "./lib/tools/ai.d.mts",
+      "default": "./lib/tools/ai.mjs"
     },
     "./tools/data": {
-      "types": "./lib/types/tools/data.d.ts",
-      "default": "./lib/tools/data.js"
+      "types": "./lib/tools/data.d.mts",
+      "default": "./lib/tools/data.mjs"
     },
     "./tools/web": {
-      "types": "./lib/types/tools/web.d.ts",
-      "default": "./lib/tools/web.js"
+      "types": "./lib/tools/web.d.mts",
+      "default": "./lib/tools/web.mjs"
     },
     "./tools/meta": {
-      "types": "./lib/types/tools/meta.d.ts",
-      "default": "./lib/tools/meta.js"
+      "types": "./lib/tools/meta.d.mts",
+      "default": "./lib/tools/meta.mjs"
+    },
+    "./ai": {
+      "types": "./lib/ai/index.d.mts",
+      "default": "./lib/ai/index.mjs"
+    },
+    "./mcp": {
+      "types": "./lib/mcp/index.d.mts",
+      "default": "./lib/mcp/index.mjs"
     },
     "./package.json": "./package.json"
   },
@@ -57,5 +65,8 @@
     "@deepseek-ai/cordis": "4.0.2",
     "@deepseek-ai/dsh-tools": "0.1.2-rc.1",
     "@deepseek-ai/dsh-llm": "0.1.2-rc.1"
+  },
+  "scripts": {
+    "build": "tsdown"
   }
 }

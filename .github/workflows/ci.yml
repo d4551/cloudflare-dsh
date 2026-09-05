@@ -29,6 +29,22 @@ jobs:
       - run: bun run lint
       - run: bun run test:coverage
 
+  accessibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      # Real Chromium, both colour schemes. Fails on any WCAG 2.2 AA violation;
+      # no rule is disabled and no selector is excluded.
+      - run: bun run test:a11y
+
   mutation:
     runs-on: ubuntu-latest
     steps:

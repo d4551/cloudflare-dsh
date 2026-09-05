@@ -167,7 +167,11 @@ export class CloudflareAiAdapter extends LlmAdapter {
         if (done) break
       }
     } finally {
-      reader.releaseLock()
+      // Cancel rather than merely release the lock: when a consumer abandons
+      // the turn mid-stream, cancelling propagates upstream and frees the
+      // connection, where releasing the lock alone leaves it open. Cancelling
+      // an already-drained stream is a no-op.
+      await reader.cancel()
     }
 
     if (!produced && !transducer.isFinished) throw emptyResponse()

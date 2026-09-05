@@ -51,9 +51,10 @@ describe('registration', () => {
     expect(registered.find((r) => r.id === 'cloudflare-cost')?.order).toBe(100)
   })
 
-  it('registers the settings card', () => {
+  it('registers the settings card in its own settings slot', () => {
     const { registered } = harness()
     const card = registered.find((r) => r.id === 'cloudflare-settings')
+    expect(card?.name).toBe('settings.plugin.cloudflare')
     expect(card?.component).toBe(client.SettingsCard)
   })
 

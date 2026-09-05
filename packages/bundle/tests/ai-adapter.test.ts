@@ -247,25 +247,44 @@ describe('stream', () => {
     await expect(collect(adapter.stream(options()))).rejects.toMatchObject({ code: TIMEOUT_CODE })
   })
 
-  // A retained reader lock leaves the response body unusable by anything else.
-  it('releases the response body reader once the stream completes', async () => {
-    let captured: Response | undefined
-    const { adapter } = makeAdapter(async () => {
-      captured = sse(TEXT, STOP)
-      return captured
+  // Abandoning a turn mid-stream must free the connection, not leave the
+  // provider response hanging open.
+  it('cancels the upstream body when the consumer abandons the stream', async () => {
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${TEXT}\n\n`))
+      },
+      cancel() {
+        cancelled = true
+      },
     })
-    await collect(adapter.stream(options()))
-    expect(captured?.body?.locked).toBe(false)
+    const { adapter } = makeAdapter(async () => new Response(body, { status: 200 }))
+    for await (const chunk of adapter.stream(options())) {
+      if (chunk.type === 'text-delta') break
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20)
+    })
+    expect(cancelled).toBe(true)
   })
 
-  it('releases the reader even when the stream ends without a finish reason', async () => {
-    let captured: Response | undefined
-    const { adapter } = makeAdapter(async () => {
-      captured = sse(TEXT)
-      return captured
+  it('cancels the upstream body once a completed stream is drained', async () => {
+    let cancelled = false
+    const payload = `data: ${TEXT}\n\ndata: ${STOP}\n\n`
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(payload))
+        controller.close()
+      },
+      cancel() {
+        cancelled = true
+      },
     })
-    await collect(adapter.stream(options()))
-    expect(captured?.body?.locked).toBe(false)
+    const { adapter } = makeAdapter(async () => new Response(body, { status: 200 }))
+    const chunks = await collect(adapter.stream(options()))
+    expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
+    expect(cancelled).toBe(false)
   })
 
   // A leaked idle timer would keep the process alive after a finished stream.

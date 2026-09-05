@@ -13,7 +13,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['packages/*/tests/**/*.test.ts', 'packages/*/tests/**/*.test.tsx'],
-    exclude: ['**/node_modules/**'],
+    // The Chromium accessibility lane runs from vitest.a11y.config.ts.
+    exclude: ['**/node_modules/**', '**/*.browser.test.tsx'],
     pool: 'threads',
     coverage: {
       provider: 'v8',

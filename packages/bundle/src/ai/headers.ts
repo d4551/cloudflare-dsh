@@ -11,16 +11,6 @@
  * it as something "adapters may map to model-hidden transport metadata".
  */
 
-/** Metadata attached to every gateway request. */
-export interface GatewayMetadata {
-  /** Harness session this request belongs to, when the loop supplied one. */
-  readonly sessionId?: string
-  /** Auxiliary-call classification, so housekeeping is attributable separately. */
-  readonly purpose?: string
-  /** Free-form tags from plugin config, for grouping across sessions. */
-  readonly [key: string]: string | undefined
-}
-
 /** Gateway behaviour this adapter can request per call. */
 export interface GatewayHeaderOptions {
   /** Seconds to cache an identical request; 0 disables caching. */

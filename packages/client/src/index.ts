@@ -18,11 +18,15 @@ import { D1Result } from './toolviews/D1Result.tsx'
 
 export * from './format.ts'
 export * from './locales/en.ts'
-export { SessionCostChip } from './SessionCostChip.tsx'
-export { SettingsCard } from './SettingsCard.tsx'
-export { AccessibilityTree } from './toolviews/AccessibilityTree.tsx'
-export { BrowserRender } from './toolviews/BrowserRender.tsx'
-export { D1Result } from './toolviews/D1Result.tsx'
+export { SessionCostChip, type SessionCostChipProps } from './SessionCostChip.tsx'
+export { SettingsCard, type CloudflareSettings, type SettingsCardProps } from './SettingsCard.tsx'
+export {
+  AccessibilityTree,
+  type AccessibilityTreeProps,
+  type AxNode,
+} from './toolviews/AccessibilityTree.tsx'
+export { BrowserRender, type BrowserRenderProps } from './toolviews/BrowserRender.tsx'
+export { D1Result, type D1ResultProps, type D1ResultSet } from './toolviews/D1Result.tsx'
 
 /** One slot registration request. */
 export interface SlotRegistration {
