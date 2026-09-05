@@ -259,6 +259,17 @@ describe('endpoint resolution', () => {
     )
   })
 
+  it('applies a cost override configured on the input side alone', async () => {
+    // Each side is a reason to send the header on its own; a mutation testing
+    // survivor showed only the output side was ever asserted.
+    const { outbound } = await stream(
+      { customCostPerTokenIn: 0.001 },
+      'cloudflare-workers-ai',
+      async () => envelope(null),
+    )
+    expect(outbound[0]!.headers.get('cf-aig-custom-cost')).toBe('{"per_token_in":0.001,"per_token_out":0}')
+  })
+
   it('applies a cost override configured on the output side alone', async () => {
     const { outbound } = await stream({ customCostPerTokenOut: 0.002 }, 'cloudflare-workers-ai', async () =>
       envelope(null),

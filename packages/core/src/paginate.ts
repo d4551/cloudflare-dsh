@@ -98,6 +98,9 @@ export async function paginate<T>(
 
   // Stopping at the ceiling with a next page still offered is a different
   // outcome from running out of data. A caller that cannot tell them apart
-  // reports a partial result as a total.
-  return { items, pages: page, truncated: page >= maxPages && query !== null }
+  // reports a partial result as a total. The walk only ever stops while a
+  // next page is still offered because the ceiling was reached, so that alone
+  // is the signal — a `page >= maxPages` conjunct here would be dead, and a
+  // mutation testing run proved it so.
+  return { items, pages: page, truncated: query !== null }
 }

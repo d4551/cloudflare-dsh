@@ -137,15 +137,25 @@ Fixing forward exposed five more holes, each now closed:
 5. **No assertion kept `as unknown as` and `any` out of source.** There are
    none; there is now a check that keeps it that way.
 
-**Mutation result at this point: 99.92%, not 100.** Two runs on this tree report
-the same two mutants as surviving — `ai/index.ts:183` (the custom-cost
-condition replaced by `false`) and `paginate.ts:102` (`truncated` replaced by
-`true`) — with every covering test completed and none failing. Applied by hand,
-the identical changes fail 2 and 8 tests; applied by hand under Stryker's own
-selection (the covering-test name filter, `bail`, a single worker) they are
-still killed. The difference is therefore in the runner's instrumentation or
-activation of these two mutants, not in the tests. The threshold stays at 100,
-so CI reports this red until the cause is found and fixed.
+**Mutation result at the first commit of this restart: 99.92%, not 100 — and
+the conclusion recorded there was wrong.** Two runs reported the same two
+mutants surviving, `ai/index.ts:183` and `paginate.ts:102`, and the by-hand
+probes "killed" both. The probes had applied different mutations: a compound
+condition and its first operand start at the same column, and the survivors
+were the operand-level ones, read from a fresh instrumented sandbox rather
+than from the report's line and column.
+
+- `paginate.ts:102` — `page >= maxPages` replaced by `true`, leaving
+  `truncated: query !== null`. Equivalent: the walk only stops while a next
+  page is still offered because the ceiling was reached, so the conjunct was
+  dead. Deleted, not tested.
+- `ai/index.ts:183` — `customCostPerTokenIn > 0` replaced by `false`. A real
+  gap: only the output side of the cost override had ever been asserted on its
+  own. The input-side test now exists.
+
+Stryker was right both times. The commit message of `c29d156` states the
+wrong conclusion ("the runner's instrumentation or activation"); this entry
+corrects it, and the threshold was never moved.
 
 </details>
 
