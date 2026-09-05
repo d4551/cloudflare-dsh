@@ -256,6 +256,21 @@ no longer passes and prose no longer fails; it is proven on snippets before it
 is trusted on the tree, and the file list includes what git would add. Probed
 with an untracked file carrying both hatches: the gate failed, naming it.
 
+The run that followed, on `fad63a3`, scored 100.00% — 2,976 mutants, 2,963
+killed, 13 timeouts, none surviving.
+
+9. **The mutation guard compared times, and time was not enough.** A source
+   edited while a run is in progress is older than the report the run writes
+   at its end, so the guard read the report as fresh although the run never
+   saw the edit. Stryker records the text it instrumented, so the guard now
+   compares that text with the file on disk, byte for byte, before it trusts a
+   report; a file that has gone is different too. Its checks are pure
+   functions now, each with unit tests in the gates lane that show it failing
+   on a synthetic report. Probed for real: a comment was appended to
+   `paginate.ts` two minutes before run 9 finished; the report was newer than
+   the edit, its recorded source did not contain it, and the guard refused the
+   report by name.
+
 </details>
 
 <details>

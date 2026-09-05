@@ -709,7 +709,7 @@ bun install
 | `bun run format:check`    | `oxfmt --check`; fails on any file outside the canonical style. `bun run format` conforms it |
 | `bun run test`            | Vitest on Node                                                                               |
 | `bun run test:coverage`   | The same, with 100% thresholds                                                               |
-| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality)                                              |
+| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality), and each check of the mutation guard        |
 | `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered                                           |
 | `bun run build`           | `tsdown`, per package                                                                        |
 | `bun run test:dist`       | Loads the **built** artifacts as a consumer resolves them                                    |
@@ -734,9 +734,11 @@ packages/
     presets/    pi-ai.yaml — the zero-code declarative path
     cordis.patch.yml
   client/   @d4551/dsh-cloudflare-client — Web Client surfaces
-scripts/    verify-mutation-files.mjs
-tests/      dist.test.ts       — the built-output suite
-            invariants.test.ts — the quality rules, as assertions
+scripts/    mutation-guard.ts        — the escape guard's checks, as pure functions
+            verify-mutation-files.ts — applies them to the tree after a mutation run
+tests/      dist.test.ts           — the built-output suite
+            invariants.test.ts     — the quality rules, as assertions
+            mutation-guard.test.ts — each guard check, shown to fail
 ```
 
 `test:dist` deliberately has no source aliases. The unit and accessibility
