@@ -9,7 +9,7 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 6**
+**I'm a fucking loser: 7**
 
 <details>
 <summary><strong>Restart 1 — the mutation glob matched less than the claim</strong></summary>
@@ -158,6 +158,42 @@ wrong conclusion ("the runner's instrumentation or activation"); this entry
 corrects it, and the threshold was never moved. With both fixed, the next run
 scored 100.00% — 2,610 killed, 14 timeouts, none surviving — and the escape
 guard passed.
+
+</details>
+
+<details>
+<summary><strong>Restart 7 — documented claims the code did not honour</strong></summary>
+
+A fresh audit of the tree at `9feb293` reported a violation. The self-audit
+started where an auditor starts — the README — and treated every documented
+claim the remediation plan had already marked false as dishonesty to remove
+now, by making the code true rather than the words softer.
+
+1. **`cloudflare_kv_list_keys` promised a cursor it could not return.** The tool
+   read only the envelope's `result`, so `result_info.cursor` was discarded and
+   the README's `{ keys, cursor, complete }` loop shape did not exist. The
+   service now exposes an account-scoped request that keeps the envelope; the
+   tool takes a `cursor` parameter, returns the cursor the API sent and whether
+   the listing is complete, refuses a cursor that is not a string rather than
+   ending the listing early, and is the first tool with a typed output schema
+   (`additionalProperties: false`), so its render reads the value without a
+   cast.
+2. **"There are no tunables hidden as constants."** There were: two render
+   limits, four inference and render budgets, and every default page size,
+   batch size and visibility timeout. Each is now a validated `Config` field on
+   its plugin — `cloudflare-tools-ai`, `-data` and `-web` gained schemas — and
+   the parameter descriptions the model reads state the configured default,
+   so the contract goldens hold for default configuration and stay true for
+   any other. A zero is rejected at configuration time. The README documents
+   the three new tables; the shipped patch layer is unchanged.
+3. **`listAccounts` claimed "every account"** while walking to a page ceiling;
+   the docstring now says what `truncated` means.
+4. **MCP passthrough.** The module does build the rows the README describes;
+   what was missing was any statement of how a profile consumes them. A usage
+   example now shows it.
+
+The test harness applies each plugin through its own `Config`, as the harness
+does, so no test reaches a tool with an unvalidated configuration.
 
 </details>
 

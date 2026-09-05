@@ -8,6 +8,7 @@
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import Schema from '@deepseek-ai/schemastery'
 import {
   d1ListSpec,
   d1QuerySpec,
@@ -33,12 +34,32 @@ interface CloudflareContext extends Context {
 }
 
 /** Longest value body rendered to the model; the canonical value keeps it all. */
-const RENDER_LIMIT = 4000
 
 export const name = 'cloudflare-tools-data'
 export const inject = ['tools', 'cloudflare']
 
-export function apply(ctx: Context): void {
+export interface DataToolsConfig {
+  /** Default page size for namespace, database, queue and bucket listings. */
+  pageSize: number
+  /** Default number of keys `cloudflare_kv_list_keys` returns per page. */
+  keyListLimit: number
+  /** Characters of a KV value shown to the model before truncation. */
+  renderLimit: number
+  /** Default number of messages `cloudflare_queue_pull` takes. */
+  queueBatchSize: number
+  /** Default time pulled messages stay invisible to other consumers. */
+  queueVisibilityTimeoutMs: number
+}
+
+export const Config: Schema<Partial<DataToolsConfig>, DataToolsConfig> = Schema.object({
+  pageSize: Schema.natural().min(1).default(50),
+  keyListLimit: Schema.natural().min(1).default(1000),
+  renderLimit: Schema.natural().min(1).default(4000),
+  queueBatchSize: Schema.natural().min(1).default(10),
+  queueVisibilityTimeoutMs: Schema.natural().min(1).default(30_000),
+})
+
+export function apply(ctx: Context, config: DataToolsConfig): void {
   const cf = (ctx as CloudflareContext).cloudflare
 
   ctx.tools.register(
@@ -46,7 +67,7 @@ export function apply(ctx: Context): void {
       name: 'cloudflare_kv_namespace_list',
       description: 'List the Workers KV namespaces in the Cloudflare account.',
       parameters: {
-        perPage: { type: 'integer', description: 'Namespaces per page (default 50).' },
+        perPage: { type: 'integer', description: `Namespaces per page (default ${config.pageSize}).` },
       },
       output: {
         schema: {
@@ -59,7 +80,9 @@ export function apply(ctx: Context): void {
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const namespaces = await cf.accountRequest<JsonValue[]>(kvNamespaceListSpec(args.perPage ?? 50))
+        const namespaces = await cf.accountRequest<JsonValue[]>(
+          kvNamespaceListSpec(args.perPage ?? config.pageSize),
+        )
         return { namespaces }
       },
     }),
@@ -68,22 +91,57 @@ export function apply(ctx: Context): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_kv_list_keys',
-      description: 'List keys in a Workers KV namespace. Returns a cursor for paging when more keys remain.',
+      description:
+        'List keys in a Workers KV namespace. Returns the cursor for the next page and whether the listing is complete.',
       parameters: {
         namespaceId: { type: 'string', required: true, description: 'KV namespace id.' },
         prefix: { type: 'string', description: 'Only list keys starting with this prefix.' },
-        limit: { type: 'integer', description: 'Maximum keys to return (default 1000).' },
+        limit: { type: 'integer', description: `Maximum keys to return (default ${config.keyListLimit}).` },
+        cursor: {
+          type: 'string',
+          description: 'Cursor returned by a previous page; omit for the first page.',
+        },
       },
       output: {
-        schema: { type: 'object', additionalProperties: true, description: 'Keys and paging state.' },
-        render: (_args, value) => listing((value as { keys: unknown[] }).keys.length, 'key', value),
+        schema: {
+          type: 'object',
+          description: 'Keys and paging state.',
+          additionalProperties: false,
+          properties: {
+            keys: {
+              type: 'array',
+              required: true,
+              description: 'Key entries as the API returns them.',
+              items: { type: 'object', additionalProperties: true },
+            },
+            cursor: {
+              type: 'string',
+              required: true,
+              description: 'Cursor for the next page; empty when complete.',
+            },
+            complete: {
+              type: 'boolean',
+              required: true,
+              description: 'Whether every key has been returned.',
+            },
+          },
+        },
+        render: (_args, value) => listing(value.keys.length, 'key', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const keys = await cf.accountRequest<JsonValue[]>(
-          kvListKeysSpec(args.namespaceId, args.prefix, args.limit ?? 1000),
+        // The envelope, not just its result: `result_info.cursor` is the paging
+        // state this tool exists to hand back. The API ends a listing by
+        // omitting the cursor (or sending an empty one).
+        const page = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>(
+          kvListKeysSpec(args.namespaceId, args.prefix, args.limit ?? config.keyListLimit, args.cursor),
         )
-        return { keys }
+        const raw = page.result_info?.cursor
+        if (raw !== undefined && typeof raw !== 'string') {
+          throw new TypeError(`KV result_info.cursor must be a string, got ${typeof raw}`)
+        }
+        const cursor = raw ?? ''
+        return { keys: page.result, cursor, complete: cursor === '' }
       },
     }),
   )
@@ -99,7 +157,7 @@ export function apply(ctx: Context): void {
       output: {
         schema: { type: 'object', additionalProperties: true, description: 'The stored value.' },
         render: (args, value) =>
-          text(`${args.key}\n${truncate((value as { value: string }).value, RENDER_LIMIT)}`),
+          text(`${args.key}\n${truncate((value as { value: string }).value, config.renderLimit)}`),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
@@ -177,7 +235,9 @@ export function apply(ctx: Context): void {
     defineTool({
       name: 'cloudflare_d1_list',
       description: 'List the D1 databases in the Cloudflare account.',
-      parameters: { perPage: { type: 'integer', description: 'Databases per page (default 50).' } },
+      parameters: {
+        perPage: { type: 'integer', description: `Databases per page (default ${config.pageSize}).` },
+      },
       output: {
         schema: { type: 'object', additionalProperties: true, description: 'Databases with ids and names.' },
         render: (_args, value) =>
@@ -185,7 +245,7 @@ export function apply(ctx: Context): void {
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const databases = await cf.accountRequest<JsonValue[]>(d1ListSpec(args.perPage ?? 50))
+        const databases = await cf.accountRequest<JsonValue[]>(d1ListSpec(args.perPage ?? config.pageSize))
         return { databases }
       },
     }),
@@ -226,14 +286,16 @@ export function apply(ctx: Context): void {
     defineTool({
       name: 'cloudflare_queue_list',
       description: 'List the Cloudflare Queues in the account.',
-      parameters: { perPage: { type: 'integer', description: 'Queues per page (default 50).' } },
+      parameters: {
+        perPage: { type: 'integer', description: `Queues per page (default ${config.pageSize}).` },
+      },
       output: {
         schema: { type: 'object', additionalProperties: true, description: 'Queues with ids and names.' },
         render: (_args, value) => listing((value as { queues: unknown[] }).queues.length, 'queue', value),
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const queues = await cf.accountRequest<JsonValue[]>(queueListSpec(args.perPage ?? 50))
+        const queues = await cf.accountRequest<JsonValue[]>(queueListSpec(args.perPage ?? config.pageSize))
         return { queues }
       },
     }),
@@ -265,10 +327,10 @@ export function apply(ctx: Context): void {
         'Pull a batch of messages from a Cloudflare Queue. Each message carries a lease_id that must be passed to cloudflare_queue_ack.',
       parameters: {
         queueId: { type: 'string', required: true, description: 'Queue id.' },
-        batchSize: { type: 'integer', description: 'Messages to pull (default 10).' },
+        batchSize: { type: 'integer', description: `Messages to pull (default ${config.queueBatchSize}).` },
         visibilityTimeoutMs: {
           type: 'integer',
-          description: 'How long pulled messages stay invisible, in ms (default 30000, max 12 hours).',
+          description: `How long pulled messages stay invisible, in ms (default ${config.queueVisibilityTimeoutMs}, max 12 hours).`,
         },
       },
       output: {
@@ -282,7 +344,11 @@ export function apply(ctx: Context): void {
       },
       async execute(args) {
         const result = await cf.accountRequest<{ messages?: JsonValue[] }>(
-          queuePullSpec(args.queueId, args.batchSize ?? 10, args.visibilityTimeoutMs ?? 30_000),
+          queuePullSpec(
+            args.queueId,
+            args.batchSize ?? config.queueBatchSize,
+            args.visibilityTimeoutMs ?? config.queueVisibilityTimeoutMs,
+          ),
         )
         return { messages: result.messages ?? [] }
       },
@@ -323,7 +389,9 @@ export function apply(ctx: Context): void {
     defineTool({
       name: 'cloudflare_r2_bucket_list',
       description: 'List the R2 buckets in the Cloudflare account.',
-      parameters: { perPage: { type: 'integer', description: 'Buckets per page (default 50).' } },
+      parameters: {
+        perPage: { type: 'integer', description: `Buckets per page (default ${config.pageSize}).` },
+      },
       output: {
         schema: {
           type: 'object',
@@ -335,7 +403,7 @@ export function apply(ctx: Context): void {
       isConcurrencySafe: () => true,
       async execute(args) {
         const result = await cf.accountRequest<{ buckets?: JsonValue[] }>(
-          r2BucketListSpec(args.perPage ?? 50),
+          r2BucketListSpec(args.perPage ?? config.pageSize),
         )
         return { buckets: result.buckets ?? [] }
       },

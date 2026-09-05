@@ -733,3 +733,38 @@ describe('summariseSessionLogs', () => {
     )
   })
 })
+
+describe('AiToolsConfig', () => {
+  it('defaults every tunable the tools used to hard-code', () => {
+    expect(aiTools.Config({})).toStrictEqual({
+      pageSize: 50,
+      searchMaxResults: 10,
+      vectorTopK: 5,
+      inferenceTimeoutMs: 120_000,
+    })
+  })
+
+  it('rejects a zero budget at configuration time', () => {
+    expect(() => aiTools.Config({ inferenceTimeoutMs: 0 })).toThrow(
+      '$.inferenceTimeoutMs expected number >= 1 but got 0',
+    )
+  })
+
+  it('applies a configured page size to the model catalogue', async () => {
+    const h = makeHarness(aiTools, async () => envelope([]), {}, { pageSize: 7 })
+    await h.run('cloudflare_ai_models_search', {})
+    expect(h.requests[0]!.url).toContain('per_page=7')
+  })
+
+  it('applies a configured inference budget to the tools that wait on a model', () => {
+    const h = makeHarness(aiTools, async () => envelope(null), {}, { inferenceTimeoutMs: 9_000 })
+    expect(h.tool('cloudflare_ai_run').timeoutMs).toBe(9_000)
+  })
+
+  it('states the configured default in the parameter description the model reads', () => {
+    const h = makeHarness(aiTools, async () => envelope([]), {}, { vectorTopK: 3 })
+    expect(h.tool('cloudflare_vectorize_query').parameters).toMatchObject({
+      properties: { topK: { description: 'How many matches to return (default 3).' } },
+    })
+  })
+})

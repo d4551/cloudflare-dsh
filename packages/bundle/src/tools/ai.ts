@@ -8,6 +8,7 @@
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import Schema from '@deepseek-ai/schemastery'
 import { nextPageQuery } from '@d4551/dsh-cloudflare-core'
 import { SESSION_METADATA_KEY } from '../ai/headers.ts'
 import {
@@ -46,7 +47,25 @@ const BILLING_VIEWS: readonly BillingView[] = ['credit-balance', 'usage-history'
 export const name = 'cloudflare-tools-ai'
 export const inject = ['tools', 'cloudflare']
 
-export function apply(ctx: Context): void {
+export interface AiToolsConfig {
+  /** Default page size for listing and search tools. */
+  pageSize: number
+  /** Default number of chunks `cloudflare_aisearch_search` returns. */
+  searchMaxResults: number
+  /** Default number of matches `cloudflare_vectorize_query` returns. */
+  vectorTopK: number
+  /** Cooperative budget for tools that wait on model inference. */
+  inferenceTimeoutMs: number
+}
+
+export const Config: Schema<Partial<AiToolsConfig>, AiToolsConfig> = Schema.object({
+  pageSize: Schema.natural().min(1).default(50),
+  searchMaxResults: Schema.natural().min(1).default(10),
+  vectorTopK: Schema.natural().min(1).default(5),
+  inferenceTimeoutMs: Schema.natural().min(1).default(120_000),
+})
+
+export function apply(ctx: Context, config: AiToolsConfig): void {
   const cf = (ctx as CloudflareContext).cloudflare
 
   ctx.tools.register(
@@ -66,7 +85,7 @@ export function apply(ctx: Context): void {
         schema: { type: 'object', additionalProperties: true, description: 'The model output.' },
         render: (_args, value) => json((value as { output: JsonValue }).output),
       },
-      timeoutMs: 120_000,
+      timeoutMs: config.inferenceTimeoutMs,
       async execute(args) {
         const output = await cf.accountRequest<JsonValue>(aiRunSpec(args.model, args.input))
         return { model: args.model, output }
@@ -81,7 +100,7 @@ export function apply(ctx: Context): void {
       parameters: {
         search: { type: 'string', description: 'Substring to match against model names.' },
         task: { type: 'string', description: 'Task filter, e.g. "Text Generation".' },
-        perPage: { type: 'integer', description: 'Models per page (default 50).' },
+        perPage: { type: 'integer', description: `Models per page (default ${config.pageSize}).` },
       },
       output: {
         schema: { type: 'object', additionalProperties: true, description: 'Matching models.' },
@@ -90,7 +109,7 @@ export function apply(ctx: Context): void {
       isConcurrencySafe: () => true,
       async execute(args) {
         const models = await cf.accountRequest<JsonValue[]>(
-          aiModelsSearchSpec(args.search, args.task, args.perPage ?? 50),
+          aiModelsSearchSpec(args.search, args.task, args.perPage ?? config.pageSize),
         )
         return { models }
       },
@@ -123,7 +142,9 @@ export function apply(ctx: Context): void {
     defineTool({
       name: 'cloudflare_aigateway_list',
       description: 'List the AI Gateways in the Cloudflare account.',
-      parameters: { perPage: { type: 'integer', description: 'Gateways per page (default 50).' } },
+      parameters: {
+        perPage: { type: 'integer', description: `Gateways per page (default ${config.pageSize}).` },
+      },
       output: {
         schema: {
           type: 'object',
@@ -135,7 +156,9 @@ export function apply(ctx: Context): void {
       },
       isConcurrencySafe: () => true,
       async execute(args) {
-        const gateways = await cf.accountRequest<JsonValue[]>(gatewayListSpec(args.perPage ?? 50))
+        const gateways = await cf.accountRequest<JsonValue[]>(
+          gatewayListSpec(args.perPage ?? config.pageSize),
+        )
         return { gateways }
       },
     }),
@@ -283,7 +306,10 @@ export function apply(ctx: Context): void {
       parameters: {
         instanceId: { type: 'string', required: true, description: 'AI Search instance id.' },
         query: { type: 'string', required: true, description: 'Search query.' },
-        maxResults: { type: 'integer', description: 'Maximum chunks to return (default 10).' },
+        maxResults: {
+          type: 'integer',
+          description: `Maximum chunks to return (default ${config.searchMaxResults}).`,
+        },
       },
       output: {
         schema: { type: 'object', additionalProperties: true, description: 'Matching chunks.' },
@@ -292,7 +318,7 @@ export function apply(ctx: Context): void {
       isConcurrencySafe: () => true,
       async execute(args) {
         const results = await cf.accountRequest<JsonValue>(
-          aiSearchSearchSpec(args.instanceId, args.query, args.maxResults ?? 10),
+          aiSearchSearchSpec(args.instanceId, args.query, args.maxResults ?? config.searchMaxResults),
         )
         return { results }
       },
@@ -312,7 +338,7 @@ export function apply(ctx: Context): void {
         schema: { type: 'object', additionalProperties: true, description: 'The grounded completion.' },
         render: (_args, value) => json((value as { answer: JsonValue }).answer),
       },
-      timeoutMs: 120_000,
+      timeoutMs: config.inferenceTimeoutMs,
       async execute(args) {
         const answer = await cf.accountRequest<JsonValue>(
           aiSearchChatSpec(args.instanceId, args.query, args.model),
@@ -369,7 +395,7 @@ export function apply(ctx: Context): void {
           description: 'Query vector.',
           items: { type: 'number' },
         },
-        topK: { type: 'integer', description: 'How many matches to return (default 5).' },
+        topK: { type: 'integer', description: `How many matches to return (default ${config.vectorTopK}).` },
         returnValues: { type: 'boolean', description: 'Include stored vectors in the response.' },
         returnMetadata: { type: 'boolean', description: 'Include stored metadata in the response.' },
       },
@@ -383,7 +409,7 @@ export function apply(ctx: Context): void {
           vectorizeQuerySpec(
             args.indexName,
             args.vector as readonly number[],
-            args.topK ?? 5,
+            args.topK ?? config.vectorTopK,
             args.returnValues ?? false,
             args.returnMetadata ?? true,
           ),

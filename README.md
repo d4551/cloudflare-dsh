@@ -479,6 +479,32 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 | `streamIdleTimeoutMs` | `300000`                  | How long a stream may go quiet before failing as a timeout       |
 | `models`              | `[]`                      | Advertised models; empty means query the catalogue               |
 
+### `cloudflare-tools-ai` (`cloudflare-dsh/tools/ai`)
+
+| Field                | Default  | Meaning                                                        |
+| -------------------- | -------- | -------------------------------------------------------------- |
+| `pageSize`           | `50`     | Default page size for the model catalogue and gateway listings |
+| `searchMaxResults`   | `10`     | Default number of chunks `cloudflare_aisearch_search` returns  |
+| `vectorTopK`         | `5`      | Default number of matches `cloudflare_vectorize_query` returns |
+| `inferenceTimeoutMs` | `120000` | Cooperative budget for tools that wait on model inference      |
+
+### `cloudflare-tools-data` (`cloudflare-dsh/tools/data`)
+
+| Field                      | Default | Meaning                                                              |
+| -------------------------- | ------- | -------------------------------------------------------------------- |
+| `pageSize`                 | `50`    | Default page size for namespace, database, queue and bucket listings |
+| `keyListLimit`             | `1000`  | Default number of keys `cloudflare_kv_list_keys` returns per page    |
+| `renderLimit`              | `4000`  | Characters of a KV value shown to the model before truncation        |
+| `queueBatchSize`           | `10`    | Default number of messages `cloudflare_queue_pull` takes             |
+| `queueVisibilityTimeoutMs` | `30000` | Default time pulled messages stay invisible to other consumers       |
+
+### `cloudflare-tools-web` (`cloudflare-dsh/tools/web`)
+
+| Field             | Default  | Meaning                                                                     |
+| ----------------- | -------- | --------------------------------------------------------------------------- |
+| `renderLimit`     | `8000`   | Characters of a rendered page or accessibility tree shown before truncation |
+| `renderTimeoutMs` | `120000` | Cooperative budget for a real browser render                                |
+
 ### `cloudflare-tools-meta` — the escape hatch (`cloudflare-dsh/tools/meta`)
 
 | Field              | Default | Meaning                                                        |
@@ -593,6 +619,18 @@ interactive profile and unsuitable for headless runs.
 
 Only tools are bridged — MCP resources and prompts are not. Bridged tools appear
 as `mcp__<serverName>__<toolName>`.
+
+A profile opts in by adding the rows it wants to its own patch layer. The
+module builds them, so a server name is validated against the MCP client's
+constraint before anything is mounted:
+
+```ts
+import { mcpPatchRows } from 'cloudflare-dsh/mcp'
+
+// One row per server, each mounting '@deepseek-ai/dsh-mcp-client' over
+// streamable HTTP. Paste into the profile's patch layer.
+const rows = mcpPatchRows(['cloudflare-docs', 'cloudflare-browser'])
+```
 
 ---
 

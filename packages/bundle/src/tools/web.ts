@@ -8,6 +8,7 @@
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import Schema from '@deepseek-ai/schemastery'
 import {
   RESOURCE_TYPES,
   type RenderFormat,
@@ -23,7 +24,6 @@ interface CloudflareContext extends Context {
 }
 
 /** Longest rendered body handed to the model; the canonical value keeps it all. */
-const RENDER_LIMIT = 8000
 
 /** Formats the render tool accepts, in the order they appear to the model. */
 const FORMATS: readonly RenderFormat[] = [
@@ -54,7 +54,19 @@ export function renderOptionsFrom(args: {
   }
 }
 
-export function apply(ctx: Context): void {
+export interface WebToolsConfig {
+  /** Characters of a rendered page or tree shown to the model before truncation. */
+  renderLimit: number
+  /** Cooperative budget for a real browser render. */
+  renderTimeoutMs: number
+}
+
+export const Config: Schema<Partial<WebToolsConfig>, WebToolsConfig> = Schema.object({
+  renderLimit: Schema.natural().min(1).default(8000),
+  renderTimeoutMs: Schema.natural().min(1).default(120_000),
+})
+
+export function apply(ctx: Context, config: WebToolsConfig): void {
   const cf = (ctx as CloudflareContext).cloudflare
 
   ctx.tools.register(
@@ -86,12 +98,12 @@ export function apply(ctx: Context): void {
         },
         render: (args, value) => {
           const v = value as { body: JsonValue }
-          if (typeof v.body === 'string') return text(truncate(v.body, RENDER_LIMIT))
+          if (typeof v.body === 'string') return text(truncate(v.body, config.renderLimit))
           return json(v.body)
         },
       },
       isConcurrencySafe: () => true,
-      timeoutMs: 120_000,
+      timeoutMs: config.renderTimeoutMs,
       async execute(args) {
         const body = await cf.accountRequest<JsonValue>(
           browserRenderSpec(args.format as RenderFormat, renderOptionsFrom(args)),
@@ -125,12 +137,12 @@ export function apply(ctx: Context): void {
         render: (args, value) => {
           const v = value as { tree: JsonValue }
           return text(
-            `Accessibility tree for ${args.url}\n${truncate(JSON.stringify(v.tree, null, 2), RENDER_LIMIT)}`,
+            `Accessibility tree for ${args.url}\n${truncate(JSON.stringify(v.tree, null, 2), config.renderLimit)}`,
           )
         },
       },
       isConcurrencySafe: () => true,
-      timeoutMs: 120_000,
+      timeoutMs: config.renderTimeoutMs,
       async execute(args) {
         const tree = await cf.accountRequest<JsonValue>(accessibilityTreeSpec(renderOptionsFrom(args)))
         return { url: args.url, tree }

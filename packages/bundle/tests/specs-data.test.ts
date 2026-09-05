@@ -38,7 +38,7 @@ describe('KV specs', () => {
   })
 
   it('lists keys with a limit and no undefined-valued keys in the spec', () => {
-    expect(kvListKeysSpec('ns1', undefined, 100)).toStrictEqual({
+    expect(kvListKeysSpec('ns1', undefined, 100, undefined)).toStrictEqual({
       method: 'GET',
       path: '/storage/kv/namespaces/ns1/keys',
       query: { limit: 100 },
@@ -46,7 +46,7 @@ describe('KV specs', () => {
   })
 
   it('includes the prefix filter only when one is given', () => {
-    expect(kvListKeysSpec('ns1', 'user:', 10).query).toEqual({ limit: 10, prefix: 'user:' })
+    expect(kvListKeysSpec('ns1', 'user:', 10, undefined).query).toEqual({ limit: 10, prefix: 'user:' })
   })
 
   it('deletes a key', () => {
@@ -77,6 +77,16 @@ describe('KV specs', () => {
       path: '/storage/kv/namespaces/ns1/bulk/delete',
       body: ['a', 'b'],
     })
+  })
+})
+
+describe('KV key paging', () => {
+  it('carries the cursor a previous page returned', () => {
+    expect(kvListKeysSpec('ns1', undefined, 1000, 'abc').query).toStrictEqual({ limit: 1000, cursor: 'abc' })
+  })
+
+  it('sends no cursor parameter on the first page', () => {
+    expect(kvListKeysSpec('ns1', undefined, 1000, undefined).query).toStrictEqual({ limit: 1000 })
   })
 })
 

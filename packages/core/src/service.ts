@@ -13,7 +13,7 @@ import type { CredentialResolver } from './credentials.ts'
 import { CloudflareError } from './errors.ts'
 import { nextPageQuery, type PageStepper, type PageWalk } from './paginate.ts'
 import { makeScope, scopedPath } from './scope.ts'
-import type { RequestSpec, Scope, ScopeKind } from './types.ts'
+import type { CloudflareEnvelope, RequestSpec, Scope, ScopeKind } from './types.ts'
 
 /** One account as returned by `GET /accounts`. */
 export interface CloudflareAccount {
@@ -92,7 +92,7 @@ export class CloudflareService extends Service {
     })
   }
 
-  /** Every account the token can see. */
+  /** Every account the token can see, up to the page ceiling; `truncated` says whether the ceiling cut the list. */
   async listAccounts(): Promise<{ accounts: CloudflareAccount[]; truncated: boolean }> {
     // `/accounts` is page-numbered, not cursor-paginated. Walking it with the
     // cursor stepper stopped after the first page, and the walk was reported as
@@ -138,6 +138,19 @@ export class CloudflareService extends Service {
   async accountRequest<T>(spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<T> {
     const scope = await this.accountScope()
     return this.client.request<T>({ ...spec, path: scopedPath(scope, spec.path) })
+  }
+
+  /**
+   * Issue an account-scoped request and keep the whole envelope.
+   *
+   * `result_info` is where a paged endpoint reports its cursor. `accountRequest`
+   * returns only `result`, so a tool that hands its caller a cursor comes here.
+   */
+  async accountRequestEnvelope<T>(
+    spec: Omit<RequestSpec, 'path'> & { path: string },
+  ): Promise<CloudflareEnvelope<T>> {
+    const scope = await this.accountScope()
+    return this.client.requestEnvelope<T>({ ...spec, path: scopedPath(scope, spec.path) })
   }
 
   /**

@@ -25,11 +25,20 @@ export function kvValuePath(namespaceId: string, key: string): string {
 }
 
 /** List keys in a namespace, optionally filtered by prefix. */
-export function kvListKeysSpec(namespaceId: string, prefix: string | undefined, limit: number): RequestSpec {
+export function kvListKeysSpec(
+  namespaceId: string,
+  prefix: string | undefined,
+  limit: number,
+  cursor: string | undefined,
+): RequestSpec {
   return {
     method: 'GET',
     path: `/storage/kv/namespaces/${seg(namespaceId)}/keys`,
-    query: { limit, ...(prefix === undefined ? {} : { prefix }) },
+    query: {
+      limit,
+      ...(prefix === undefined ? {} : { prefix }),
+      ...(cursor === undefined ? {} : { cursor }),
+    },
   }
 }
 

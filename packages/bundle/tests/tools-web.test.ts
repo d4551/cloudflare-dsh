@@ -225,3 +225,27 @@ describe('lifecycle', () => {
     expect(tools.get('cloudflare_browser_accessibility_tree')).toBeUndefined()
   })
 })
+
+describe('WebToolsConfig', () => {
+  it('defaults every tunable the tools used to hard-code', () => {
+    expect(webTools.Config({})).toStrictEqual({ renderLimit: 8000, renderTimeoutMs: 120_000 })
+  })
+
+  it('rejects a zero render limit at configuration time', () => {
+    expect(() => webTools.Config({ renderLimit: 0 })).toThrow('$.renderLimit expected number >= 1 but got 0')
+  })
+
+  it('applies a configured render budget to both tools', () => {
+    const h = makeHarness(webTools, async () => envelope(''), {}, { renderTimeoutMs: 5_000 })
+    expect(h.tool('cloudflare_browser_render').timeoutMs).toBe(5_000)
+    expect(h.tool('cloudflare_browser_accessibility_tree').timeoutMs).toBe(5_000)
+  })
+
+  it('applies a configured render limit to a rendered page', () => {
+    const h = makeHarness(webTools, async () => envelope(''), {}, { renderLimit: 4 })
+    const blocks = h
+      .tool('cloudflare_browser_render')
+      .output.render({ url: 'u', format: 'markdown' }, { url: 'u', format: 'markdown', body: 'x'.repeat(10) })
+    expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated 6 characters') }])
+  })
+})

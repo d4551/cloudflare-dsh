@@ -5,8 +5,7 @@ import { envelope, makeHarness } from './harness.ts'
 
 /** Build a harness with the meta plugin at a given configuration. */
 function harness(config: Partial<metaTools.MetaConfig>, fetchImpl = async () => envelope(null)) {
-  const validated = metaTools.Config(config)
-  return makeHarness({ apply: (ctx) => metaTools.apply(ctx, validated) }, fetchImpl)
+  return makeHarness(metaTools, fetchImpl, {}, config)
 }
 
 describe('meta plugin shape', () => {

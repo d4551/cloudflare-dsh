@@ -54,10 +54,11 @@ interface Harness {
 }
 
 /** Build a harness around one tool-registering plugin. */
-export function makeHarness(
-  plugin: { apply(ctx: Context): void },
+export function makeHarness<C>(
+  plugin: { apply(ctx: Context, config: C): void; Config(input: Partial<C>): C },
   fetchImpl: (request: Request) => Promise<Response>,
   config: Partial<Parameters<typeof CloudflareConfig>[0]> = {},
+  pluginConfig: Partial<C> = {},
 ): Harness {
   const requests: Request[] = []
   const tools = new Map<string, ToolDefinition>()
@@ -89,7 +90,7 @@ export function makeHarness(
     },
   )
   expect(service.name).toBe('cloudflare')
-  plugin.apply(ctx)
+  plugin.apply(ctx, plugin.Config(pluginConfig))
 
   return {
     tools,

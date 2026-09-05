@@ -101,6 +101,8 @@ describe('cloudflare_kv_list_keys', () => {
     const h = makeHarness(dataTools, async () => envelope([{ name: 'a' }]))
     await expect(h.run('cloudflare_kv_list_keys', { namespaceId: 'n1' })).resolves.toEqual({
       keys: [{ name: 'a' }],
+      cursor: '',
+      complete: true,
     })
     expect(h.requests[0]!.url).toContain('limit=1000')
   })
@@ -401,5 +403,88 @@ describe('r2 bucket tools', () => {
     expect(h.tool('cloudflare_r2_bucket_create').output.render({ name: 'media' }, { bucket: {} })).toEqual([
       { type: 'text', text: 'Created R2 bucket media.' },
     ])
+  })
+})
+
+describe('cloudflare_kv_list_keys paging', () => {
+  it('hands back the cursor the API returned, so a caller can page', async () => {
+    const h = makeHarness(dataTools, async () => envelope([{ name: 'a' }], { count: 1, cursor: 'next-1' }))
+    await expect(h.run('cloudflare_kv_list_keys', { namespaceId: 'n1' })).resolves.toEqual({
+      keys: [{ name: 'a' }],
+      cursor: 'next-1',
+      complete: false,
+    })
+  })
+
+  it('reports a complete listing when the API sends no cursor', async () => {
+    const h = makeHarness(dataTools, async () => envelope([{ name: 'a' }], { count: 1 }))
+    await expect(h.run('cloudflare_kv_list_keys', { namespaceId: 'n1' })).resolves.toEqual({
+      keys: [{ name: 'a' }],
+      cursor: '',
+      complete: true,
+    })
+  })
+
+  it('reports a complete listing when the API sends an empty cursor', async () => {
+    const h = makeHarness(dataTools, async () => envelope([], { count: 0, cursor: '' }))
+    await expect(h.run('cloudflare_kv_list_keys', { namespaceId: 'n1' })).resolves.toMatchObject({
+      complete: true,
+    })
+  })
+
+  it('sends a caller-supplied cursor on the wire', async () => {
+    const h = makeHarness(dataTools, async () => envelope([]))
+    await h.run('cloudflare_kv_list_keys', { namespaceId: 'n1', cursor: 'next-1' })
+    expect(h.requests[0]!.url).toContain('cursor=next-1')
+  })
+
+  it('refuses a cursor that is not a string rather than ending the listing early', async () => {
+    const h = makeHarness(dataTools, async () => envelope([], { cursor: 7 }))
+    await expect(h.run('cloudflare_kv_list_keys', { namespaceId: 'n1' })).rejects.toThrow(
+      'KV result_info.cursor must be a string, got number',
+    )
+  })
+})
+
+describe('DataToolsConfig', () => {
+  it('defaults every tunable the tools used to hard-code', () => {
+    expect(dataTools.Config({})).toStrictEqual({
+      pageSize: 50,
+      keyListLimit: 1000,
+      renderLimit: 4000,
+      queueBatchSize: 10,
+      queueVisibilityTimeoutMs: 30_000,
+    })
+  })
+
+  it('rejects a zero page size at configuration time rather than at the API', () => {
+    expect(() => dataTools.Config({ pageSize: 0 })).toThrow('$.pageSize expected number >= 1 but got 0')
+  })
+
+  it('applies a configured page size to every listing', async () => {
+    const h = makeHarness(dataTools, async () => envelope([]), {}, { pageSize: 7 })
+    await h.run('cloudflare_kv_namespace_list', {})
+    expect(h.requests[0]!.url).toContain('per_page=7')
+  })
+
+  it('applies a configured key list limit', async () => {
+    const h = makeHarness(dataTools, async () => envelope([]), {}, { keyListLimit: 3 })
+    await h.run('cloudflare_kv_list_keys', { namespaceId: 'n1' })
+    expect(h.requests[0]!.url).toContain('limit=3')
+  })
+
+  it('states the configured default in the parameter description the model reads', () => {
+    const h = makeHarness(dataTools, async () => envelope([]), {}, { pageSize: 7 })
+    expect(h.tool('cloudflare_kv_namespace_list').parameters).toMatchObject({
+      properties: { perPage: { description: 'Namespaces per page (default 7).' } },
+    })
+  })
+
+  it('applies a configured render limit to KV values', () => {
+    const h = makeHarness(dataTools, async () => new Response('v'), {}, { renderLimit: 5 })
+    const blocks = h
+      .tool('cloudflare_kv_get')
+      .output.render({ namespaceId: 'n', key: 'k' }, { key: 'k', value: 'x'.repeat(12) })
+    expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated 7 characters') }])
   })
 })

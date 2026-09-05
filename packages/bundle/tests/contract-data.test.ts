@@ -107,7 +107,8 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
   },
   cloudflare_kv_list_keys: {
-    description: 'List keys in a Workers KV namespace. Returns a cursor for paging when more keys remain.',
+    description:
+      'List keys in a Workers KV namespace. Returns the cursor for the next page and whether the listing is complete.',
     parameters: {
       type: 'object',
       properties: {
@@ -123,13 +124,33 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           type: 'integer',
           description: 'Maximum keys to return (default 1000).',
         },
+        cursor: {
+          type: 'string',
+          description: 'Cursor returned by a previous page; omit for the first page.',
+        },
       },
       required: ['namespaceId'],
     },
     output: {
       type: 'object',
       description: 'Keys and paging state.',
-      additionalProperties: true,
+      additionalProperties: false,
+      properties: {
+        keys: {
+          type: 'array',
+          description: 'Key entries as the API returns them.',
+          items: { type: 'object', additionalProperties: true },
+        },
+        cursor: {
+          type: 'string',
+          description: 'Cursor for the next page; empty when complete.',
+        },
+        complete: {
+          type: 'boolean',
+          description: 'Whether every key has been returned.',
+        },
+      },
+      required: ['keys', 'cursor', 'complete'],
     },
   },
   cloudflare_kv_namespace_list: {

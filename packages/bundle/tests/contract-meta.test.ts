@@ -58,9 +58,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
 }
 
 describe('meta tool contract', () => {
-  const h = makeHarness({ apply: (ctx) => toolsModule.apply(ctx, toolsModule.Config({})) }, async () =>
-    envelope(null),
-  )
+  const h = makeHarness(toolsModule, async () => envelope(null))
 
   it('registers exactly the contracted tools', () => {
     expect([...h.tools.keys()].toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
