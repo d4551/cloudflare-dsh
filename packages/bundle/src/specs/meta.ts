@@ -14,9 +14,6 @@ export function isReadOnlyMethod(method: HttpMethod): boolean {
 /** Raised when the generic API tool is asked to do something it may not. */
 export class CloudflareApiDeniedError extends Error {
   override readonly name = 'CloudflareApiDeniedError'
-  constructor(message: string) {
-    super(message)
-  }
 }
 
 /**

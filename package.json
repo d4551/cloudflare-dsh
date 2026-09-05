@@ -11,14 +11,15 @@
   "scripts": {
     "build": "bun run --filter '*' build",
     "typecheck": "tsc -b --pretty false",
-    "lint": "oxlint .",
+    "lint": "oxlint --deny-warnings .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:a11y": "vitest run --config vitest.a11y.config.ts",
     "stryker": "stryker run",
     "publint": "bun run --filter '*' publint",
-    "knip": "knip"
+    "knip": "knip",
+    "test:dist": "vitest run --config vitest.dist.config.ts"
   },
   "devDependencies": {
     "@stryker-mutator/core": "10.0.0",

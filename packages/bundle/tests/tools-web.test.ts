@@ -10,7 +10,7 @@ describe('web tools plugin', () => {
 
   it('registers both rendering tools', () => {
     const h = makeHarness(webTools, async () => envelope(null))
-    expect([...h.tools.keys()].sort()).toEqual([
+    expect([...h.tools.keys()].toSorted()).toEqual([
       'cloudflare_browser_accessibility_tree',
       'cloudflare_browser_render',
     ])

@@ -26,6 +26,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
+      # --deny-warnings: a warning fails the build, so "lint clean" is enforced.
       - run: bun run lint
       - run: bun run test:coverage
 
@@ -78,4 +79,8 @@ jobs:
           node-version: '22'
       - run: bun install --frozen-lockfile
       - run: bun run build
+      # Loads the built artifacts the way a consumer resolves them, and rejects
+      # a `workspace:` range surviving into a published manifest.
+      - run: bun run test:dist
       - run: bun run knip
+      - run: bun run --filter '*' publint

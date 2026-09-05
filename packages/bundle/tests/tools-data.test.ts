@@ -29,7 +29,7 @@ describe('plugin shape', () => {
 
   it('registers exactly the expected tools', () => {
     const h = makeHarness(dataTools, async () => envelope(null))
-    expect([...h.tools.keys()].sort()).toEqual([...EXPECTED_TOOLS].sort())
+    expect([...h.tools.keys()].toSorted()).toEqual([...EXPECTED_TOOLS].toSorted())
   })
 
   it('gives every tool a description and an output schema', () => {

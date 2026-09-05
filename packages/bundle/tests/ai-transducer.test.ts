@@ -168,11 +168,11 @@ describe('reasoning streaming', () => {
   })
 })
 
-describe('tool-call streaming', () => {
-  const call = (over: Record<string, unknown>): WireChunk => ({
-    choices: [{ delta: { tool_calls: [{ index: 0, ...over }] } }],
-  })
+const call = (over: Record<string, unknown>): WireChunk => ({
+  choices: [{ delta: { tool_calls: [{ index: 0, ...over }] } }],
+})
 
+describe('tool-call streaming', () => {
   it('keeps arguments as raw JSON string fragments and rejoins them at block-end', () => {
     expect(
       run([

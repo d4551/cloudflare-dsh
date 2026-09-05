@@ -29,6 +29,7 @@
     "@deepseek-ai/cordis": "4.0.2"
   },
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "publint": "publint"
   }
 }

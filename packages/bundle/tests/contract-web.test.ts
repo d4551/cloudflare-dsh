@@ -87,7 +87,7 @@ describe('web tool contract', () => {
   const h = makeHarness(toolsModule, async () => envelope(null))
 
   it('registers exactly the contracted tools', () => {
-    expect([...h.tools.keys()].sort()).toEqual(Object.keys(CONTRACT).sort())
+    expect([...h.tools.keys()].toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
   })
 
   it.each(Object.keys(CONTRACT))('%s exposes its contracted description', (name) => {

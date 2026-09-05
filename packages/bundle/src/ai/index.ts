@@ -106,14 +106,17 @@ interface GatewayUrlResult {
  * accepted at request time; nothing here rejects anything.
  */
 export function toModelInfo(provider: string, models: readonly { name?: string; description?: string }[]): LlmModelInfo[] {
-  return models
-    .filter((m): m is { name: string; description?: string } => m.name !== undefined && m.name !== '')
-    .map((m) => ({
-      provider,
-      id: m.name,
-      name: m.name,
-      ...(m.description === undefined ? {} : { description: m.description }),
-    }))
+  const info: LlmModelInfo[] = []
+  for (const model of models) {
+    const id = model.name
+    if (id === undefined || id === '') continue
+    info.push(
+      model.description === undefined
+        ? { provider, id, name: id }
+        : { provider, id, name: id, description: model.description },
+    )
+  }
+  return info
 }
 
 export function apply(ctx: Context, config: AiConfig): () => void {

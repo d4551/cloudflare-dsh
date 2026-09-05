@@ -10,7 +10,7 @@ describe('ai plugin shape', () => {
 
   it('registers the full AI tool set', () => {
     const h = makeHarness(aiTools, async () => envelope(null))
-    expect([...h.tools.keys()].sort()).toEqual([
+    expect([...h.tools.keys()].toSorted()).toEqual([
       'cloudflare_ai_model_schema',
       'cloudflare_ai_models_search',
       'cloudflare_ai_run',

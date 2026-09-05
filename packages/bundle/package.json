@@ -53,7 +53,7 @@
     }
   },
   "dependencies": {
-    "@d4551/dsh-cloudflare-core": "workspace:*",
+    "@d4551/dsh-cloudflare-core": "^0.1.0",
     "@deepseek-ai/schemastery": "^3.18.2"
   },
   "peerDependencies": {
@@ -67,6 +67,7 @@
     "@deepseek-ai/dsh-llm": "0.1.2-rc.1"
   },
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "publint": "publint"
   }
 }

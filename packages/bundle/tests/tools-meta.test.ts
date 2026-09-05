@@ -30,7 +30,7 @@ describe('meta plugin shape', () => {
   })
 
   it('registers both meta tools', () => {
-    expect([...harness({}).tools.keys()].sort()).toEqual(['cloudflare_account_list', 'cloudflare_api'])
+    expect([...harness({}).tools.keys()].toSorted()).toEqual(['cloudflare_account_list', 'cloudflare_api'])
   })
 })
 
