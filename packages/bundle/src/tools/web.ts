@@ -1,0 +1,117 @@
+/**
+ * Browser Rendering tools.
+ *
+ * These give an agent a real headless Chrome: fetch a page as markdown, take a
+ * screenshot, or — the one worth calling out — pull the accessibility tree of
+ * any URL, which makes automated WCAG review possible from inside a session.
+ */
+import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
+import type { Context } from '@deepseek-ai/cordis'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import {
+  type RenderFormat,
+  type RenderOptions,
+  accessibilityTreeSpec,
+  browserRenderSpec,
+} from '../specs/web.ts'
+import type { JsonValue } from './_shared/json.ts'
+import { json, text, truncate } from './_shared/render.ts'
+
+interface CloudflareContext extends Context {
+  cloudflare: CloudflareService
+}
+
+/** Longest rendered body handed to the model; the canonical value keeps it all. */
+const RENDER_LIMIT = 8000
+
+/** Formats the render tool accepts, in the order they appear to the model. */
+const FORMATS: readonly RenderFormat[] = ['markdown', 'content', 'links', 'screenshot', 'pdf', 'scrape', 'json']
+
+export const name = 'cloudflare-tools-web'
+export const inject = ['tools', 'cloudflare'] as const
+
+/** Read the shared rendering options out of validated tool arguments. */
+export function renderOptionsFrom(args: {
+  url: string
+  gotoTimeoutMs?: number | undefined
+  waitForSelector?: string | undefined
+}): RenderOptions {
+  return {
+    url: args.url,
+    gotoTimeoutMs: args.gotoTimeoutMs,
+    waitForSelector: args.waitForSelector,
+  }
+}
+
+export function apply(ctx: Context): void {
+  const cf = (ctx as CloudflareContext).cloudflare
+
+  ctx.tools.register(
+    defineTool({
+      name: 'cloudflare_browser_render',
+      description:
+        'Render a web page with Cloudflare Browser Rendering (real headless Chrome, so JavaScript runs). Use markdown for reading a page, links to enumerate its links, screenshot or pdf for a visual capture.',
+      parameters: {
+        url: { type: 'string', required: true, description: 'Absolute URL to render.' },
+        format: {
+          type: 'string',
+          required: true,
+          enum: FORMATS,
+          description: 'What to return for the page.',
+        },
+        gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
+        waitForSelector: { type: 'string', description: 'Wait for this CSS selector before capturing.' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'The rendered result, plus the url and format that produced it.',
+        },
+        render: (args, value) => {
+          const v = value as { body: JsonValue }
+          if (typeof v.body === 'string') return text(truncate(v.body, RENDER_LIMIT))
+          return json(v.body)
+        },
+      },
+      isConcurrencySafe: () => true,
+      timeoutMs: 120_000,
+      async execute(args) {
+        const body = await cf.accountRequest<JsonValue>(
+          browserRenderSpec(args.format as RenderFormat, renderOptionsFrom(args)),
+        )
+        return { url: args.url, format: args.format, body }
+      },
+    }),
+  )
+
+  ctx.tools.register(
+    defineTool({
+      name: 'cloudflare_browser_accessibility_tree',
+      description:
+        'Fetch the accessibility tree for a web page using Cloudflare Browser Rendering. Returns the roles, names and structure a screen reader would expose, which is what WCAG review needs.',
+      parameters: {
+        url: { type: 'string', required: true, description: 'Absolute URL to inspect.' },
+        gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
+        waitForSelector: { type: 'string', description: 'Wait for this CSS selector before inspecting.' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'The accessibility tree for the page.',
+        },
+        render: (args, value) => {
+          const v = value as { tree: JsonValue }
+          return text(`Accessibility tree for ${args.url}\n${truncate(JSON.stringify(v.tree, null, 2), RENDER_LIMIT)}`)
+        },
+      },
+      isConcurrencySafe: () => true,
+      timeoutMs: 120_000,
+      async execute(args) {
+        const tree = await cf.accountRequest<JsonValue>(accessibilityTreeSpec(renderOptionsFrom(args)))
+        return { url: args.url, tree }
+      },
+    }),
+  )
+}

@@ -259,6 +259,49 @@ describe('CloudflareClient.request', () => {
   })
 })
 
+describe('CloudflareClient.requestText', () => {
+  it('returns the raw body for endpoints that do not use an envelope', async () => {
+    const { client } = makeClient(async () => new Response('stored-value', { status: 200 }))
+    await expect(client.requestText({ method: 'GET', path: '/x' })).resolves.toBe('stored-value')
+  })
+
+  it('returns an empty body unchanged', async () => {
+    const { client } = makeClient(async () => new Response('', { status: 200 }))
+    await expect(client.requestText({ method: 'GET', path: '/x' })).resolves.toBe('')
+  })
+
+  it('classifies a failure by status', async () => {
+    const { client } = makeClient(async () => new Response('nope', { status: 404 }))
+    await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareNotFoundError)
+  })
+
+  it('carries the retry hint on a rate-limited raw response', async () => {
+    const { client } = makeClient(
+      async () => new Response('slow', { status: 429, headers: { 'retry-after': '4' } }),
+    )
+    await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      retryAfterMs: 4000,
+    })
+  })
+
+  it('sends the resolved bearer token', async () => {
+    const { client, requests } = makeClient(async () => new Response('v', { status: 200 }))
+    await client.requestText({ method: 'GET', path: '/x' })
+    expect(requests[0]!.headers.get('authorization')).toBe('Bearer tok')
+  })
+
+  it('fails loud when the credential is missing', async () => {
+    const client = new CloudflareClient({
+      credentials: { resolve: () => undefined },
+      apiTokenRef: REF,
+      retry,
+      maxPages: 1,
+      fetch: async () => new Response('v'),
+    })
+    await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareAuthError)
+  })
+})
+
 describe('CloudflareClient.requestEnvelope', () => {
   it('returns the whole envelope including result_info', async () => {
     const { client } = makeClient(async () => json(ok([1, 2], { cursor: 'c1' })))

@@ -111,6 +111,16 @@ export class CloudflareService extends Service {
     return this.client.request<T>({ ...spec, path: scopedPath(scope, spec.path) })
   }
 
+  /**
+   * Issue an account-scoped request whose response is not an envelope.
+   *
+   * See `CloudflareClient.requestText` for why a few endpoints need this.
+   */
+  async accountRequestText(spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<string> {
+    const scope = await this.accountScope()
+    return this.client.requestText({ ...spec, path: scopedPath(scope, spec.path) })
+  }
+
   /** Issue a request against an explicit scope. */
   async scopedRequest<T>(scope: Scope, spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<T> {
     return this.client.request<T>({ ...spec, path: scopedPath(scope, spec.path) })

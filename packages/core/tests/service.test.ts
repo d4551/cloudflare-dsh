@@ -122,6 +122,14 @@ describe('CloudflareService requests', () => {
     await expect(service.accountRequest({ method: 'GET', path: '/x' })).resolves.toEqual({ done: true })
   })
 
+  it('prefixes an account-scoped raw-body request', async () => {
+    const { service, requests } = build({ accountId: 'a9' }, async () => new Response('raw', { status: 200 }))
+    await expect(
+      service.accountRequestText({ method: 'GET', path: '/storage/kv/namespaces/n/values/k' }),
+    ).resolves.toBe('raw')
+    expect(requests[0]!.url).toBe('https://api.test/v4/accounts/a9/storage/kv/namespaces/n/values/k')
+  })
+
   it('prefixes an explicitly scoped path', async () => {
     const { service, requests } = build({ accountId: 'a9' }, async () => json(ok(null)))
     await service.scopedRequest({ kind: 'zone', id: 'z2' }, { method: 'GET', path: '/dns_records' })

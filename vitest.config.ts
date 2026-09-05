@@ -1,6 +1,15 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
+const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
+
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@d4551/dsh-cloudflare-core': r('./packages/core/src/index.ts'),
+      '@d4551/dsh-cloudflare-client': r('./packages/client/src/index.ts'),
+    },
+  },
   test: {
     environment: 'node',
     include: ['packages/*/tests/**/*.test.ts'],

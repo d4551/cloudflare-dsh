@@ -124,6 +124,28 @@ export class CloudflareClient {
     return envelope.result
   }
 
+  /**
+   * Issue a request whose response body is *not* an envelope.
+   *
+   * A few endpoints return the stored bytes directly — Workers KV value reads,
+   * for one — so the envelope contract does not apply. Failures are still
+   * classified from the status and any envelope the error path did return.
+   */
+  async requestText(spec: RequestSpec): Promise<string> {
+    const ref = this.#options.apiTokenRef
+    const token = await requireCredential(this.#options.credentials, ref)
+    const response = await this.#options.fetch(buildRequest({ baseUrl: this.#baseUrl, spec, token }))
+    const body = await response.text()
+    if (!response.ok) {
+      throw classifyFailure({
+        status: response.status,
+        credentialRef: ref,
+        retryAfter: response.headers.get('retry-after'),
+      })
+    }
+    return body
+  }
+
   /** Issue a request and return the whole envelope, for pagination callers. */
   async requestEnvelope<T>(spec: RequestSpec): Promise<CloudflareEnvelope<T>> {
     return this.#send<T>(spec)
