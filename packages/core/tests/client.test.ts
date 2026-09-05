@@ -130,11 +130,12 @@ describe('requestText failure classification', () => {
     })
   })
 
-  it('still classifies by status when the error body is not an envelope', async () => {
+  it('still classifies by status when the error body is not an envelope, and keeps the body', async () => {
     const { client } = makeClient(async () => new Response('<html>gateway error</html>', { status: 404 }))
-    await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toBeInstanceOf(
-      CloudflareNotFoundError,
-    )
+    await expect(client.requestText({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      name: 'CloudflareNotFoundError',
+      message: 'HTTP 404 without a Cloudflare envelope: <html>gateway error</html>',
+    })
   })
 })
 
@@ -207,12 +208,13 @@ describe('readEnvelope', () => {
   })
 
   it('reports failure for an empty body', async () => {
-    await expect(readEnvelope(new Response(null, { status: 204 }))).resolves.toEqual({ ok: false })
+    await expect(readEnvelope(new Response(null, { status: 204 }))).resolves.toEqual({ ok: false, body: '' })
   })
 
   it('reports failure for a non-JSON body rather than throwing SyntaxError', async () => {
     await expect(readEnvelope(new Response('<html>502</html>', { status: 502 }))).resolves.toEqual({
       ok: false,
+      body: '<html>502</html>',
     })
   })
 })
@@ -296,9 +298,13 @@ describe('CloudflareClient.request', () => {
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareNotFoundError)
   })
 
-  it('classifies a non-JSON error body by status', async () => {
+  it('classifies a non-JSON error body by status and carries the body', async () => {
     const { client } = makeClient(async () => new Response('<html>bad gateway</html>', { status: 502 }))
-    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareError)
+    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      name: 'CloudflareError',
+      status: 502,
+      message: 'HTTP 502 without a Cloudflare envelope: <html>bad gateway</html>',
+    })
   })
 
   it('carries the retry hint from a rate-limited non-JSON response', async () => {
@@ -311,9 +317,13 @@ describe('CloudflareClient.request', () => {
     })
   })
 
-  it('rejects a 2xx response whose body is not an envelope', async () => {
+  it('rejects a 2xx response whose body is not an envelope, quoting it', async () => {
     const { client } = makeClient(async () => new Response('<html>hi</html>', { status: 200 }))
-    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toThrow(CloudflareError)
+    await expect(client.request({ method: 'GET', path: '/x' })).rejects.toMatchObject({
+      name: 'CloudflareError',
+      status: 200,
+      message: 'HTTP 200 without a Cloudflare envelope: <html>hi</html>',
+    })
   })
 
   it('carries the retry hint from a rate-limited JSON envelope', async () => {

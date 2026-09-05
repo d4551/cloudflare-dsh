@@ -270,6 +270,20 @@ killed, 13 timeouts, none surviving.
    `paginate.ts` two minutes before run 9 finished; the report was newer than
    the edit, its recorded source did not contain it, and the guard refused the
    report by name.
+10. **A non-envelope error body reaches the model.** The plan's S2-7. The
+    client read an edge error page or a WAF block and threw it away, so a
+    404 without an envelope reached the model as "Cloudflare request failed
+    with no error detail". A failure now arrives at the classifier either as
+    an envelope or as the raw body — the input type makes a caller say which
+    — and a non-envelope body yields `HTTP <status> without a Cloudflare
+envelope: <body>`, whitespace folded and bounded to 200 characters, or
+    `HTTP <status> with no error detail` when the body is blank. The
+    tool-level test that exposed this now asserts that message, through the
+    real registry.
+
+The run that followed, on the tree with both repairs, scored 100.00% — 2,997
+mutants, 2,983 killed, 14 timeouts, none surviving — and the guard, comparing
+text as well as time, accepted the report for that tree.
 
 </details>
 

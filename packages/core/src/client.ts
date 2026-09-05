@@ -69,17 +69,19 @@ export function realSleep(ms: number): Promise<void> {
  *
  * A tagged union rather than `undefined`, so "the body was not an envelope" is
  * a distinct state the caller must handle rather than something that can be
- * confused with a successfully parsed empty result.
+ * confused with a successfully parsed empty result. The body travels with that
+ * state: it is the only detail such a failure has.
  */
 export type EnvelopeRead<T> =
   | { readonly ok: true; readonly envelope: CloudflareEnvelope<T> }
-  | { readonly ok: false }
+  | { readonly ok: false; readonly body: string }
 
 /**
  * Parse a response body as a Cloudflare envelope.
  *
  * An empty or non-JSON body (an edge error page, say) becomes `{ok: false}`
- * rather than a `SyntaxError` thrown from deep inside the client.
+ * carrying the text, rather than a `SyntaxError` thrown from deep inside the
+ * client.
  */
 export async function readEnvelope<T>(response: Response): Promise<EnvelopeRead<T>> {
   return parseEnvelope<T>(await response.text())
@@ -96,7 +98,7 @@ function parseEnvelope<T>(text: string): EnvelopeRead<T> {
   try {
     return { ok: true, envelope: JSON.parse(text) as CloudflareEnvelope<T> }
   } catch {
-    return { ok: false }
+    return { ok: false, body: text }
   }
 }
 
@@ -155,7 +157,7 @@ export class CloudflareClient {
     const retryAfter = response.headers.get('retry-after')
 
     if (!read.ok) {
-      throw classifyFailure({ status: response.status, credentialRef: ref, retryAfter })
+      throw classifyFailure({ status: response.status, credentialRef: ref, retryAfter, body: read.body })
     }
     // A `success: false` envelope arrives with a 2xx status often enough that
     // the flag has to be checked independently of the HTTP status.
@@ -217,7 +219,7 @@ export class CloudflareClient {
         status: response.status,
         credentialRef: ref,
         retryAfter: response.headers.get('retry-after'),
-        ...(read.ok ? { envelope: read.envelope } : {}),
+        ...(read.ok ? { envelope: read.envelope } : { body }),
       })
     }
     return body

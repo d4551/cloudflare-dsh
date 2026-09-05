@@ -85,13 +85,39 @@ export function parseRetryAfterMs(header: string | null | undefined): number | n
   return Math.round(seconds * 1000)
 }
 
-/** Inputs needed to classify a failed response, with no I/O. */
-export interface FailureInput {
+/** Longest slice of a non-envelope body carried into a message. */
+const BODY_EXCERPT_LENGTH = 200
+
+/**
+ * Describe a failure whose body was not a Cloudflare envelope — an edge error
+ * page, a WAF block, an empty 5xx. The status and a bounded, whitespace-folded
+ * slice of the body are what a reader has to go on, so both are carried.
+ */
+export function describeBody(status: number, body: string): string {
+  const folded = body.replace(/\s+/g, ' ').trim()
+  if (folded === '') return `HTTP ${status} with no error detail`
+  const shown = folded.length > BODY_EXCERPT_LENGTH ? `${folded.slice(0, BODY_EXCERPT_LENGTH)}…` : folded
+  return `HTTP ${status} without a Cloudflare envelope: ${shown}`
+}
+
+/** What every failure carries, whatever the body was. */
+interface FailureContext {
   readonly status: number
   readonly credentialRef: string
   readonly retryAfter?: string | null
-  readonly envelope?: Pick<CloudflareEnvelope, 'errors'> | undefined
 }
+
+/**
+ * Inputs needed to classify a failed response, with no I/O.
+ *
+ * A failure arrives either as a Cloudflare envelope or as some other body; the
+ * union makes a caller say which, so neither can be dropped on the way here.
+ */
+export type FailureInput = FailureContext &
+  (
+    | { readonly envelope: Pick<CloudflareEnvelope, 'errors'>; readonly body?: undefined }
+    | { readonly body: string; readonly envelope?: undefined }
+  )
 
 /**
  * Map a failed Cloudflare response onto the typed error hierarchy.
@@ -102,7 +128,8 @@ export interface FailureInput {
 export function classifyFailure(input: FailureInput): CloudflareError {
   const entries = input.envelope?.errors ?? []
   const codes = entries.map((e) => e.code)
-  const message = formatErrorEntries(entries)
+  const message =
+    input.envelope === undefined ? describeBody(input.status, input.body) : formatErrorEntries(entries)
 
   if (codes.includes(CF_CODE_UNAUTHORIZED) || input.status === 401 || input.status === 403) {
     return new CloudflareAuthError(input.credentialRef, message, input.status, codes)

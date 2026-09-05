@@ -162,6 +162,15 @@ describe('cloudflare_kv_get', () => {
   })
 })
 
+describe('cloudflare_kv_get, when the edge answers instead of the API', () => {
+  it('reads the status and the page the model would otherwise never see', async () => {
+    const h = makeHarness(dataTools, async () => new Response('<html>not found</html>', { status: 404 }))
+    await expect(h.run('cloudflare_kv_get', { namespaceId: 'n1', key: 'nope' })).rejects.toThrow(
+      'HTTP 404 without a Cloudflare envelope: <html>not found</html>',
+    )
+  })
+})
+
 describe('cloudflare_kv_put', () => {
   it('writes pairs through the bulk endpoint and reports the count', async () => {
     const h = makeHarness(dataTools, async () => envelope(null))

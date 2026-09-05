@@ -6,6 +6,7 @@ import {
   CloudflareNotFoundError,
   CloudflareRateLimitError,
   classifyFailure,
+  describeBody,
   formatErrorEntries,
   isRetryableStatus,
   parseRetryAfterMs,
@@ -91,29 +92,29 @@ describe('classifyFailure', () => {
   })
 
   it.each([401, 403])('maps status %i to an auth error', (status) => {
-    expect(classifyFailure({ status, credentialRef: REF })).toBeInstanceOf(CloudflareAuthError)
+    expect(classifyFailure({ status, credentialRef: REF, body: '' })).toBeInstanceOf(CloudflareAuthError)
   })
 
   it('maps 429 to a rate limit error and carries the retry hint', () => {
-    const err = classifyFailure({ status: 429, credentialRef: REF, retryAfter: '12' })
+    const err = classifyFailure({ status: 429, credentialRef: REF, retryAfter: '12', body: '' })
     expect(err).toBeInstanceOf(CloudflareRateLimitError)
     expect((err as CloudflareRateLimitError).retryAfterMs).toBe(12_000)
     expect(err.status).toBe(429)
   })
 
   it('leaves the retry hint null when the header is absent', () => {
-    const err = classifyFailure({ status: 429, credentialRef: REF })
+    const err = classifyFailure({ status: 429, credentialRef: REF, body: '' })
     expect((err as CloudflareRateLimitError).retryAfterMs).toBeNull()
   })
 
   it('maps 404 to a not-found error', () => {
-    const err = classifyFailure({ status: 404, credentialRef: REF })
+    const err = classifyFailure({ status: 404, credentialRef: REF, body: '' })
     expect(err).toBeInstanceOf(CloudflareNotFoundError)
     expect(err.status).toBe(404)
   })
 
   it('falls back to the base error for anything else', () => {
-    const err = classifyFailure({ status: 500, credentialRef: REF })
+    const err = classifyFailure({ status: 500, credentialRef: REF, body: '' })
     expect(err.constructor).toBe(CloudflareError)
     expect(err.status).toBe(500)
     expect(err.name).toBe('CloudflareError')
@@ -129,7 +130,37 @@ describe('classifyFailure', () => {
   })
 
   it('defaults codes to an empty list when no envelope is supplied', () => {
-    expect(classifyFailure({ status: 500, credentialRef: REF }).codes).toEqual([])
+    expect(classifyFailure({ status: 500, credentialRef: REF, body: '' }).codes).toEqual([])
+  })
+
+  it('carries the status and the body when the body is not an envelope', () => {
+    const err = classifyFailure({ status: 502, credentialRef: REF, body: '<html>bad gateway</html>' })
+    expect(err.message).toBe('HTTP 502 without a Cloudflare envelope: <html>bad gateway</html>')
+  })
+
+  it('says so when a non-envelope body is blank', () => {
+    expect(classifyFailure({ status: 503, credentialRef: REF, body: ' \n ' }).message).toBe(
+      'HTTP 503 with no error detail',
+    )
+  })
+})
+
+describe('describeBody', () => {
+  it('folds whitespace so a formatted page reads as one line', () => {
+    expect(describeBody(500, '<html>\n  <body>\n    error\n  </body>\n</html>')).toBe(
+      'HTTP 500 without a Cloudflare envelope: <html> <body> error </body> </html>',
+    )
+  })
+
+  it('bounds a long body to 200 characters and marks the cut', () => {
+    const message = describeBody(500, 'x'.repeat(201))
+    expect(message).toBe(`HTTP 500 without a Cloudflare envelope: ${'x'.repeat(200)}…`)
+  })
+
+  it('shows a body of exactly 200 characters whole', () => {
+    expect(describeBody(500, 'y'.repeat(200))).toBe(
+      `HTTP 500 without a Cloudflare envelope: ${'y'.repeat(200)}`,
+    )
   })
 })
 
