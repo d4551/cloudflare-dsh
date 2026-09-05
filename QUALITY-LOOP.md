@@ -219,7 +219,9 @@ scored 100.00% — 2,633 killed, 13 timeouts, none surviving.
 The root cause of this restart's first violation — a formatter run that no gate
 could see — is closed by a formatting gate: one canonical style, checked in CI
 and asserted by the invariants lane, with a single conformance pass recorded as
-its own commit.
+its own commit. The mutation run on the conformed tree scored 100.00% with the
+same 2,633 killed and 13 timeouts as the run before it — formatting changed
+nothing a test could see.
 
 </details>
 
