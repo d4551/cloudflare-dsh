@@ -58,7 +58,7 @@ export const TOOL_VIEWS: ReadonlyArray<{ readonly tool: string; readonly compone
 ]
 
 export const name = 'cloudflare-client'
-export const inject = ['slots'] as const
+export const inject = ['slots']
 
 export function apply(ctx: Context): void {
   const slots = (ctx as SlotsContext).slots

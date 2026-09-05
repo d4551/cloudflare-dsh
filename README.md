@@ -115,7 +115,7 @@ Concretely, and checkable by grep:
 | Rule | How it is enforced |
 | --- | --- |
 | No mutation-score slack | `stryker.config.json` sets `break: 100`; the run fails below it |
-| No file escapes mutation | `mutate` is `packages/*/src/**/*.{ts,tsx}` with **no** negated pattern |
+| No file escapes mutation | `mutate` is `packages/*/src/**/*.{ts,tsx}` with **no** negated pattern, and `scripts/verify-mutation-files.mjs` fails the run if a file that emits JavaScript produced no mutants |
 | No coverage slack | Vitest thresholds are 100 for lines, branches, functions and statements |
 | No suppression comments | The tree contains no `eslint-disable`, `oxlint-disable`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck` or `Stryker disable` |
 | No softened lint severity | Every enabled `oxlint` category is graded `error`, and the gate runs `--deny-warnings` |
@@ -183,8 +183,8 @@ them:
 **Restart 3.** An adversarial audit of `f1ada9b` reported a violation and, by
 design, would not say which. The response was to make the rule absolute — no
 overrides, exceptions or justifications anywhere — and re-audit the tree against
-it. Ten defects, every one of them a gate or a claim that was standing for the
-wrong reason:
+it. Eleven defects, every one of them a gate or a claim that was standing for
+the wrong reason:
 
 - *The mutation gate narrowed itself while the README denied it.* `mutate`
   carried a negated pattern, two paragraphs under a sentence promising "no
@@ -225,6 +225,23 @@ wrong reason:
   a plugin, which was settled by inserting a deliberately unresolvable specifier
   and watching it print and exit 0. The section now says what the output
   actually establishes, and points at the suite that does cover resolution.
+
+- *A `const` assertion was hiding a whole file from mutation.* `locales/en.ts`
+  ended in `} as const`, and Stryker does not mutate inside a const assertion —
+  so the file reported zero mutants and was omitted from the report entirely,
+  under a README line promising no file escapes mutation. Removing the
+  assertion (which was also the wrong type for a locale dictionary: it made
+  every string a literal type, so no second locale could satisfy `Locale`)
+  exposed 47 mutants, **ten of them surviving** — user-facing copy nothing
+  asserted, including four field hints, the save confirmation, the validation
+  error, the table caption and the screenshot alt text. The cause was
+  self-referential assertions: tests compared rendered output against the same
+  dictionary entry that produced it, so a mutation changed both sides. Those
+  assertions now pin the literal copy. Every `as const` in `src` is gone,
+  replaced by explicit type annotations that give the same types without
+  removing the values from mutation, and
+  `scripts/verify-mutation-files.mjs` now fails the run if any file that emits
+  JavaScript produced no mutants, so this cannot recur silently.
 
 Two contract tests were added with it, each verified by measurement rather than
 assumed: a provider that ends its body without a trailing newline still

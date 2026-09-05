@@ -11,15 +11,18 @@
 import type { ContentBlock, GenerateOptions, Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { unsupportedOption } from './errors.ts'
 
+/** One tool call carried on an assistant message. */
+interface WireToolCall {
+  readonly id: string
+  readonly type: 'function'
+  readonly function: { readonly name: string; readonly arguments: string }
+}
+
 /** One message in the OpenAI-compatible wire format. */
 export interface WireMessage {
   readonly role: 'system' | 'user' | 'assistant' | 'tool'
   readonly content?: string | null
-  readonly tool_calls?: readonly {
-    readonly id: string
-    readonly type: 'function'
-    readonly function: { readonly name: string; readonly arguments: string }
-  }[]
+  readonly tool_calls?: readonly WireToolCall[]
   readonly tool_call_id?: string
 }
 
@@ -55,8 +58,8 @@ export function textOf(content: readonly ContentBlock[]): string {
 export function toWireMessages(message: Message): WireMessage[] {
   const toolResults = message.content.filter((b) => b.type === 'tool-result')
   if (toolResults.length > 0) {
-    return toolResults.map((block) => ({
-      role: 'tool' as const,
+    return toolResults.map((block): WireMessage => ({
+      role: 'tool',
       tool_call_id: block.toolCallId,
       content: textOf(block.content),
     }))
@@ -68,9 +71,9 @@ export function toWireMessages(message: Message): WireMessage[] {
       {
         role: 'assistant',
         content: textOf(message.content),
-        tool_calls: toolCalls.map((block) => ({
+        tool_calls: toolCalls.map((block): WireToolCall => ({
           id: block.id,
-          type: 'function' as const,
+          type: 'function',
           function: { name: block.name, arguments: block.arguments },
         })),
       },
@@ -81,8 +84,8 @@ export function toWireMessages(message: Message): WireMessage[] {
 
 /** Translate harness tool schemas into the provider's `tools` field. */
 export function toWireTools(tools: readonly ToolSchema[]): WireTool[] {
-  return tools.map((tool) => ({
-    type: 'function' as const,
+  return tools.map((tool): WireTool => ({
+    type: 'function',
     function: { name: tool.name, description: tool.description, parameters: tool.parameters },
   }))
 }

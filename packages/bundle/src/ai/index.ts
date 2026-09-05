@@ -76,7 +76,7 @@ export const Config: Schema<Partial<AiConfig>, AiConfig> = Schema.object({
 })
 
 export const name = 'cloudflare-llm'
-export const inject = ['llm', 'cloudflare'] as const
+export const inject = ['llm', 'cloudflare']
 
 /** Raised when the gateway route is used without a gateway configured. */
 export class MissingGatewayError extends Error {

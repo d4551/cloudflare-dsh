@@ -36,7 +36,7 @@ interface CloudflareContext extends Context {
 const RENDER_LIMIT = 4000
 
 export const name = 'cloudflare-tools-data'
-export const inject = ['tools', 'cloudflare'] as const
+export const inject = ['tools', 'cloudflare']
 
 export function apply(ctx: Context): void {
   const cf = (ctx as CloudflareContext).cloudflare

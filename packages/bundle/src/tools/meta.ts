@@ -33,7 +33,7 @@ export const Config: Schema<Partial<MetaConfig>, MetaConfig> = Schema.object({
 })
 
 export const name = 'cloudflare-tools-meta'
-export const inject = ['tools', 'cloudflare'] as const
+export const inject = ['tools', 'cloudflare']
 
 export function apply(ctx: Context, config: MetaConfig): void {
   const cf = (ctx as CloudflareContext).cloudflare

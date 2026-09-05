@@ -65,11 +65,11 @@ export async function* paginate<T>(
   // the running count *after* a page's items have been yielded.
   const pages: AsyncIterable<CloudflareEnvelope<readonly T[]>> = {
     [Symbol.asyncIterator]: () => ({
-      async next() {
+      async next(): Promise<IteratorResult<CloudflareEnvelope<readonly T[]>, undefined>> {
         const current = query
-        if (page >= maxPages || current === null) return { done: true as const, value: undefined }
+        if (page >= maxPages || current === null) return { done: true, value: undefined }
         page += 1
-        return { done: false as const, value: await fetchPage(current) }
+        return { done: false, value: await fetchPage(current) }
       },
     }),
   }

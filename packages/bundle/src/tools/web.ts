@@ -28,7 +28,7 @@ const RENDER_LIMIT = 8000
 const FORMATS: readonly RenderFormat[] = ['markdown', 'content', 'links', 'screenshot', 'pdf', 'scrape', 'json']
 
 export const name = 'cloudflare-tools-web'
-export const inject = ['tools', 'cloudflare'] as const
+export const inject = ['tools', 'cloudflare']
 
 /** Read the shared rendering options out of validated tool arguments. */
 export function renderOptionsFrom(args: {

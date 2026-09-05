@@ -44,7 +44,7 @@ export const en = {
     emptyResult: 'The query returned no rows.',
     screenshotAlt: (url: string) => `Screenshot of ${url}`,
   },
-} as const
+}
 
 /** The dictionary shape, so alternative locales stay structurally compatible. */
 export type Locale = typeof en

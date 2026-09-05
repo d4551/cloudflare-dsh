@@ -223,8 +223,8 @@ export class StreamTransducer {
     open.push(...this.toolCalls.values())
     open.sort((a, b) => a.index - b.index)
 
-    return open.map((block) => ({
-      type: 'block-end' as const,
+    return open.map((block): StreamChunk => ({
+      type: 'block-end',
       index: block.index,
       block: StreamTransducer.finish(block),
     }))

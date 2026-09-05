@@ -30,7 +30,7 @@ declare module '@deepseek-ai/cordis' {
 export const name = 'cloudflare'
 
 /** Services this plugin requires before it can activate. */
-export const inject = ['credentials'] as const
+export const inject = ['credentials']
 
 /** Configuration schema. Cordis validates against this before `apply` runs. */
 export const Config = ConfigSchema

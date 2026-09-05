@@ -36,7 +36,7 @@ interface CloudflareContext extends Context {
 const BILLING_VIEWS: readonly BillingView[] = ['credit-balance', 'usage-history', 'invoice-preview']
 
 export const name = 'cloudflare-tools-ai'
-export const inject = ['tools', 'cloudflare'] as const
+export const inject = ['tools', 'cloudflare']
 
 export function apply(ctx: Context): void {
   const cf = (ctx as CloudflareContext).cloudflare

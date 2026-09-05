@@ -61,7 +61,32 @@ describe('SettingsCard', () => {
     const { container } = setup()
     const described = screen.getByLabelText(en.settings.accountLabel).getAttribute('aria-describedby')
     expect(described).not.toBeNull()
-    expect(container.ownerDocument.getElementById(described!)?.textContent).toBe(en.settings.accountHint)
+    expect(container.ownerDocument.getElementById(described!)?.textContent).toBe(
+      'Leave blank to use the first account the token can access.',
+    )
+  })
+
+  it('states the credential policy in the card body', () => {
+    // Copy is asserted literally: this sentence is the page's only statement
+    // that a stored secret never comes back, so it is part of the interface.
+    const { container } = setup()
+    expect(container.textContent).toContain(
+      'Credentials are stored by reference. This page never receives a stored secret back — only whether one is set.',
+    )
+  })
+
+  it.each([
+    [
+      'tokenRefLabel' as const,
+      'The environment variable name holding the token, for example CLOUDFLARE_API_TOKEN.',
+    ],
+    ['gatewayLabel' as const, 'Required to route the harness\u2019s own model calls through a gateway.'],
+  ])('describes the %s field with the hint a user needs', (labelKey, hint) => {
+    const { container } = setup()
+    const described = screen.getByLabelText(en.settings[labelKey]).getAttribute('aria-describedby')
+    expect(described).not.toBeNull()
+    const first = described!.split(' ')[0]!
+    expect(container.ownerDocument.getElementById(first)?.textContent).toBe(hint)
   })
 
   it('marks no field invalid before anything is submitted', () => {
@@ -75,7 +100,7 @@ describe('SettingsCard', () => {
     const ids = described?.split(' ') ?? []
     expect(ids).toHaveLength(2)
     const texts = ids.map((id) => container.ownerDocument.getElementById(id)?.textContent)
-    expect(texts).toEqual([en.settings.tokenValueHint, en.settings.tokenSet])
+    expect(texts).toEqual(['Write-only. Leave blank to keep the stored value.', en.settings.tokenSet])
   })
 
   // Without preventDefault the form would navigate, losing the page.
@@ -110,7 +135,7 @@ describe('SettingsCard', () => {
   it('confirms a save in a polite status region', () => {
     setup()
     fireEvent.click(screen.getByRole('button', { name: en.settings.save }))
-    expect(screen.getByRole('status').textContent).toBe(en.settings.saved)
+    expect(screen.getByRole('status').textContent).toBe('Cloudflare settings saved.')
   })
 
   it('keeps the status region mounted but empty until a save happens', () => {
@@ -134,7 +159,9 @@ describe('SettingsCard', () => {
     setup()
     fireEvent.change(screen.getByLabelText(en.settings.tokenRefLabel), { target: { value: 'bad ref' } })
     fireEvent.click(screen.getByRole('button', { name: en.settings.save }))
-    expect(screen.getByRole('alert').textContent).toBe(en.settings.invalidTokenRef)
+    expect(screen.getByRole('alert').textContent).toBe(
+      'A token reference must be an environment variable name: uppercase letters, digits and underscores.',
+    )
     expect(screen.getByLabelText(en.settings.tokenRefLabel).getAttribute('aria-invalid')).toBe('true')
   })
 

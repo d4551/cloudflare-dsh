@@ -49,7 +49,7 @@ describe('D1Result', () => {
 
   it('captions the table with the query that produced it', () => {
     render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
-    expect(screen.getByRole('table', { name: en.toolView.queryCaption('SELECT 1') })).toBeDefined()
+    expect(screen.getByRole('table', { name: 'Results for query: SELECT 1' })).toBeDefined()
   })
 
   it('renders one row per result', () => {
@@ -130,7 +130,7 @@ describe('BrowserRender', () => {
 
   it('gives a screenshot a meaningful alternative text', () => {
     render(<BrowserRender url="https://x.test" format="screenshot" body="data:image/png;base64,AAA" />)
-    expect(screen.getByAltText(en.toolView.screenshotAlt('https://x.test'))).toBeDefined()
+    expect(screen.getByAltText('Screenshot of https://x.test')).toBeDefined()
   })
 
   it('has no accessibility violations for text output', async () => {
