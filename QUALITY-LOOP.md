@@ -100,6 +100,17 @@ unauthorized code among other entries is pinned. The run on the tree at
 `930ad13` scored 100.00%: 3,077 mutants over 36 files, 3,065 killed, 12 timing
 out, none surviving.
 
+Two more claims the tools made were then found false and fixed at `0ce76c3`.
+`cloudflare_kv_put` and `cloudflare_kv_delete` reported the size of the request
+as the number of pairs written or keys deleted; they now return what the bulk
+endpoints answer, and `kv_delete` always uses the bulk endpoint, since the
+single-key endpoint reports no outcome — `kvDeleteSpec` and its unit test went
+with it, and the test that pinned the single-key path became one that pins the
+bulk path for one key. `cloudflare_ai_run` would have failed on the body shape
+of a streamed response; it now refuses `stream: true` by name and says where
+streaming lives. The run on that tree scored 100.00%: 3,102 mutants, 3,089
+killed, 13 timing out, none surviving.
+
 </details>
 
 <details>
