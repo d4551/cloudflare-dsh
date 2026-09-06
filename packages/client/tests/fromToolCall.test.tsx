@@ -127,8 +127,18 @@ describe('resultText', () => {
     ).toBe('a\nb')
   })
 
-  it('skips a block that is not text', () => {
-    expect(resultText(settled(undefined, [{ type: 'image' }, { type: 'text', text: 'a' }]))).toBe('a')
+  it('skips a block that is not text even when it carries text of its own', () => {
+    // The non-text block has a `text` field on purpose: without one, the
+    // missing-text check does the skipping and the type check is never what
+    // decides — which is how a mutant of it survived a run.
+    expect(
+      resultText(
+        settled(undefined, [
+          { type: 'image', text: 'alt' },
+          { type: 'text', text: 'a' },
+        ]),
+      ),
+    ).toBe('a')
   })
 
   it('skips a text block with no text', () => {
@@ -149,9 +159,16 @@ describe('D1ResultToolView', () => {
     expect(screen.getByRole('columnheader').textContent).toBe('id')
   })
 
-  it('falls back to the result text when the projection is not there to read', () => {
+  // One case per clause of the projection guard, so each is the clause that
+  // decides. A single malformed example leaves the others never exercised.
+  it.each([
+    ['there is no projection', undefined],
+    ['the projection is not an object', 'flat'],
+    ['the query is not a string', { sql: 7, resultSets: [] }],
+    ['the rows are not a list', { sql: 'SELECT 1', resultSets: 'rows' }],
+  ])('falls back to the result text when %s', (_label, meta) => {
     const { container } = render(
-      <D1ResultToolView {...owner(settled(undefined, [{ type: 'text', text: 'raw' }]))} />,
+      <D1ResultToolView {...owner(settled(meta, [{ type: 'text', text: 'raw' }]))} />,
     )
     expect(container.querySelector('.cf-toolview__raw')?.textContent).toBe('raw')
   })

@@ -93,6 +93,34 @@ export class ScreenshotShapeError extends TypeError {
 export const name = 'cloudflare-tools-web'
 export const inject = ['tools', 'cloudflare']
 
+/**
+ * The rendering options every Browser Rendering tool accepts.
+ *
+ * All three tools declared this block verbatim; only the verb differed, since
+ * one inspects a page rather than capturing it. `renderOptionsFrom` below
+ * already factored the reading half — this is the declaring half that was left
+ * behind, and half of a symmetric pair is where a drift starts.
+ */
+function renderOptionParameters(verb: string): {
+  readonly gotoTimeoutMs: { readonly type: 'integer'; readonly description: string }
+  readonly waitForSelector: { readonly type: 'string'; readonly description: string }
+  readonly rejectResourceTypes: {
+    readonly type: 'array'
+    readonly description: string
+    readonly items: { readonly type: 'string'; readonly enum: typeof RESOURCE_TYPES }
+  }
+} {
+  return {
+    gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
+    waitForSelector: { type: 'string', description: `Wait for this CSS selector before ${verb}.` },
+    rejectResourceTypes: {
+      type: 'array',
+      description: 'Resource types to block while the page loads, for example image or script.',
+      items: { type: 'string', enum: RESOURCE_TYPES },
+    },
+  }
+}
+
 /** Read the shared rendering options out of validated tool arguments. */
 export function renderOptionsFrom(args: {
   url: string
@@ -142,13 +170,7 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
           enum: FORMATS,
           description: 'What to return for the page.',
         },
-        gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
-        waitForSelector: { type: 'string', description: 'Wait for this CSS selector before capturing.' },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: { type: 'string', enum: RESOURCE_TYPES },
-        },
+        ...renderOptionParameters('capturing'),
       },
       output: {
         schema: {
@@ -212,13 +234,7 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
           description:
             'Capture the whole scrollable page rather than the viewport; the configured default when omitted.',
         },
-        gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
-        waitForSelector: { type: 'string', description: 'Wait for this CSS selector before capturing.' },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: { type: 'string', enum: RESOURCE_TYPES },
-        },
+        ...renderOptionParameters('capturing'),
       },
       output: {
         schema: {
@@ -299,13 +315,7 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
         'Fetch the accessibility tree for a web page using Cloudflare Browser Rendering. Returns the roles, names and structure a screen reader would expose, which is what WCAG review needs.',
       parameters: {
         url: { type: 'string', required: true, description: 'Absolute URL to inspect.' },
-        gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
-        waitForSelector: { type: 'string', description: 'Wait for this CSS selector before inspecting.' },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: { type: 'string', enum: RESOURCE_TYPES },
-        },
+        ...renderOptionParameters('inspecting'),
       },
       output: {
         schema: {
