@@ -59,13 +59,35 @@ What it found, and what changed:
    The adapter's `listModels` walks every catalogue page instead of sampling
    the first, and refuses to present a walk the page ceiling cut short as the
    whole catalogue.
+5. **A Vectorize index could be listed and queried and nothing else** — no way
+   to put a vector in, take one out, or read one back — and the query tool
+   collapsed Cloudflare's three metadata values to a boolean, losing `indexed`,
+   which is the difference between a cheap query and a complete one.
+   `cloudflare_vectorize_upsert`, `_delete` and `_get` cover the gap, an empty
+   request is refused rather than issued, and the metadata option is the three
+   values the API declares. The write endpoints take NDJSON — one vector per
+   line, not one JSON document — so `RequestSpec` gained `encodedBody`, a body
+   the caller has already encoded, sent verbatim under its own media type, and
+   `buildHeaders` takes that media type rather than a boolean, so one place
+   decides the content type of a request.
 
-The mutation run on the tree with the screenshot tool scored 99.97%: one
-survivor, and an equivalent one — emptying `default: return undefined` in the
-content-type switch, which is what falling out of a switch already does. The
-rule is that an equivalent mutant means dead code, so the branch is gone: the
-switch is a lookup, and a content type the map does not hold is a miss rather
-than a case nothing distinguishes.
+Three mutation runs paid for this restart, and each one found something the
+tests had not:
+
+- The tree with the screenshot tool scored **99.97%**: one survivor, and an
+  equivalent one — emptying `default: return undefined` in the content-type
+  switch, which is what falling out of a switch already does. An equivalent
+  mutant means dead code, so the branch is gone: the switch is a lookup, and a
+  content type the map does not hold is a miss rather than a case nothing
+  distinguishes.
+- The tree with the paging fix scored **99.91%**, with three survivors, all
+  weak tests rather than weak code. `CatalogueTruncatedError`'s name was
+  asserted nowhere. A spec test used `toEqual`, which cannot see a
+  `cursor: undefined` the builder never means to send, so `toStrictEqual` now
+  states the spec's exact shape. And `wholeListOutcome`'s `total === null ||`
+  guarded nothing at all, because `returned >= null` is `returned >= 0`, which
+  is always true — the function now says what would make a listing incomplete,
+  which has no such hole.
 
 </details>
 

@@ -223,6 +223,21 @@ honestly: every branch that matters can be driven from a literal array of
 fixture inputs, so a surviving mutant means a real gap rather than an
 untestable seam.
 
+### What one request can carry
+
+Cloudflare's REST surface is not uniformly JSON, so a `RequestSpec` says how it
+is read and how it is written, and the client does exactly that.
+
+| Direction | Shapes                                                                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read      | The envelope (`request`, `requestEnvelope`); raw text, for a KV value (`requestText`); bytes with the media type the server declared, for a screenshot (`requestBytes`)   |
+| Write     | A `body` the client serializes as JSON; or an `encodedBody` the caller already encoded, sent verbatim under its own media type — Vectorize's writes take NDJSON, not JSON |
+
+`accept` names what the caller can read, so an endpoint that answers with an
+image is asked for an image. Every one of these paths goes through the same
+retry policy and the same failure classification: an error body is read as an
+envelope when the endpoint sends one, whatever the successful shape would be.
+
 ---
 
 ## How a tool call flows
@@ -407,15 +422,16 @@ profile takes only the groups it wants.
 
 ### Data — `cloudflare-dsh/tools/data` (13)
 
-| Tool                                                 | Purpose                                    |
-| ---------------------------------------------------- | ------------------------------------------ |
-| `cloudflare_kv_namespace_list`                       | List KV namespaces                         |
-| `cloudflare_kv_list_keys`                            | Page keys — returns a cursor for PTC loops |
-| `cloudflare_kv_get` / `_put` / `_delete`             | Single-key value operations                |
-| `cloudflare_d1_list`                                 | List D1 databases                          |
-| `cloudflare_d1_query`                                | Parameterised SQL, multi-statement         |
-| `cloudflare_queue_list` / `_send` / `_pull` / `_ack` | Queue operations, lease-based              |
-| `cloudflare_r2_bucket_list` / `_create`              | R2 bucket management                       |
+| Tool                                                 | Purpose                                                   |
+| ---------------------------------------------------- | --------------------------------------------------------- |
+| `cloudflare_kv_namespace_list`                       | List KV namespaces                                        |
+| `cloudflare_kv_list_keys`                            | Page keys — returns a cursor for PTC loops                |
+| `cloudflare_kv_get`                                  | Read one key's value                                      |
+| `cloudflare_kv_put` / `_delete`                      | Bulk write and delete, reporting what Cloudflare accepted |
+| `cloudflare_d1_list`                                 | List D1 databases                                         |
+| `cloudflare_d1_query`                                | Parameterised SQL, multi-statement                        |
+| `cloudflare_queue_list` / `_send` / `_pull` / `_ack` | Queue operations, lease-based                             |
+| `cloudflare_r2_bucket_list` / `_create`              | R2 bucket management                                      |
 
 ### Web — `cloudflare-dsh/tools/web` (3)
 
@@ -766,6 +782,7 @@ packages/
   bundle/   cloudflare-dsh               — the bundle
     src/ai/     adapter, transducer, sse, headers, request, errors
     src/tools/  ai, data, web, meta
+    src/tools/_shared/  json, render, paging, batch — what every tool group shares
     src/specs/  request specifications, separated from tool wiring
     src/mcp/    hosted MCP server rows
     presets/    pi-ai.yaml — the zero-code declarative path
@@ -801,9 +818,9 @@ Not yet done, and worth knowing before you depend on this:
   shapes are modelled and will be corrected against recorded fixtures.
 - **The tools have not been driven from a real agent session**, which needs a
   DeepSeek key and Cloudflare credentials.
-- **R2 object access, Vectorize upsert and D1 database creation are missing.**
-  Buckets and indexes can be listed and created; object-level work needs the S3
-  API and is not wrapped yet.
+- **R2 object access and D1 database creation are missing.** Buckets can be
+  listed and created, and Vectorize indexes read and written; R2 object-level
+  work needs the S3 API and is not wrapped yet.
 - **The Web Client components take props no host currently supplies.** They
   render, and they are covered by tests, but the wiring from tool results to
   component props is not written.
