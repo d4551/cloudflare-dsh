@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { CredentialResolver } from '../src/credentials.ts'
 import {
   CloudflareClient,
+  type FetchLike,
   TRANSPORT_FAILURE_STATUS,
   readEnvelope,
   realSleep,
@@ -172,7 +174,7 @@ describe('request cancellation', () => {
   it('retries a timed-out attempt, because a deadline is a transient failure', async () => {
     // The budget is per attempt. A timeout that ends the whole operation would
     // make the per-attempt deadline a cap on the operation instead.
-    const fetchImpl = vi.fn(hang)
+    const fetchImpl = vi.fn<FetchLike>(hang)
     const { client } = makeClient(fetchImpl, { requestTimeoutMs: 10 })
     await expect(client.request({ method: 'GET', path: '/x' })).rejects.toMatchObject({
       name: 'TimeoutError',
@@ -193,7 +195,7 @@ describe('request cancellation', () => {
 
   it('does not retry a caller abort, which is a decision rather than a failure', async () => {
     const controller = new AbortController()
-    const fetchImpl = vi.fn((request: Request) => {
+    const fetchImpl = vi.fn<FetchLike>((request: Request) => {
       controller.abort()
       return hang(request)
     })
@@ -429,7 +431,7 @@ describe('CloudflareClient.request', () => {
   })
 
   it('re-resolves the credential on every attempt so rotation is picked up', async () => {
-    const resolve = vi.fn(() => 'tok')
+    const resolve = vi.fn<CredentialResolver['resolve']>(() => 'tok')
     let calls = 0
     const client = new CloudflareClient({
       credentials: { resolve },

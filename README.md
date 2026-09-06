@@ -550,13 +550,13 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 
 ### `cloudflare-tools-data` (`cloudflare-dsh/tools/data`)
 
-| Field                      | Default | Meaning                                                              |
-| -------------------------- | ------- | -------------------------------------------------------------------- |
-| `pageSize`                 | `50`    | Default page size for namespace, database, queue and bucket listings |
-| `keyListLimit`             | `1000`  | Default number of keys `cloudflare_kv_list_keys` returns per page    |
-| `renderLimit`              | `4000`  | Characters of a KV value shown to the model before truncation        |
-| `queueBatchSize`           | `10`    | Default number of messages `cloudflare_queue_pull` takes             |
-| `queueVisibilityTimeoutMs` | `30000` | Default time pulled messages stay invisible to other consumers       |
+| Field                      | Default | Meaning                                                           |
+| -------------------------- | ------- | ----------------------------------------------------------------- |
+| `pageSize`                 | `50`    | Default page size for namespace, database and bucket listings     |
+| `keyListLimit`             | `1000`  | Default number of keys `cloudflare_kv_list_keys` returns per page |
+| `renderLimit`              | `4000`  | Characters of a KV value shown to the model before truncation     |
+| `queueBatchSize`           | `10`    | Default number of messages `cloudflare_queue_pull` takes          |
+| `queueVisibilityTimeoutMs` | `30000` | Default time pulled messages stay invisible to other consumers    |
 
 ### `cloudflare-tools-web` (`cloudflare-dsh/tools/web`)
 
@@ -613,11 +613,20 @@ its entry by `id`; the keyed tool-view slot dispatches on the wire tool name.
 | `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered text, captioned with the page it came from                         |
 | `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump                            |
 
+Each tool view is a figure, named from the caption already on screen, and
+deliberately not a landmark: a tool view is rendered once per tool call, so a
+conversation that runs one query twice would otherwise put two identically
+named landmarks on the page.
+
 The package ships `cloudflare.css`. Colours are CSS custom properties, so a
 host's theme wins wherever it defines them.
 
 All user-facing copy routes through a typed dictionary in `locales/en.ts`,
 including accessible names — those are part of the interface, not decoration.
+That is a gate, not a habit: the invariants lane reads each component's syntax
+tree and fails on any literal a user would read. It had to be, because a
+toggle's entire accessible name was a literal in the component while the
+sentence above sat here unchecked.
 
 ---
 
@@ -626,7 +635,8 @@ including accessible names — those are part of the interface, not decoration.
 Upstream DSH ships no accessibility guidance for plugin authors. This project
 sets its own bar: **WCAG 2.2 AA, zero axe violations, enforced in CI**.
 
-Accessibility runs in two lanes because one is not enough:
+Accessibility runs in three lanes, because no one of them reaches all three
+criteria:
 
 ```mermaid
 graph LR
@@ -636,40 +646,71 @@ graph LR
         C["ARIA wiring: describedby, invalid, live regions"]
     end
     subgraph chromium["Lane 2 — real Chromium via Playwright"]
-        D["Computed styles"]
-        E["Colour contrast, light and dark"]
-        F["Every surface, assembled"]
+        D["Text contrast, light and dark"]
+        E["Focus ring, walked by keyboard"]
+        F["Every state, and the client assembled"]
     end
-    jsdom --> G["0 violations"]
+    subgraph computed["Lane 3 — computed from the stylesheet"]
+        H["Non-text contrast: borders, focus rings"]
+    end
+    jsdom --> G["0 violations, 0 left for review"]
     chromium --> G
+    computed --> G
 ```
 
-The split exists for a measured reason: axe-core's colour-contrast rule cannot
-run under jsdom ([axe-core#595](https://github.com/dequelabs/axe-core/issues/595))
-because it needs computed styles. Components that pass in isolation can still
-conflict once composed, so the assembled client gets its own scan in both colour
-schemes.
+Each split exists for a measured reason.
 
-**Neither lane filters axe.** No tag scope, no disabled rules, no excluded
-selectors. The Chromium fixture supplies the landmarks, page heading and chrome
-colours a host would provide, so page-scoped rules fail on a real defect rather
-than on an unrealistic harness.
+axe-core's colour-contrast rule cannot run under jsdom
+([axe-core#595](https://github.com/dequelabs/axe-core/issues/595)) because it
+needs computed styles, so text contrast is checked in a real browser, in both
+colour schemes, across every state a surface can be rendered into from its
+props — an empty chip, a failed one, an empty result set each render copy no
+other state does.
+
+Components that pass alone can conflict once composed, so the client is also
+scanned as a host assembles it: the session chip and the settings card once
+each, and every tool view twice, because a tool view is rendered once per tool
+call. That scan earns its place — the first time it ran it found the tool views
+registering as `region` landmarks, so a conversation running the same query
+twice shipped two identically named landmarks. They are figures now.
+
+axe has no rule at all for non-text contrast (SC 1.4.11) and none for focus
+appearance, so neither is assumed. The invariants lane reads the shipped
+stylesheet, resolves every `--cf-*` token in both schemes, and fails on any
+colour beneath the ratio its use requires — 4.5:1 for text, 3:1 for a border or
+a focus ring. The browser lane walks the assembled page by keyboard and pins the
+focus ring the stylesheet declares, because Chromium draws a ring of its own
+when a page supplies none, and a test that only asks whether _something_ is
+drawn passes with the focus block deleted.
+
+**No lane filters axe.** No tag scope, no disabled rules, no excluded
+selectors — and the run is read for what it left for a human to review as well
+as for what it failed, since `incomplete` is where a prohibited `aria-label` sat
+while the gate read `violations` alone. The Chromium fixture supplies the
+landmarks, page heading and chrome colours a host would provide, so page-scoped
+rules fail on a real defect rather than on an unrealistic harness.
 
 Specific commitments, each named with the test that holds it. "Covered by
 tests" is worth nothing unless the test exists and runs, so `readme.test.ts`
 collects both lanes and fails when a name below is not among them:
 
-| Commitment                                                                        | Test                                                                                                                                                                                                                                      |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Every input has a programmatic label                                              | `SettingsCard > gives API token reference a programmatic label`, `SettingsCard > gives API token a programmatic label`, `SettingsCard > gives Account ID a programmatic label`, `SettingsCard > gives AI Gateway ID a programmatic label` |
-| A secret field is `type=password` and holds no value to read back                 | `SettingsCard > keeps the token field write-only`                                                                                                                                                                                         |
-| A secret field keeps password managers out with `autocomplete=off`                | `SettingsCard > keeps password managers out of a harness credential`                                                                                                                                                                      |
-| An invalid field points at its hint and its error together (SC 3.3.1)             | `SettingsCard > points the invalid field at both its hint and its error`                                                                                                                                                                  |
-| The error region stays mounted and empty until it has something to say (SC 4.1.3) | `SettingsCard > keeps the error region mounted but empty until validation fails`, `SettingsCard > announces the validation error and marks the field invalid`                                                                             |
-| A status message lands in a polite `role="status"` region                         | `SettingsCard > confirms a save in a polite status region`                                                                                                                                                                                |
-| A result is a real table with header cells                                        | `D1Result > renders a real table with column headers`                                                                                                                                                                                     |
-| The table's caption names the query that produced it                              | `D1Result > captions the table with the query that produced it`                                                                                                                                                                           |
-| A scroll container is keyboard-reachable and named                                | `D1Result > makes the scroll container reachable by keyboard and gives it a name`                                                                                                                                                         |
+| Commitment                                                                                   | Test                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every input has a programmatic label                                                         | `SettingsCard > gives API token reference a programmatic label`, `SettingsCard > gives API token a programmatic label`, `SettingsCard > gives Account ID a programmatic label`, `SettingsCard > gives AI Gateway ID a programmatic label`                                 |
+| A secret field is `type=password` and holds no value to read back                            | `SettingsCard > keeps the token field write-only`                                                                                                                                                                                                                         |
+| A secret field keeps password managers out with `autocomplete=off`                           | `SettingsCard > keeps password managers out of a harness credential`                                                                                                                                                                                                      |
+| An invalid field points at its hint and its error together (SC 3.3.1)                        | `SettingsCard > points the invalid field at both its hint and its error`                                                                                                                                                                                                  |
+| The error region stays mounted and empty until it has something to say (SC 4.1.3)            | `SettingsCard > keeps the error region mounted but empty until validation fails`, `SettingsCard > announces the validation error and marks the field invalid`                                                                                                             |
+| A status message lands in a polite `role="status"` region                                    | `SettingsCard > confirms a save in a polite status region`                                                                                                                                                                                                                |
+| A result is a real table with header cells                                                   | `D1Result > renders a real table with column headers`                                                                                                                                                                                                                     |
+| The table's caption names the query that produced it                                         | `D1Result > captions the table with the query that produced it`                                                                                                                                                                                                           |
+| A scroll container is keyboard-reachable and named                                           | `D1Result > makes the scroll container reachable by keyboard and gives it a name`                                                                                                                                                                                         |
+| A tool view is not a landmark, because tool views repeat                                     | `D1Result > keeps the result card out of the landmark map, since tool views repeat`, `BrowserRender > keeps the render card out of the landmark map, since tool views repeat`, `AccessibilityTree > keeps the tree card out of the landmark map, since tool views repeat` |
+| A keyboard focus ring is drawn, and measured rather than assumed (SC 2.4.7)                  | `accessibility in Chromium > draws the declared focus ring on every focus stop in light`, `accessibility in Chromium > draws the declared focus ring on every focus stop in dark`                                                                                         |
+| The client is scanned as a host assembles it, not one surface at a time                      | `accessibility in Chromium > the assembled client has no violations in light`, `accessibility in Chromium > the assembled client has no violations in dark`                                                                                                               |
+| A run leaves nothing for a human to review, not merely nothing failing                       | `accessibility in Chromium > leaves nothing for a human to review, not merely nothing failing`                                                                                                                                                                            |
+| Every colour pair clears its ratio, including non-text contrast axe cannot check (SC 1.4.11) | `every colour pair the stylesheet ships clears its ratio > puts no colour beneath the ratio its use requires`                                                                                                                                                             |
+| All user-facing copy routes through the dictionary, accessible names included                | `user-facing copy lives in the dictionary > finds no inline copy in any client component`                                                                                                                                                                                 |
 
 Screenshots are not in that list: `cloudflare_browser_screenshot` returns the
 image as a harness attachment block, which the host renders, so this package has
@@ -680,9 +721,18 @@ commitment outlived the code by two restarts.
 
 ## MCP passthrough
 
-`cloudflare-dsh/mcp` exports patch rows for Cloudflare's eight hosted MCP
-servers: docs, bindings, observability, radar, browser, AI Gateway, AutoRAG and
-Logpush.
+`cloudflare-dsh/mcp` exports patch rows for every hosted MCP server Cloudflare
+publishes — seventeen of them, each carrying a one-line summary so a profile can
+choose without leaving the file. They range from the Code Mode server, which
+reaches the whole Cloudflare API through code execution, to the per-product
+servers for docs, bindings, builds, observability, containers, browser
+rendering, Logpush, AI Gateway, AutoRAG, audit logs, DNS analytics, Digital
+Experience Monitoring, CASB, Radar, the blog, and a published demo.
+
+`cloudflare-autorag` keeps that name deliberately: the REST product was renamed
+AI Search, which is why the tools address `/ai-search`, but the hosted MCP
+server is still published as AutoRAG at the AutoRAG host. This list names
+servers as Cloudflare publishes them.
 
 **Nothing ships enabled.** Each server is a remote endpoint reached outside the
 agent sandbox, so turning one on is a deliberate act by whoever owns the
@@ -738,7 +788,13 @@ wrap stay reachable. It is a bounded capability, not a bypass:
 
 ## Quality
 
-CI runs on Node 22 and 24, and every gate below fails the build:
+Every gate below fails the build. The typecheck, lint, format, invariant and
+coverage lanes run on Node 22 and 24, and so does packaging, which loads the
+built artifacts the way a consumer on either would. The accessibility and
+mutation lanes run on Node 22 alone — a Chromium scan and a mutation run do not
+change with the Node major, and doubling either buys a longer wait rather than
+a stronger signal. `test:invariants` asserts that split, so the sentence and
+the workflow cannot drift apart.
 
 | Gate               | Bar                                                                                                                                                       |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |

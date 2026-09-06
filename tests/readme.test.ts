@@ -534,8 +534,14 @@ describe('the accessibility commitments', () => {
   })
 
   it('names only tests that exist and run', { timeout: COLLECTION_TIMEOUT_MS }, () => {
-    // Both lanes: a commitment may be held in the unit suite or in Chromium.
-    const running = new Set([...collected('vitest.config.ts'), ...collected('vitest.a11y.config.ts')])
+    // All three lanes: a commitment may be held in the unit suite, in Chromium,
+    // or — for the criteria axe has no rule for — by a gate that computes the
+    // answer from the shipped stylesheet.
+    const running = new Set([
+      ...collected('vitest.config.ts'),
+      ...collected('vitest.a11y.config.ts'),
+      ...collected('vitest.invariants.config.ts'),
+    ])
     expect(
       commitments()
         .flatMap((row) => row.tests)

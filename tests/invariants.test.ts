@@ -48,6 +48,9 @@ interface StrykerConfig {
 }
 interface OxlintConfig {
   readonly categories: Readonly<Record<string, string>>
+  readonly plugins: readonly string[]
+  readonly rules?: Readonly<Record<string, unknown>>
+  readonly ignorePatterns?: readonly string[]
 }
 interface TsConfigBase {
   readonly compilerOptions: Readonly<Record<string, unknown>>
@@ -524,6 +527,57 @@ describe('linting cannot be softened', () => {
 
   it('fails the build on a warning', () => {
     expect(json<PackageJson>('package.json').scripts.lint).toContain('--deny-warnings')
+  })
+
+  it('runs exactly these plugins, so dropping one is a visible edit', () => {
+    // The formatter's ignore list was gated and the linter's plugin list was
+    // not, so `typescript` could have been removed with every gate green.
+    // `jsx-a11y` is the static half of the accessibility bar; `import`,
+    // `promise` and `vitest` each found a real defect the day they went on.
+    expect(json<OxlintConfig>('.oxlintrc.json').plugins.toSorted()).toEqual([
+      'import',
+      'jsx-a11y',
+      'oxc',
+      'promise',
+      'typescript',
+      'unicorn',
+      'vitest',
+    ])
+  })
+
+  it('ignores only what git ignores, so no source can be excused from the lint', () => {
+    const gitignored = read('.gitignore')
+      .split('\n')
+      .filter((line) => line.endsWith('/'))
+      .map((line) => line.slice(0, -1))
+    // As a subset check on the whole list rather than an assertion per entry:
+    // a loop over an empty list asserts nothing and passes.
+    const patterns = json<OxlintConfig>('.oxlintrc.json').ignorePatterns ?? []
+    expect(patterns.filter((pattern) => !gitignored.includes(pattern))).toEqual([])
+  })
+
+  it('configures rules and never softens one', () => {
+    // A rule entry may teach a rule something true about this codebase; it may
+    // not lower a severity. Every entry is checked to be an error, whether it
+    // is written as a bare severity or as a severity with options — so `off`
+    // and `warn` cannot appear, and a `rules` block cannot become the place a
+    // finding goes to be silenced.
+    const rules = Object.entries(json<OxlintConfig>('.oxlintrc.json').rules ?? {})
+    const severityOf = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value)
+    expect(rules.filter(([, value]) => severityOf(value) !== 'error').map(([id]) => id)).toEqual([])
+  })
+
+  it('overrides exactly these rules, each for a reason the tree can show', () => {
+    // Named, so a new override is a reviewed edit rather than a quiet one.
+    // Each of these teaches a rule a fact about this codebase that it has no
+    // way to know: a scrollable figure is a legitimate focus stop and axe
+    // requires it to be one, the axe wrapper is an assertion helper, and
+    // Vitest's `expect` genuinely takes a message as its second argument.
+    expect(Object.keys(json<OxlintConfig>('.oxlintrc.json').rules ?? {}).toSorted()).toEqual([
+      'jsx-a11y/no-noninteractive-tabindex',
+      'vitest/expect-expect',
+      'vitest/valid-expect',
+    ])
   })
 })
 

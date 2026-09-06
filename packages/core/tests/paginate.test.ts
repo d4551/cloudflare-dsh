@@ -93,7 +93,7 @@ describe('nextPageQuery', () => {
 
 describe('paginate', () => {
   it('collects items from a single page', async () => {
-    const fetchPage = vi.fn(async () => page(['a', 'b']))
+    const fetchPage = vi.fn<PageFetcher<string>>(async () => page(['a', 'b']))
     await expect(paginate(fetchPage, () => null, 10)).resolves.toEqual({
       items: ['a', 'b'],
       pages: 1,
@@ -105,19 +105,19 @@ describe('paginate', () => {
   it('follows the cursor across pages', async () => {
     const pages = [page(['a'], { cursor: 'c1' }), page(['b'], { cursor: '' })]
     let i = 0
-    const fetchPage = vi.fn(async () => pages[i++]!)
+    const fetchPage = vi.fn<PageFetcher<string>>(async () => pages[i++]!)
     await expect(paginate(fetchPage, byCursor, 10)).resolves.toMatchObject({ items: ['a', 'b'] })
     expect(fetchPage).toHaveBeenNthCalledWith(2, { cursor: 'c1' })
   })
 
   it('starts from an empty overlay, letting the spec carry the first page', async () => {
-    const fetchPage = vi.fn(async () => page<string>([]))
+    const fetchPage = vi.fn<PageFetcher<string>>(async () => page<string>([]))
     await paginate(fetchPage, () => null, 5)
     expect(fetchPage).toHaveBeenCalledWith({})
   })
 
   it('reports truncation when the ceiling stops a walk the server would continue', async () => {
-    const fetchPage = vi.fn(async () => page(['x'], { cursor: 'always' }))
+    const fetchPage = vi.fn<PageFetcher<string>>(async () => page(['x'], { cursor: 'always' }))
     await expect(paginate(fetchPage, byCursor, 3)).resolves.toEqual({
       items: ['x', 'x', 'x'],
       pages: 3,

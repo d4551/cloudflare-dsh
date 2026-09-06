@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
+import type { FetchLike } from '../src/client.ts'
 import * as plugin from '../src/index.ts'
 import { CloudflareService } from '../src/service.ts'
 
@@ -81,7 +82,7 @@ describe('plugin lifecycle', () => {
   // Proves the harness's credentials service is what actually authenticates
   // requests, not some other resolver the plugin might have reached for.
   it('authenticates requests with the harness credentials service', async () => {
-    const globalFetch = vi.fn(
+    const globalFetch = vi.fn<FetchLike>(
       async (_request: Request) =>
         new Response(JSON.stringify({ success: true, errors: [], messages: [], result: { ok: 1 } }), {
           status: 200,

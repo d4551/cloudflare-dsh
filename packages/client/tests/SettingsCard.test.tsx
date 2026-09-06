@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { type CloudflareSettings, SettingsCard } from '../src/SettingsCard.tsx'
+import { type CloudflareSettings, SettingsCard, type SettingsCardProps } from '../src/SettingsCard.tsx'
 import { expectNoViolations } from './axe.ts'
 
 afterEach(cleanup)
@@ -13,7 +13,7 @@ const settings: CloudflareSettings = {
 }
 
 function setup(over: Partial<Parameters<typeof SettingsCard>[0]> = {}) {
-  const onSave = vi.fn()
+  const onSave = vi.fn<SettingsCardProps['onSave']>()
   const result = render(<SettingsCard settings={settings} tokenStored={false} onSave={onSave} {...over} />)
   return { ...result, onSave }
 }
