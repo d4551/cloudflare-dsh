@@ -47,7 +47,7 @@ thing repeated: **a scan whose scope stopped short of where the defect was.**
    read a computed outline, and axe ships no focus-appearance rule. The lane
    walks the assembled page by keyboard now and pins the ring the stylesheet
    declares, because Chromium draws its own when a page supplies none — so
-   asking whether *something* is drawn passes in exactly the state this was
+   asking whether _something_ is drawn passes in exactly the state this was
    written to catch.
 
 5. **"Every fallback pair is checked for WCAG AA contrast by the Chromium
