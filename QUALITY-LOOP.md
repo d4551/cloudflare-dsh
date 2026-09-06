@@ -9,7 +9,53 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 11**
+**I'm a fucking loser: 12**
+
+<details>
+<summary><strong>Restart 12 — a commitment that outlived the code it described</strong></summary>
+
+A fourth adversarial audit of `9632436` reported a violation and, by design, not
+where, noting again that every gate passed while it sat in the tree. It did, and
+the audit left one word to work from: "covered by tests" means a test exists and
+runs.
+
+The accessibility section listed six commitments as prose under exactly those
+words. Five were held by real assertions. The sixth — **"Screenshots carry
+meaningful alternative text"** — was held by nothing, and could not be: Restart 9
+deleted the client's screenshot branch along with its locale string and its CSS,
+because `cloudflare_browser_screenshot` returns the image as a harness
+attachment block for the host to render. There is no `alt` anywhere in the
+client, and `BrowserRender`'s own header says a screenshot is not rendered
+there. The commitment outlived the code by two restarts, in the one section of
+the page that claims conformance to a standard.
+
+It is gone, and the page says why rather than leaving a silent hole. The other
+five are no longer prose: each commitment now sits in a table beside the name of
+the test that holds it, and `readme.test.ts` collects both the unit and the
+Chromium lanes and fails when a named test is not among them — so a commitment
+whose test is deleted or renamed takes the build with it, and a commitment
+nobody can name a test for cannot be written down at all. Each was read before
+it was cited: the citation names the assertion, not a test whose title sounded
+close.
+
+Watched to fail both ways before it was trusted: a commitment naming a test that
+does not exist, and a commitment naming no test.
+
+Two neighbouring claims of the same shape were checked and are true. The client
+components are covered by tests, and `mutation-guard.test.ts` does show each of
+the guard's five checks failing, not merely passing.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings`, `oxfmt --check` clean across 113 files, 143 invariant and
+README tests, 1330 unit tests at 100% coverage (1145 statements, 621 branches,
+364 functions, 1016 lines), 35 built-artifact tests, 13 Chromium axe tests with
+no rule or selector filtering, knip 0, publint clean on all three packages, and
+a mutation score of **100.00%** — 3635 mutants over 38 instrumented files, 3622
+killed and 13 detected by timeout, none surviving and none without coverage. No
+module under `packages/` changed in this restart, which the mutation guard
+confirms by accepting the report against this tree rather than being told to.
+
+</details>
 
 <details>
 <summary><strong>Restart 11 — the gate that was checkable by omission was the one I had just added</strong></summary>

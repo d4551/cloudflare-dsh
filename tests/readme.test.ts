@@ -289,6 +289,55 @@ const slotsDocumented = (section: string): string[] =>
       return first?.[1] === undefined ? [] : [first[1]]
     })
 
+/**
+ * Budget for collecting a whole vitest suite as a subprocess. Collecting over a
+ * thousand tests takes seconds locally and longer on a two-core runner; the
+ * bound is finite so a hung collection fails rather than waits.
+ */
+const COLLECTION_TIMEOUT_MS = 120_000
+
+/** Every test name vitest collects for one config, as `describe > it`. */
+function collected(config: string): string[] {
+  const listed = JSON.parse(
+    execFileSync('bunx', ['vitest', 'list', '--config', config, '--json'], {
+      cwd: root('..'),
+      encoding: 'utf8',
+      // A vitest run inherits the outer worker's environment; the listing must
+      // not believe it is one of this run's workers.
+      env: {
+        ...process.env,
+        VITEST: undefined,
+        VITEST_MODE: undefined,
+        VITEST_POOL_ID: undefined,
+        VITEST_WORKER_ID: undefined,
+      },
+    }),
+  ) as readonly { readonly name: string }[]
+  return listed.map((test) => test.name)
+}
+
+/**
+ * The accessibility commitments and the test each one names.
+ *
+ * The page used to list these as prose "covered by tests", and one of them —
+ * alternative text on a screenshot — outlived the code by two restarts: the
+ * client's screenshot branch was deleted, so no test covered it and none could.
+ * A commitment now carries the name of the test that holds it, and that name is
+ * checked against what vitest actually collects.
+ */
+const commitments = (): { readonly commitment: string; readonly test: string }[] => {
+  const start = readme.indexOf('| Commitment ')
+  const rows = readme.slice(start).split('\n')
+  const found: { commitment: string; test: string }[] = []
+  for (const line of rows.slice(2)) {
+    if (!line.startsWith('| ')) break
+    const [commitment, cited] = line.slice(1).split('|')
+    const test = /`([^`]+)`/.exec(cited ?? '')?.[1]
+    if (test !== undefined) found.push({ commitment: (commitment ?? '').trim(), test })
+  }
+  return found
+}
+
 /** One fenced Mermaid block. */
 interface Diagram {
   readonly file: string
@@ -464,6 +513,25 @@ describe('the Web Client surfaces', () => {
     expect([...new Set(slotsDocumented(section))].toSorted()).toEqual(
       slotsIn(CLIENT, read(CLIENT)).toSorted(),
     )
+  })
+})
+
+describe('the accessibility commitments', () => {
+  it('names a test for every commitment it makes', () => {
+    // A row whose second column carries no test name is a commitment nothing
+    // holds, which is what the prose list allowed.
+    const rows = readme.slice(readme.indexOf('| Commitment ')).split('\n').slice(2)
+    const stated = rows.slice(
+      0,
+      rows.findIndex((line) => !line.startsWith('| ')),
+    )
+    expect(commitments()).toHaveLength(stated.length)
+  })
+
+  it('names only tests that exist and run', { timeout: COLLECTION_TIMEOUT_MS }, () => {
+    // Both lanes: a commitment may be held in the unit suite or in Chromium.
+    const running = new Set([...collected('vitest.config.ts'), ...collected('vitest.a11y.config.ts')])
+    expect(commitments().filter((row) => !running.has(row.test))).toEqual([])
   })
 })
 

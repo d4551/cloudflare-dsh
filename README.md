@@ -655,17 +655,26 @@ selectors. The Chromium fixture supplies the landmarks, page heading and chrome
 colours a host would provide, so page-scoped rules fail on a real defect rather
 than on an unrealistic harness.
 
-Specific commitments, covered by tests:
+Specific commitments, each named with the test that holds it. "Covered by
+tests" is worth nothing unless the test exists and runs, so `readme.test.ts`
+collects both lanes and fails when a name below is not among them:
 
-- Every input has a programmatic label; secret fields are `type=password` with
-  `autocomplete=off`.
-- Errors are wired with `aria-describedby` and announced in a live region
-  (SC 3.3.1, 4.1.3); the region stays mounted and empty until it has something
-  to say.
-- Status messages land in a polite `role="status"` region.
-- Tables are real tables with header cells and a caption naming the query.
-- Scroll containers are keyboard-reachable and named.
-- Screenshots carry meaningful alternative text.
+| Commitment                                                                        | Test                                                                              |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Every input has a programmatic label                                              | `SettingsCard > gives API token reference a programmatic label`                   |
+| A secret field is `type=password` and holds no value to read back                 | `SettingsCard > keeps the token field write-only`                                 |
+| A secret field keeps password managers out with `autocomplete=off`                | `SettingsCard > keeps password managers out of a harness credential`              |
+| An invalid field points at its hint and its error together (SC 3.3.1)             | `SettingsCard > points the invalid field at both its hint and its error`          |
+| The error region stays mounted and empty until it has something to say (SC 4.1.3) | `SettingsCard > keeps the error region mounted but empty until validation fails`  |
+| A status message lands in a polite `role="status"` region                         | `SettingsCard > confirms a save in a polite status region`                        |
+| A result is a real table with header cells                                        | `D1Result > renders a real table with column headers`                             |
+| The table's caption names the query that produced it                              | `D1Result > captions the table with the query that produced it`                   |
+| A scroll container is keyboard-reachable and named                                | `D1Result > makes the scroll container reachable by keyboard and gives it a name` |
+
+Screenshots are not in that list: `cloudflare_browser_screenshot` returns the
+image as a harness attachment block, which the host renders, so this package has
+no screenshot surface to give alternative text to. It once did, and the
+commitment outlived the code by two restarts.
 
 ---
 
@@ -759,20 +768,20 @@ Two toolchain notes for contributors:
 bun install
 ```
 
-| Script                    | What it does                                                                                                                                    |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bun run typecheck`       | `tsc -b`, strict, `skipLibCheck: false`                                                                                                         |
-| `bun run lint`            | `oxlint --deny-warnings .`                                                                                                                      |
-| `bun run format:check`    | `oxfmt --check`; fails on any file outside the canonical style. `bun run format` conforms it                                                    |
-| `bun run test`            | Vitest on Node                                                                                                                                  |
-| `bun run test:coverage`   | The same, with 100% thresholds                                                                                                                  |
-| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality), each check of the mutation guard, and this page's tool counts, tool names and Mermaid diagrams |
-| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered                                                                                              |
-| `bun run build`           | `tsdown`, per package                                                                                                                           |
-| `bun run test:dist`       | Loads the **built** artifacts as a consumer resolves them                                                                                       |
-| `bun run stryker`         | Mutation testing, then the escape guard                                                                                                         |
-| `bun run knip`            | Unused files, exports and dependencies                                                                                                          |
-| `bun run publint`         | Package publishing sanity, all three packages                                                                                                   |
+| Script                    | What it does                                                                                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bun run typecheck`       | `tsc -b`, strict, `skipLibCheck: false`                                                                                                                                                          |
+| `bun run lint`            | `oxlint --deny-warnings .`                                                                                                                                                                       |
+| `bun run format:check`    | `oxfmt --check`; fails on any file outside the canonical style. `bun run format` conforms it                                                                                                     |
+| `bun run test`            | Vitest on Node                                                                                                                                                                                   |
+| `bun run test:coverage`   | The same, with 100% thresholds                                                                                                                                                                   |
+| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality), each check of the mutation guard, and this page's tool counts, tool names, configuration fields, accessibility commitments and Mermaid diagrams |
+| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered                                                                                                                                               |
+| `bun run build`           | `tsdown`, per package                                                                                                                                                                            |
+| `bun run test:dist`       | Loads the **built** artifacts as a consumer resolves them                                                                                                                                        |
+| `bun run stryker`         | Mutation testing, then the escape guard                                                                                                                                                          |
+| `bun run knip`            | Unused files, exports and dependencies                                                                                                                                                           |
+| `bun run publint`         | Package publishing sanity, all three packages                                                                                                                                                    |
 
 Development history is in [QUALITY-LOOP.md](QUALITY-LOOP.md).
 
@@ -797,7 +806,7 @@ scripts/    mutation-guard.ts        — the escape guard's checks, as pure func
 tests/      dist.test.ts           — the built-output suite
             invariants.test.ts     — the quality rules, as assertions
             mutation-guard.test.ts — each guard check, shown to fail
-            readme.test.ts         — this page's counts, tool names and diagrams
+            readme.test.ts         — this page's counts, names, commitments, diagrams
 ```
 
 `test:dist` deliberately has no source aliases. The unit and accessibility
