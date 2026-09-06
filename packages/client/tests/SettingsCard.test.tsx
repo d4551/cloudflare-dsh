@@ -54,7 +54,7 @@ describe('SettingsCard', () => {
     expect(screen.getByText('No token is stored for this reference.')).toBeInstanceOf(HTMLElement)
   })
 
-  it('associates each field with its hint', () => {
+  it('associates the Account ID field with its hint', () => {
     const { container } = setup()
     const described = screen.getByLabelText('Account ID').getAttribute('aria-describedby')
     expect(described).not.toBeNull()
@@ -166,11 +166,17 @@ describe('SettingsCard', () => {
   })
 
   it('points the invalid field at both its hint and its error', () => {
-    setup()
+    const { container } = setup()
     fireEvent.change(screen.getByLabelText('API token reference'), { target: { value: 'bad ref' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save Cloudflare settings' }))
-    const described = screen.getByLabelText('API token reference').getAttribute('aria-describedby')
-    expect(described?.split(' ')).toHaveLength(2)
+    const ids = screen.getByLabelText('API token reference').getAttribute('aria-describedby')?.split(' ')
+    // Resolved to what they point at, not counted: two ids is true of any two
+    // elements, and of the same element named twice, so a count would let the
+    // field describe itself with anything at all and still read as wired.
+    expect(ids?.map((id) => container.ownerDocument.getElementById(id)?.textContent)).toEqual([
+      'The environment variable name holding the token, for example CLOUDFLARE_API_TOKEN.',
+      'A token reference must be an environment variable name: uppercase letters, digits and underscores.',
+    ])
   })
 
   it('clears the error once a valid reference is saved', () => {

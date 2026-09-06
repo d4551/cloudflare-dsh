@@ -9,7 +9,60 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 12**
+**I'm a fucking loser: 13**
+
+<details>
+<summary><strong>Restart 13 — a test whose name promised more than it asserted</strong></summary>
+
+A fifth adversarial audit of `4e95267` reported a violation and, by design, not
+where, with one line to work from: a test name that over-claims relative to its
+actual assertion is dishonesty, not imprecision.
+
+`SettingsCard > points the invalid field at both its hint and its error`
+asserted that the field's `aria-describedby` held **two ids**. Nothing more. Two
+ids is true of any two elements, and of the same element named twice, so a field
+pointing at its hint twice — with the error message referenced by nothing, which
+is the failure SC 3.3.1 exists to prevent — passed it. Two lines below,
+`describes the token field by both its hint and its stored-state note` does it
+properly: it resolves the ids and pins the text they point at. The weaker test
+had the stronger name.
+
+It is worse than an ordinary weak test, because Restart 12 cited this exact test
+in the README as the one holding an SC 3.3.1 commitment. The gate added to make
+"covered by tests" mean something was pointed at a test that did not mean what
+its name said, so the commitment inherited the over-claim.
+
+The assertion now resolves both ids and pins the copy each points at. Watched to
+fail on the defect the count accepted: the component wired to name its hint
+twice instead of its hint and its error.
+
+A second name over-claimed in the same file: `associates each field with its
+hint` asserted one field, Account ID. The other three fields have tests of their
+own that name them, so the name is now the field it checks rather than all of
+them.
+
+The citation format had the same flaw one level up. "Every input has a
+programmatic label" cited a single input's test, and the gate read only the
+first name in a cell — so a commitment about four inputs was held by one. The
+gate reads every name in the cell now, and that commitment cites all four; the
+live-region commitment cites both halves of what it claims. Watched to fail when
+one of several cited tests is renamed away.
+
+The rest of the suite was swept for the same shape: every other test name
+carrying "every", "each", "all" or "both" iterates or asserts the conjunction it
+names.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings`, `oxfmt --check` clean across 113 files, 143 invariant and
+README tests, 1330 unit tests at 100% coverage (1145 statements, 621 branches,
+364 functions, 1016 lines), 35 built-artifact tests, 13 Chromium axe tests with
+no rule or selector filtering, knip 0, publint clean on all three packages, and
+a mutation score of **100.00%** — 3635 mutants over 38
+instrumented files, 3622 killed and 13 detected by timeout, none surviving and
+none without coverage, with the escape guard confirming the report describes
+this tree.
+
+</details>
 
 <details>
 <summary><strong>Restart 12 — a commitment that outlived the code it described</strong></summary>

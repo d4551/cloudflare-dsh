@@ -325,15 +325,20 @@ function collected(config: string): string[] {
  * A commitment now carries the name of the test that holds it, and that name is
  * checked against what vitest actually collects.
  */
-const commitments = (): { readonly commitment: string; readonly test: string }[] => {
+const commitments = (): { readonly commitment: string; readonly tests: string[] }[] => {
   const start = readme.indexOf('| Commitment ')
   const rows = readme.slice(start).split('\n')
-  const found: { commitment: string; test: string }[] = []
+  const found: { commitment: string; tests: string[] }[] = []
   for (const line of rows.slice(2)) {
     if (!line.startsWith('| ')) break
     const [commitment, cited] = line.slice(1).split('|')
-    const test = /`([^`]+)`/.exec(cited ?? '')?.[1]
-    if (test !== undefined) found.push({ commitment: (commitment ?? '').trim(), test })
+    // Every name in the cell, not the first: a commitment about every input is
+    // not held by one input's test, and citing one would be the same over-claim
+    // in the citation that the prose list made in the commitment.
+    const tests = [...(cited ?? '').matchAll(/`([^`]+)`/g)].flatMap((match) =>
+      match[1] === undefined ? [] : [match[1]],
+    )
+    if (tests.length > 0) found.push({ commitment: (commitment ?? '').trim(), tests })
   }
   return found
 }
@@ -531,7 +536,11 @@ describe('the accessibility commitments', () => {
   it('names only tests that exist and run', { timeout: COLLECTION_TIMEOUT_MS }, () => {
     // Both lanes: a commitment may be held in the unit suite or in Chromium.
     const running = new Set([...collected('vitest.config.ts'), ...collected('vitest.a11y.config.ts')])
-    expect(commitments().filter((row) => !running.has(row.test))).toEqual([])
+    expect(
+      commitments()
+        .flatMap((row) => row.tests)
+        .filter((test) => !running.has(test)),
+    ).toEqual([])
   })
 })
 
