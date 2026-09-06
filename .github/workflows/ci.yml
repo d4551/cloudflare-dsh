@@ -7,7 +7,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A superseded pull-request run is noise. A superseded run on the default
+  # branch is a commit that never got a verdict, so only pull requests cancel.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:

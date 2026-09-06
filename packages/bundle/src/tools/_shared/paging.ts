@@ -121,11 +121,13 @@ export function pageOutcome(
  */
 export function wholeListOutcome(info: WireResultInfo | undefined, returned: number): WholeListOutcome {
   const total = reportedTotal(info)
-  // Phrased as what would make it incomplete. The obvious spelling —
-  // `total === null || returned >= total` — has a null guard nothing depends
-  // on, because `returned >= null` is `returned >= 0`, which is always true.
-  const missing = total !== null && returned < total
-  return { total, complete: !missing }
+  // Compared against what came back when the API reported no total, because a
+  // listing with no next page cannot be short of one. Guarding the comparison
+  // with `total !== null` reads as the careful spelling and is unobservable:
+  // `returned < null` is `returned < 0`, false for every count, so the guard
+  // decides nothing while implying that it does.
+  const claimed = total ?? returned
+  return { total, complete: returned >= claimed }
 }
 
 /** Project a cursor-paged `result_info`: the API ends a listing by omitting the cursor or sending an empty one. */

@@ -5,26 +5,54 @@ import { AccessibilityTree } from '../src/toolviews/AccessibilityTree.tsx'
 import { BrowserRender } from '../src/toolviews/BrowserRender.tsx'
 import { D1Result } from '../src/toolviews/D1Result.tsx'
 
-/** A context with a recording slots runtime, as the Web Client would supply. */
+/** One recorded contribution, flattened so a test can read either kind's fields. */
+interface Entry {
+  readonly name: string
+  readonly id?: string
+  readonly key?: string
+  readonly order?: number
+  readonly label?: string
+  readonly component: unknown
+}
+
+/**
+ * A slots runtime that behaves as the published `SlotRegistry` documents.
+ *
+ * `register` hands back the disposer for its contribution; `inject` runs the
+ * effect for the declaration's lifetime and keeps what it returned, disposing
+ * an iterable in reverse. Modelling that here is what lets a test observe the
+ * obligation this package actually has — returning its disposers — rather than
+ * the registry's own bookkeeping.
+ */
 function harness() {
-  const registered: { name: string; id: string; order?: number; component: unknown }[] = []
-  const declared: string[] = []
+  const registered: Entry[] = []
+  const injected: string[] = []
+  const releases: (() => void)[] = []
   const ctx = new Context()
   ctx.provide('slots', {
     register(registration: client.SlotRegistration, component: unknown) {
-      const entry = { ...registration, component }
+      const entry: Entry = { ...registration, component }
       registered.push(entry)
       return () => {
         registered.splice(registered.indexOf(entry), 1)
       }
     },
-    inject(name: string, declare: () => void) {
-      declared.push(name)
-      declare()
+    inject(name: string, effect: () => client.SlotEffect) {
+      injected.push(name)
+      const installed = effect()
+      const disposers = typeof installed === 'function' ? [installed] : [...installed]
+      const release = () => {
+        for (const dispose of disposers.toReversed()) dispose()
+      }
+      releases.push(release)
+      return release
     },
   })
-  return { ctx, registered, declared, apply: () => client.apply(ctx) }
+  return { ctx, registered, injected, releases, apply: () => client.apply(ctx) }
 }
+
+const entryFor = (registered: readonly Entry[], slot: string, cell: string): Entry | undefined =>
+  registered.find((entry) => entry.name === slot && (entry.id ?? entry.key) === cell)
 
 describe('plugin shape', () => {
   it('declares its name and injections', () => {
@@ -35,36 +63,40 @@ describe('plugin shape', () => {
   it('names the slots it contributes into', () => {
     expect(client.SESSION_HEADER_SLOT).toBe('conversation.session.header.actions')
     expect(client.TOOL_VIEW_SLOT).toBe('tool.call.toolview')
+    expect(client.SETTINGS_SLOT).toBe('settings.plugins.tab')
   })
 })
 
 describe('registration', () => {
-  it('injects into both host slots before registering', () => {
-    const { declared, apply } = harness()
+  it('waits for each slot to be declared before contributing into it', () => {
+    // Registering into a slot nobody has declared throws, and none of these
+    // three is declared by the framework itself.
+    const { injected, apply } = harness()
     apply()
-    expect(declared).toEqual([client.SESSION_HEADER_SLOT, client.TOOL_VIEW_SLOT])
+    expect(injected).toEqual([client.SESSION_HEADER_SLOT, client.TOOL_VIEW_SLOT, client.SETTINGS_SLOT])
   })
 
-  it('registers the session cost chip in the conversation header', () => {
+  it('registers the session cost chip as an ordered header action', () => {
     const { registered, apply } = harness()
     apply()
-    const chip = registered.find((r) => r.id === 'cloudflare-cost')
-    expect(chip?.name).toBe(client.SESSION_HEADER_SLOT)
-    expect(chip?.component).toBe(client.SessionCostChip)
+    expect(entryFor(registered, client.SESSION_HEADER_SLOT, 'cloudflare-cost')).toEqual({
+      name: client.SESSION_HEADER_SLOT,
+      id: 'cloudflare-cost',
+      order: 100,
+      component: client.SessionCostChip,
+    })
   })
 
-  it('orders the chip after the host’s own header actions', () => {
+  it('registers the settings card as a page in the Plugins section', () => {
     const { registered, apply } = harness()
     apply()
-    expect(registered.find((r) => r.id === 'cloudflare-cost')?.order).toBe(100)
-  })
-
-  it('registers the settings card in its own settings slot', () => {
-    const { registered, apply } = harness()
-    apply()
-    const card = registered.find((r) => r.id === 'cloudflare-settings')
-    expect(card?.name).toBe('settings.plugin.cloudflare')
-    expect(card?.component).toBe(client.SettingsCard)
+    expect(entryFor(registered, client.SETTINGS_SLOT, 'cloudflare')).toEqual({
+      name: client.SETTINGS_SLOT,
+      id: 'cloudflare',
+      order: 100,
+      label: 'Cloudflare',
+      component: client.SettingsCard,
+    })
   })
 
   it.each([
@@ -74,15 +106,21 @@ describe('registration', () => {
   ])('keys the tool view for %s to its component', (tool, component) => {
     const { registered, apply } = harness()
     apply()
-    const view = registered.find((r) => r.name === client.TOOL_VIEW_SLOT && r.id === tool)
-    expect(view?.component).toBe(component)
+    expect(entryFor(registered, client.TOOL_VIEW_SLOT, tool)).toEqual({
+      name: client.TOOL_VIEW_SLOT,
+      key: tool,
+      component,
+    })
   })
 
-  it('keys every tool view by its wire tool name', () => {
+  it('dispatches every tool view by key, since a keyed slot has no id', () => {
+    // A tool view registered with `id` is what the registry throws on, so the
+    // absence of one is the assertion, not an implementation detail.
     const { registered, apply } = harness()
     apply()
-    const views = registered.filter((r) => r.name === client.TOOL_VIEW_SLOT)
-    expect(views.map((v) => v.id)).toEqual(client.TOOL_VIEWS.map((v) => v.tool))
+    const views = registered.filter((entry) => entry.name === client.TOOL_VIEW_SLOT)
+    expect(views.map((view) => view.key)).toEqual(client.TOOL_VIEWS.map((view) => view.tool))
+    expect(views.filter((view) => 'id' in view)).toEqual([])
   })
 
   it('registers exactly the surfaces it declares', () => {
@@ -101,23 +139,26 @@ describe('registration', () => {
 })
 
 describe('lifecycle', () => {
-  it('releases every registration when the plugin fiber unloads', async () => {
-    // Through cordis rather than by calling the disposer directly: this is the
-    // path the harness takes when a plugin is removed from a profile.
-    const { ctx, registered } = harness()
-    const fiber = await ctx.plugin(client)
-    expect(registered).toHaveLength(5)
-    // The labels are what `getEffects()` shows someone debugging a profile, so
-    // they name the slot and the key of each contribution.
-    expect(fiber.getEffects().map((effect) => effect.label)).toEqual([
-      'slots.register(conversation.session.header.actions#cloudflare-cost)',
-      'slots.register(tool.call.toolview#cloudflare_d1_query)',
-      'slots.register(tool.call.toolview#cloudflare_browser_render)',
-      'slots.register(tool.call.toolview#cloudflare_browser_accessibility_tree)',
-      'slots.register(settings.plugin.cloudflare#cloudflare-settings)',
-    ])
-    await fiber.dispose()
+  it('returns each contribution’s disposer, so a collapsed declaration takes it away', () => {
+    const { registered, releases, apply } = harness()
+    apply()
+    for (const release of releases) release()
     expect(registered).toEqual([])
+  })
+
+  it('takes away only the contributions of the declaration that collapsed', () => {
+    const { registered, releases, apply } = harness()
+    apply()
+    releases[1]?.()
+    expect(registered.map((entry) => entry.name)).toEqual([client.SESSION_HEADER_SLOT, client.SETTINGS_SLOT])
+  })
+
+  it('installs no effect of its own, because the registry owns disposal', async () => {
+    // `slots.register` and `slots.inject` each install their disposer on the
+    // calling fiber. An `ctx.effect` around either would put one disposal under
+    // two owners, which is what this asserts is not happening.
+    const { ctx } = harness()
+    const fiber = await ctx.plugin(client)
     expect(fiber.getEffects()).toEqual([])
   })
 })
