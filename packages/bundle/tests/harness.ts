@@ -87,7 +87,7 @@ function pngDimensions(data: Uint8Array): { width: number; height: number } {
  * back, and its id is the digest of its bytes, as a content-addressed store's
  * would be. Constructing it registers it as `ctx.attachments`.
  */
-export class MemoryAttachmentStore extends AttachmentStore {
+class MemoryAttachmentStore extends AttachmentStore {
   readonly imageLimits: ImageAttachmentLimits = {
     maxImageBytes: 10_000_000,
     maxImagesPerMessage: 10,

@@ -509,6 +509,9 @@ describe('coverage cannot be softened', () => {
   })
 })
 
+/** A rule entry's severity, whether written bare or beside its options. */
+const severityOf = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value)
+
 describe('linting cannot be softened', () => {
   it('grades every enabled category as an error', () => {
     const { categories } = json<OxlintConfig>('.oxlintrc.json')
@@ -546,14 +549,16 @@ describe('linting cannot be softened', () => {
   })
 
   it('ignores only what git ignores, so no source can be excused from the lint', () => {
-    const gitignored = read('.gitignore')
-      .split('\n')
-      .filter((line) => line.endsWith('/'))
-      .map((line) => line.slice(0, -1))
-    // As a subset check on the whole list rather than an assertion per entry:
-    // a loop over an empty list asserts nothing and passes.
+    const gitignored = new Set(
+      read('.gitignore')
+        .split('\n')
+        .filter((line) => line.endsWith('/'))
+        .map((line) => line.slice(0, -1)),
+    )
+    // As a filter over the whole list rather than an assertion per entry: a
+    // loop over an empty list asserts nothing and passes.
     const patterns = json<OxlintConfig>('.oxlintrc.json').ignorePatterns ?? []
-    expect(patterns.filter((pattern) => !gitignored.includes(pattern))).toEqual([])
+    expect(patterns.filter((pattern) => !gitignored.has(pattern))).toEqual([])
   })
 
   it('configures rules and never softens one', () => {
@@ -563,7 +568,6 @@ describe('linting cannot be softened', () => {
     // and `warn` cannot appear, and a `rules` block cannot become the place a
     // finding goes to be silenced.
     const rules = Object.entries(json<OxlintConfig>('.oxlintrc.json').rules ?? {})
-    const severityOf = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value)
     expect(rules.filter(([, value]) => severityOf(value) !== 'error').map(([id]) => id)).toEqual([])
   })
 
@@ -629,6 +633,12 @@ describe('the runner and the mutator are pinned', () => {
 
 describe('type checking cannot be skipped', () => {
   it.each([
+    // `ignoreDeprecations` silences a deprecation rather than acting on it,
+    // which is a suppression comment in configuration form. `baseUrl` is the
+    // deprecation it would have silenced here: it stops functioning in
+    // TypeScript 7, and `paths` resolves relative to this file without it.
+    ['ignoreDeprecations', undefined],
+    ['baseUrl', undefined],
     ['strict', true],
     ['skipLibCheck', false],
     ['noUncheckedIndexedAccess', true],

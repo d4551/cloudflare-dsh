@@ -808,15 +808,26 @@ the workflow cannot drift apart.
 | `stryker`          | 100% mutation score, no file exclusions                                                                                                                   |
 | `knip` / `publint` | No unused code or dependencies; packages are publishable                                                                                                  |
 
-Two toolchain notes for contributors:
+Three toolchain notes for contributors, each a pin with a reason rather than a
+version left behind:
 
 - Tests run on Vitest under Node rather than `bun test`, because Stryker has no
   official Bun runner and DSH executes plugins on Node. Bun is the package
   manager and script runner.
 - Vitest is pinned to 4.x. On Vitest 5 the Stryker vitest runner's per-test
   filter matches nothing and every covered mutant reports as surviving
-  ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)).
-  Unpin once that is fixed.
+  ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)),
+  which would leave the mutation gate green and meaningless. The pin is
+  asserted, so a caret cannot appear without a gate going red. Unpin once that
+  is fixed.
+- TypeScript is on 6.x, not 7. TypeScript 7 is the native compiler and ships no
+  programmatic API — its `lib/` holds `tsc.js` and nothing else — and every
+  gate on this page that reads a syntax tree is built on that API: the escape-
+  hatch scan, the superseded-doc scan, the inline-copy scan, and the README's
+  tool, field and slot discovery. A stable API is expected in 7.1. The tree is
+  ready for it otherwise: `baseUrl` is gone, since it stops functioning in 7,
+  and `ignoreDeprecations` is banned — silencing a deprecation is a suppression
+  comment in configuration form.
 
 ## Development
 
