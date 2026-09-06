@@ -9,7 +9,148 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 13**
+**I'm a fucking loser: 14**
+
+<details>
+<summary><strong>Restart 14 — the scans stopped short of where the defects were</strong></summary>
+
+A sixth adversarial audit of `c9d80da` reported a violation and, by design, not
+where. Every gate was green while it sat in the tree.
+
+The self-audit found it, and eleven more of the same shape. The root was one
+thing repeated: **a scan whose scope stopped short of where the defect was.**
+
+1. **The escape-hatch and superseded-doc scans read only `src` and `tests`.**
+   Nine TypeScript files — four vitest configs, three tsdown configs and the two
+   mutation-guard scripts — decide what every other gate does, and neither scan
+   could see them. Widened to every tracked module, and the first run found a
+   superseded doc block in `vitest.a11y.config.ts` that had been sitting under a
+   green suite.
+
+2. **"All user-facing copy routes through a typed dictionary, including
+   accessible names."** It did not. `SessionCostChip` carried the toggle's whole
+   accessible name as a literal, plus two description terms; the accessibility
+   tree's `unknown` role and its `role: name` separator were literals too.
+   Nothing gated the sentence. A scanner does now — and its first draft was the
+   lesson: written to read JSX text and attributes, it walked past a conditional
+   inside an expression container and passed the very tree it was written to
+   fail. It reads the whole module now, skipping only what addresses the machine.
+
+3. **Assertions that hold for anything.** `toBeInstanceOf(HTMLElement)` on a
+   `getBy*` result is the banned defined-only assertion under another name: the
+   query already throws when nothing matches, and it passes for every element on
+   the page. There were 23. Snapshots, empty substring matchers and clock reads
+   joined the banned list; the one wall-clock test asserted a 20ms tolerance
+   under a name claiming 25.
+
+4. **"This lane covers focus visibility."** Nothing did. No test pressed Tab or
+   read a computed outline, and axe ships no focus-appearance rule. The lane
+   walks the assembled page by keyboard now and pins the ring the stylesheet
+   declares, because Chromium draws its own when a page supplies none — so
+   asking whether *something* is drawn passes in exactly the state this was
+   written to catch.
+
+5. **"Every fallback pair is checked for WCAG AA contrast by the Chromium
+   lane."** Four never were: the error text renders empty until a submit fails,
+   the detail terms sat inside a hidden list, and the saved and empty-result
+   lines never rendered in the fixture. Worse, axe has no non-text-contrast rule
+   at all, and the input and table borders sat at **1.89:1** against a 3:1
+   requirement (SC 1.4.11) under a WCAG 2.2 AA badge. The tokens clear it in both
+   schemes now, and the invariants lane computes every pair the stylesheet ships
+   — text at 4.5:1, borders and focus rings at 3:1 — straight from the file. The
+   focus comment also cited the wrong criteria.
+
+6. **"The assembled client gets its own scan."** It never ran — the lane opened
+   one surface per page. Assembled as a host composes it, the first run found the
+   tool views registering as `region` landmarks, so a conversation running one
+   query twice shipped two identically named landmarks. All three are figures
+   now. That also removed an `aria-label` on a `<pre>` — the `generic` role ARIA
+   prohibits naming — which axe had been reporting as `incomplete` for as long as
+   the gate read `violations` alone. It reads both.
+
+7. **A test name that said "every" and asserted one.** "Applies a configured page
+   size to every paged listing" checked one of three. This is the exact shape of
+   Restart 13, whose entry claims the suite was swept for it — a sweep this tree
+   shows was not performed as described. The three are asserted now, and the set
+   of tools offering a page size is read from the registry rather than
+   remembered.
+
+8. **A validation hole the duplication was hiding.** Four page-numbered tools
+   called `requestedPage`, which refuses a page below the first.
+   `cloudflare_aigateway_logs` read `args.page ?? 1` and put `page=0` on the
+   wire; its parameter description had drifted too.
+
+9. **Config the gates did not read.** The formatter's ignore list was asserted
+   against `.gitignore`; the linter's was not, and neither was its plugin list.
+   Both are asserted, along with a stronger rule: every entry in `rules` must be
+   an error, so the block can configure a rule but never silence one. `publint`
+   and the Node matrix joined the CI assertions, and the runner and mutator are
+   pinned by a gate rather than by convention.
+
+10. **Tool views that received nothing they declare.** Registered components got
+    the slot's owner currency — a call id, a tool name, a block — while their
+    props were a query and its rows. Each tool projects what its view needs
+    through `output.presentationMeta` now, and an adapter validates it. The usage
+    chip became the view for `cloudflare_aigateway_session_cost`, whose output it
+    was already documented as rendering.
+
+11. **Nothing had ever laid this UI out at a width.** Every browser check ran at
+    Playwright's default 1280x720. A viewport lane now renders the assembled
+    client at 320, 390, 430, 768, 1024, 1280 and 1920, and it found a box-model
+    bug on its first run: with no `box-sizing`, a field at `inline-size: 100%`
+    added its padding and border on top of the width it was given — 18px past its
+    card and 2px past the viewport, at every width including 1920.
+
+12. **A screenshot found what no test could.** The chip's collapsed detail was on
+    screen the whole time: `display: grid` outranks the user agent's
+    `[hidden] { display: none }`, and the jsdom test asserted the attribute was
+    set — which it was — while the element was plainly visible. jsdom applies no
+    CSS. A browser test asks what `hidden` computes to now, in both directions.
+
+Four lint plugins went on — `jsx-a11y`, `import`, `promise`, `vitest` — with
+three rule overrides, each teaching a rule a fact it has no way to know. What
+they found was fixed, not configured away.
+
+TypeScript moved to 6.0.3 and stopped there: TypeScript 7 ships no programmatic
+API, and every gate here that reads a syntax tree is built on it. `baseUrl` is
+gone and `ignoreDeprecations` is banned, so the tree is ready for 7.1. Vitest
+stays pinned at 4.1.11 — stryker-js#6210 is still open.
+
+Two things were written and taken back out, which the record should carry as
+much as the rest. A `resourceId()` helper over 33 declarations sharing
+`{ type: 'string', required: true, description }` produced
+`sql: resourceId('SQL to execute.')` and rewrote output fields as resource
+identifiers: counting instances is not the same as finding duplication. And a
+`light-dark()` change first claimed it would let a host theme these surfaces by
+setting `color-scheme` on an ancestor — two tests written to hold that claim
+failed, because declaring `color-scheme` on these roots is exactly what stops
+them inheriting it. The consolidation stayed; the claim did not.
+
+**Left standing, and named rather than implied:** the four page-numbered list
+tools still repeat a structurally identical execute-and-render pair, which a
+`pagedListTool()` factory would collapse; the paged listings' renders are still
+unbounded, since bounding them needs a render budget the AI and meta groups do
+not declare.
+
+Every new assertion was verified the only way an assertion can be: by breaking
+what it guards and watching the suite go red, then restoring the tree. The focus
+block deleted, the prohibited attribute restored, a border token reverted in
+each scheme, a plugin dropped, a severity lowered, a rule turned off, a source
+directory excused, the page check reverted, a hidden rule unhidden, an
+accessible name inlined again, and a published MCP server removed.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings` with seven plugins, `oxfmt --check` clean across 119 files,
+211 invariant and README tests, 1,410 unit tests at 100% coverage (1,204
+statements, 666 branches, 390 functions, 1,067 lines), 59 Chromium tests across
+two colour schemes and seven viewports with no rule or selector filtering and
+nothing left for review, 35 built-artifact tests, knip 0, publint clean on all
+three packages, and a mutation score of **100.00%** — 3,786 mutants over 41
+instrumented files, 3,774 killed and 12 detected by timeout, none surviving and
+none without coverage, with the escape guard confirming the report describes
+this tree.
+
+</details>
 
 <details>
 <summary><strong>Restart 13 — a test whose name promised more than it asserted</strong></summary>
