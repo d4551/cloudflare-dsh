@@ -412,6 +412,10 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         // Bounded: a wide result set reached the model whole, and `renderLimit`
         // was declared for exactly this and applied to one tool.
         render: (_args, value) => truncatedJson(value, config.renderLimit),
+        // The client's table needs the query beside its rows, and the render
+        // text cannot carry the rows losslessly. Persisted with the session
+        // log, so a replayed call renders the same table as a live one.
+        presentationMeta: (args, value) => ({ sql: args.sql, resultSets: value.results }),
       },
       async execute(args, exec) {
         const results = await cf.accountRequest<JsonValue>({

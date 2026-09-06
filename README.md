@@ -612,11 +612,28 @@ its entry by `id`; the keyed tool-view slot dispatches on the wire tool name.
 | `D1Result`          | `tool.call.toolview` → `cloudflare_d1_query`                   | A real table with column headers and a caption naming the query             |
 | `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered text, captioned with the page it came from                         |
 | `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump                            |
+| `SessionCostChip`   | `tool.call.toolview` → `cloudflare_aigateway_session_cost`     | The same chip, showing one call's figures rather than the session's         |
 
 Each tool view is a figure, named from the caption already on screen, and
 deliberately not a landmark: a tool view is rendered once per tool call, so a
 conversation that runs one query twice would otherwise put two identically
 named landmarks on the page.
+
+A tool view is registered as an **adapter**, not as the component itself. The
+slot hands over the call's owner currency — `callId`, `toolName`, and the
+running-or-settled block — not the tool's result, so a component whose props are
+a query and its rows receives none of what it declares. The structured value
+reaches the client through `output.presentationMeta`: each tool projects the
+fields its view needs, the harness persists that projection with the session
+log, and it arrives as the settled block's `meta` on live and replay paths
+alike. The adapter validates that projection and renders the component, or falls
+back to the result text when a replayed log carries a shape it does not
+recognise.
+
+The chip appears twice on purpose. `SessionUsage` is documented as the shape
+`cloudflare_aigateway_session_cost` returns, so the component that renders the
+session header renders that tool's result too — and its loading and failed
+states are a running call and a failed one.
 
 The package ships `cloudflare.css`. Colours are CSS custom properties, so a
 host's theme wins wherever it defines them.
@@ -904,17 +921,20 @@ Not yet done, and worth knowing before you depend on this:
 - **R2 object access and D1 database creation are missing.** Buckets can be
   listed and created, and Vectorize indexes read and written; R2 object-level
   work needs the S3 API and is not wrapped yet.
-- **The Web Client components take props no host currently supplies.** The
-  registrations are correct — the right slots, the right kind fields, disposers
-  returned to the declarations that own them — and the components render and are
-  covered by tests, but a registered tool view is handed the harness's own owner
-  props (`callId`, `toolName`, the running-or-settled `block`) and these take
-  their own shapes instead. Closing that means projecting each tool's result
-  through `output.presentationMeta` and `presentResult`, which is not written.
-  The published client contracts cannot be imported to typecheck it either:
-  their declarations reference type-only packages they do not depend on, and one
-  does not typecheck against its own `SlotMap`, so the shapes here are modelled
-  from those declarations and pinned by the contract suite instead.
+- **The Web Client's host contract is modelled, not compiled.** The tool views
+  now take the owner props a host supplies and read each tool's
+  `output.presentationMeta` projection to get the value they render, so they
+  render the tool's result rather than nothing. What remains unverified by a
+  compiler is the shape of that contract: `ToolCallViewProps` is not exported
+  from `@deepseek-ai/dsh-client-ui-tool`'s package root, and these packages'
+  declarations do not typecheck with `skipLibCheck` off, so the owner props and
+  the settled block are modelled from the published declarations and pinned by
+  the contract suite instead. A field renamed upstream is a test to fix, not a
+  compiler error.
+- **`presentCall` and `presentResult` are not declared.** The provider-neutral
+  render intents would give the pending and completed cards a title and a
+  category; the tools rely on the harness's generic card today. The tool views
+  do not depend on them.
 
 ## License
 

@@ -219,6 +219,17 @@
   margin: 0;
 }
 
+/* A settled result whose projection a view could not read: the text the model
+   saw, rather than an empty card. */
+.cf-toolview__raw {
+  max-block-size: 24rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.5rem;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cf-chip,
   .cf-settings,

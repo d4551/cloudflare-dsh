@@ -839,6 +839,15 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
             `Session ${args.sessionId}: ${value.requests} requests, ${value.cached} served from cache, cost ${value.cost}${partial}.`,
           )
         },
+        // The client's usage chip renders exactly these five figures, and the
+        // one-line summary the model reads carries only three of them.
+        presentationMeta: (_args, value) => ({
+          requests: value.requests,
+          cost: value.cost,
+          tokensIn: value.tokensIn,
+          tokensOut: value.tokensOut,
+          cached: value.cached,
+        }),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {

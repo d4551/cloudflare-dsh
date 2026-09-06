@@ -23,9 +23,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import { SessionCostChip } from './SessionCostChip.tsx'
 import { SettingsCard } from './SettingsCard.tsx'
 import { en } from './locales/en.ts'
-import { AccessibilityTree } from './toolviews/AccessibilityTree.tsx'
-import { BrowserRender } from './toolviews/BrowserRender.tsx'
-import { D1Result } from './toolviews/D1Result.tsx'
+import {
+  AccessibilityTreeToolView,
+  BrowserRenderToolView,
+  D1ResultToolView,
+  SessionCostToolView,
+} from './toolviews/fromToolCall.tsx'
 
 export * from './format.ts'
 export * from './locales/en.ts'
@@ -38,6 +41,7 @@ export {
 } from './toolviews/AccessibilityTree.tsx'
 export { BrowserRender, type BrowserRenderProps } from './toolviews/BrowserRender.tsx'
 export { D1Result, type D1ResultProps, type D1ResultSet } from './toolviews/D1Result.tsx'
+export * from './toolviews/fromToolCall.tsx'
 
 /** The slot a registration contributes into. Every registration names one. */
 interface SlotTarget {
@@ -106,11 +110,20 @@ export const TOOL_VIEW_SLOT = 'tool.call.toolview'
  */
 export const SETTINGS_SLOT = 'settings.plugins.tab'
 
-/** Tool views this package supplies, keyed by wire tool name. */
+/**
+ * Tool views this package supplies, keyed by wire tool name.
+ *
+ * The registered component is the adapter, not the presentational component:
+ * the slot hands over the call's owner currency, and the adapter turns that
+ * into the props the component declares. Registering the component directly —
+ * which this list used to do — gave it a `callId`, a `toolName` and a block
+ * where it expected a query and its rows.
+ */
 export const TOOL_VIEWS: ReadonlyArray<{ readonly tool: string; readonly component: unknown }> = [
-  { tool: 'cloudflare_d1_query', component: D1Result },
-  { tool: 'cloudflare_browser_render', component: BrowserRender },
-  { tool: 'cloudflare_browser_accessibility_tree', component: AccessibilityTree },
+  { tool: 'cloudflare_d1_query', component: D1ResultToolView },
+  { tool: 'cloudflare_browser_render', component: BrowserRenderToolView },
+  { tool: 'cloudflare_browser_accessibility_tree', component: AccessibilityTreeToolView },
+  { tool: 'cloudflare_aigateway_session_cost', component: SessionCostToolView },
 ]
 
 export const name = 'cloudflare-client'

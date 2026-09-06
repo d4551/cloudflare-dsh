@@ -496,6 +496,20 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
     expect(blocks).toEqual(json({ results: [] }))
   })
 
+  it('publishes the query and its rows for the client table', () => {
+    // The render text cannot carry the rows losslessly, so the view reads this
+    // projection instead — persisted with the session log, so a replay renders
+    // the same table.
+    const h = makeHarness(dataTools, async () => envelope([]))
+    const meta = h
+      .tool('cloudflare_d1_query')
+      .output.presentationMeta?.(
+        { databaseId: 'd', sql: 'SELECT 1' },
+        { results: [{ results: [{ id: 1 }] }] },
+      )
+    expect(meta).toEqual({ sql: 'SELECT 1', resultSets: [{ results: [{ id: 1 }] }] })
+  })
+
   it('bounds a wide result set by the configured render limit', () => {
     // The budget was declared for this and applied to one tool; a wide result
     // set reached the model whole.

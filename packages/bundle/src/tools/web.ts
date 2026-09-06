@@ -174,6 +174,13 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
           if (typeof value.body === 'string') return text(truncate(value.body, config.renderLimit))
           return json(value.body)
         },
+        // The view shows text captioned with the page it came from. A format
+        // that answers with structured data is shown as its JSON, since that is
+        // what a reader has to look at.
+        presentationMeta: (_args, value) => ({
+          url: value.url,
+          body: typeof value.body === 'string' ? value.body : JSON.stringify(value.body, null, 2),
+        }),
       },
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,
@@ -316,6 +323,9 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
         },
         render: (args, value) =>
           text(`Accessibility tree for ${args.url}\n${boundedJson(value.tree, config.renderLimit)}`),
+        // The view renders the hierarchy as nested lists, which the bounded
+        // JSON in the render text cannot be rebuilt from.
+        presentationMeta: (_args, value) => ({ url: value.url, tree: value.tree }),
       },
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,

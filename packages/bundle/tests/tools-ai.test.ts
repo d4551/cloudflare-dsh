@@ -866,6 +866,26 @@ describe('summariseSessionLogs', () => {
   })
 })
 
+describe('what the usage chip is given', () => {
+  it('publishes the five figures the chip renders, which the summary line carries three of', () => {
+    const h = makeHarness(aiTools, async () => envelope([]))
+    const meta = h.tool('cloudflare_aigateway_session_cost').output.presentationMeta?.(
+      { gatewayId: 'gw1', sessionId: 's1' },
+      {
+        requests: 4,
+        cost: 0.0125,
+        tokensIn: 120,
+        tokensOut: 40,
+        cached: 1,
+        scanned: 9,
+        pages: 1,
+        truncated: false,
+      },
+    )
+    expect(meta).toEqual({ requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 })
+  })
+})
+
 describe('page numbers are refused before the first, on every page-numbered tool', () => {
   // Four of the five called `requestedPage`; `cloudflare_aigateway_logs` read
   // `args.page ?? 1` and put `page=0` on the wire. Every one is asserted here,

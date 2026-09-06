@@ -187,10 +187,27 @@ const USER_VISIBLE_ATTRIBUTES = new Set([
   'title',
 ])
 
-/** `typeof x === 'string'` compares against a language keyword, not copy. */
-const isTypeofOperand = (node: ts.Node): boolean =>
-  ts.isBinaryExpression(node.parent) &&
-  (ts.isTypeOfExpression(node.parent.left) || ts.isTypeOfExpression(node.parent.right))
+/**
+ * Whether a literal addresses the machine rather than the reader.
+ *
+ * Three shapes, all of them names rather than words: a literal type, which is
+ * not a value at all; the index of an element access, since `block['kind']` is
+ * a property name; and a literal compared against a property read or a
+ * `typeof`, which is a shape being discriminated. All sit in the same category
+ * as `className` and `role`, which are skipped by attribute.
+ */
+const isMachineFacing = (node: ts.Node): boolean => {
+  const parent = node.parent
+  if (ts.isLiteralTypeNode(parent)) return true
+  if (ts.isElementAccessExpression(parent) && parent.argumentExpression === node) return true
+  if (!ts.isBinaryExpression(parent)) return false
+  const other = parent.left === node ? parent.right : parent.left
+  return (
+    ts.isTypeOfExpression(other) ||
+    ts.isElementAccessExpression(other) ||
+    ts.isPropertyAccessExpression(other)
+  )
+}
 
 /**
  * User-visible copy written inline in a component instead of routed through
@@ -220,7 +237,7 @@ function inlineCopy(name: string, text: string): string[] {
     // A module specifier is a path, not something anyone reads.
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return
     if (ts.isJsxText(node)) report(node, node.text)
-    if (ts.isStringLiteralLike(node) && !isTypeofOperand(node)) report(node, node.text)
+    if (ts.isStringLiteralLike(node) && !isMachineFacing(node)) report(node, node.text)
     if (ts.isTemplateLiteral(node) && !ts.isNoSubstitutionTemplateLiteral(node)) {
       report(node.head, node.head.text)
       for (const span of node.templateSpans) report(span.literal, span.literal.text)
@@ -269,6 +286,13 @@ describe('user-facing copy lives in the dictionary', () => {
     ['an import specifier', `import { en } from './locales/${'en'}.ts'`],
     ['a typeof comparison', "const f = (v: unknown) => typeof v === 'string'"],
     ['a typeof comparison written the other way round', "const f = (v: unknown) => 'string' === typeof v"],
+    ['a property name', "const f = (v: Record<string, unknown>) => v['sql']"],
+    [
+      'a shape being discriminated by index',
+      "const f = (v: Record<string, unknown>) => v['kind'] === 'tool-result'",
+    ],
+    ['a shape being discriminated by property', "const f = (v: { type: string }) => v.type === 'text'"],
+    ['a literal type', "interface B {\n  kind: 'tool-result'\n}"],
   ])('passes %s', (_label, snippet) => {
     expect(inlineCopy('probe.tsx', snippet)).toEqual([])
   })
