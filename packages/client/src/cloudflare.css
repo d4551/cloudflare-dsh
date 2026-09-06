@@ -12,6 +12,15 @@
  * either. It guarded nothing. Introduce motion and the gate fails, which is the
  * point at which a reduced-motion story has to be written.
  *
+ * Every colour here comes from `light-dark()`, which is the engine floor these
+ * surfaces are written against: Chrome and Edge 123, Firefox 120, Safari 17.5,
+ * Baseline since May 2024. Below it the function does not parse, so each token
+ * is invalid where it is substituted — measured in Chromium with the function
+ * renamed, that leaves text inheriting the host's colour and every background
+ * transparent, which is the right degradation for a fragment except that the
+ * accent buttons lose their fill and read as plain text. Supporting an engine
+ * that old means giving those a fallback; nothing here claims to.
+ *
  * Two lanes check those fallbacks, because one cannot reach both criteria.
  * The Chromium lane runs axe over every surface in both colour schemes, which
  * covers text contrast (SC 1.4.3) on the copy actually rendered — jsdom cannot
@@ -24,19 +33,21 @@
 /* One declaration per token carrying both schemes, rather than the whole block
    repeated inside a `prefers-color-scheme` query.
 
-   `color-scheme: light dark` is what makes `light-dark()` follow the operating
-   system here. It also means these roots stop inheriting a scheme the host set
-   on an ancestor — the same as the media query it replaces, which answered to
-   the OS alone too. A host that themes its own surfaces does it through the
-   `--dsh-*` tokens below, which win over both schemes; that is the extension
-   point, and a test holds it. */
+   No `color-scheme` is declared here, and that is the load-bearing part.
+   `light-dark()` resolves against the *used* colour scheme, and `color-scheme`
+   inherits, so declaring nothing is what makes these fragments answer to the
+   page they are dropped into. Declaring `light dark` on these roots — which
+   this file did — is an override: it discards the host's choice and answers to
+   the operating system alone. Measured in Chromium, that rendered dark text on
+   a light host page, and light text on a dark one, whenever the host's declared
+   scheme and the operating system disagreed; the host could not correct it from
+   outside, and axe never saw it because no fixture disagreed. A host that wants
+   more than a scheme sets the `--dsh-*` tokens below, which win over both. */
 .cf-chip,
 .cf-settings,
 .cf-d1,
 .cf-render,
 .cf-axtree {
-  color-scheme: light dark;
-
   --cf-fg: var(--dsh-fg, light-dark(#16181d, #f2f3f5));
   --cf-bg: var(--dsh-bg, light-dark(#ffffff, #16181d));
   --cf-muted: var(--dsh-fg-muted, light-dark(#55595f, #b3b8c0));

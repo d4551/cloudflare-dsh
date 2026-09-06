@@ -136,10 +136,53 @@ export function launch(): Promise<Browser> {
   return chromium.launch(existsSync(PROVIDED_CHROMIUM) ? { executablePath: PROVIDED_CHROMIUM } : {})
 }
 
+/**
+ * What a page may declare as its own colour scheme.
+ *
+ * The whole legal set for a fixture: accept both and defer to the reader's
+ * system, name one and decide, or say nothing and take the initial value.
+ */
+export type HostScheme = 'light dark' | 'light' | 'dark' | 'normal'
+
+/**
+ * The document a host would serve, around whatever it puts in `<main>`.
+ *
+ * One host for every browser lane, because two lanes rendering two slightly
+ * different pages would be two claims about two things — and because the host
+ * is itself under test. It supplies what a real one supplies: the viewport meta
+ * a mobile layout depends on, landmarks, a page heading, and a colour scheme
+ * declared the way pages declare one. `hostScheme` is that declaration, so a
+ * test can put it at odds with the operating system preference; the chrome
+ * colours are read back out of it with `light-dark()` rather than branched on,
+ * so the page cannot disagree with itself.
+ *
+ * Page-scoped rules must fail on a real defect, not on an unrealistic harness
+ * — and the fix for that is a better fixture, not a filtered rule set.
+ */
+export function hostPage(main: string, hostScheme: HostScheme): string {
+  return (
+    `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+    `<title>Cloudflare surfaces</title><style>` +
+    `:root{color-scheme:${hostScheme}}` +
+    `body{margin:0;color:light-dark(#16181d,#f2f3f5);background:light-dark(#ffffff,#16181d)}` +
+    `${css}</style></head><body><header><h1>Cloudflare surfaces</h1></header>` +
+    `<main>${main}</main></body></html>`
+  )
+}
+
 /** How a page is opened: colour scheme, and the viewport it is laid out for. */
 export interface PageOptions {
   readonly scheme: 'light' | 'dark'
   readonly viewport?: { readonly width: number; readonly height: number } | undefined
+  /**
+   * What the host declares as its own `color-scheme`.
+   *
+   * Defaults to accepting both, which is what a page that follows the reader's
+   * preference declares. Pinning it to one while `scheme` says the other is how
+   * a test asks whose choice these fragments actually follow.
+   */
+  readonly hostScheme?: HostScheme | undefined
 }
 
 /**
@@ -158,20 +201,6 @@ export async function open(
     ...(options.viewport === undefined ? {} : { viewport: options.viewport }),
   })
   const page = await context.newPage()
-  // These are fragments that live inside a host page, so the fixture supplies
-  // what a host would: the viewport meta a mobile layout depends on, landmarks,
-  // a page heading, and readable chrome colours. Page-scoped rules must fail on
-  // a real defect, not on an unrealistic harness — and the fix for that is a
-  // better fixture, not a filtered rule set.
-  const fg = options.scheme === 'dark' ? '#f2f3f5' : '#16181d'
-  const bg = options.scheme === 'dark' ? '#16181d' : '#ffffff'
-  await page.setContent(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
-      `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-      `<title>Cloudflare surfaces</title>` +
-      `<style>body{margin:0;color:${fg};background:${bg}}${css}</style>` +
-      `</head><body><header><h1>Cloudflare surfaces</h1></header>` +
-      `<main>${markup}</main></body></html>`,
-  )
+  await page.setContent(hostPage(markup, options.hostScheme ?? 'light dark'))
   return { page, context }
 }

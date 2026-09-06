@@ -636,7 +636,14 @@ session header renders that tool's result too — and its loading and failed
 states are a running call and a failed one.
 
 The package ships `cloudflare.css`. Colours are CSS custom properties, so a
-host's theme wins wherever it defines them.
+host's theme wins wherever it defines them, and the stylesheet declares no
+`color-scheme` of its own — `light-dark()` reads the scheme it inherits, so
+these fragments take whichever one the page is already in. They did declare
+one, which made them answer the operating system while the page answered
+itself: a dark card on a white document, in a host that had done nothing
+unusual. The browser lane now resolves the colour in all six combinations of
+what a host declares and what a system prefers, and an invariant holds the
+declaration out.
 
 All user-facing copy routes through a typed dictionary in `locales/en.ts`,
 including accessible names — those are part of the interface, not decoration.
@@ -672,7 +679,7 @@ graph LR
     end
     subgraph viewport["Lane 4 — laid out, 320px to 1920px"]
         I["Reflow, target size, text spacing"]
-        J["What hidden computes to, forced colours"]
+        J["What hidden computes to, forced colours, whose scheme wins"]
     end
     subgraph e2e["Lane 5 — mounted and operated"]
         K["Keyboard and pointer, form and live regions"]
@@ -726,6 +733,15 @@ setting `display: grid` outranks the user agent's `[hidden] { display: none }`,
 and the chip's collapsed detail was on screen with a passing test asserting the
 attribute was set.
 
+The same lane asks whose colour scheme these fragments follow, in all six
+combinations of what a page declares and what a reader's system prefers. That
+is a contrast question (SC 1.4.3) rather than a styling one: while the
+stylesheet declared a `color-scheme` of its own, a page that had chosen light
+under a dark system got dark fragments, and one that had chosen dark under a
+light system got light ones — text on its own background, and not correctable
+by the host. Every fixture agreed with the system, so no lane disagreed with
+it, and the screenshots showed it before any assertion did.
+
 Every one of those lanes renders these components to **static markup**, which
 has no React attached: a toggle that never toggles, a form that never submits
 and a live region that never updates all produce markup identical to ones that
@@ -747,6 +763,12 @@ elements the stylesheet never gave a transition — neither property being
 inherited, so a host could not have given them one either. It guarded nothing.
 Introducing motion now fails a gate, which is the point at which a
 reduced-motion story has to be written rather than assumed.
+
+The bar is evaluated against the engines this stylesheet is written for —
+Chrome and Edge 123, Firefox 120, Safari 17.5 and later, the floor
+`light-dark()` sets. Below it the tokens do not resolve and the accent buttons
+lose their fill, which is measured in the stylesheet's own header rather than
+assumed; nothing here claims to support an engine that old.
 
 **No lane filters axe.** No tag scope, no disabled rules, no excluded
 selectors — and the run is read for what it left for a human to review as well

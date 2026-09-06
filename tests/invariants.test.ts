@@ -37,6 +37,7 @@ const json = <T>(file: string): T => JSON.parse(read(file)) as T
 interface PackageJson {
   readonly scripts: Readonly<Record<string, string>>
   readonly devDependencies: Readonly<Record<string, string>>
+  readonly engines: { readonly node: string }
 }
 interface OxfmtConfig {
   readonly ignorePatterns?: readonly string[]
@@ -659,6 +660,33 @@ describe('the runner and the mutator are pinned', () => {
   })
 })
 
+describe('the types describe the runtime the manifests require', () => {
+  /** Every published manifest, plus the root, read from what git tracks. */
+  const manifests = tracked.filter((file) => /^(?:packages\/[^/]+\/)?package\.json$/u.test(file))
+
+  it('finds the root manifest and one per package', () => {
+    // An empty list would satisfy the assertion below without reading a thing.
+    expect(manifests.length).toBe(4)
+  })
+
+  it('asks every manifest for the same Node', () => {
+    // A package published with a lower floor than the tree is built against is
+    // a runtime error in someone else's install, and nothing here would see it.
+    expect([...new Set(manifests.map((file) => json<PackageJson>(file).engines.node))]).toHaveLength(1)
+  })
+
+  it('floors the Node types at the version the manifests require', () => {
+    // `engines` is the floor a consumer is told to meet; `@types/node` is the
+    // API surface `tsc` checks against. Types older than the floor prove
+    // nothing about the runtime the manifest demands; newer ones type-check
+    // against APIs that floor does not have. They are one number, so the gate
+    // reads it once and requires the other to match rather than pinning both.
+    const floor = /\^(\d+\.\d+\.\d+)/u.exec(json<PackageJson>('package.json').engines.node)?.[1]
+    expect(floor).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(json<PackageJson>('package.json').devDependencies['@types/node']).toBe(`^${String(floor)}`)
+  })
+})
+
 describe('type checking cannot be skipped', () => {
   it.each([
     // `ignoreDeprecations` silences a deprecation rather than acting on it,
@@ -855,6 +883,31 @@ describe('the stylesheet introduces no motion', () => {
       expect(css).not.toContain(property)
     },
   )
+})
+
+describe('the stylesheet declares no colour scheme of its own', () => {
+  /** Selectors that declare `color-scheme`, which these should never do. */
+  const declares = (css: string): string[] =>
+    rulesOf(css)
+      .filter((rule) => declaration(rule.body, 'color-scheme') !== undefined)
+      .map((rule) => rule.selector)
+
+  it('finds one where a rule declares one', () => {
+    expect(declares('.a { color-scheme: light dark }\n.b { color: red }')).toEqual(['.a'])
+  })
+
+  it('finds none in the stylesheet this package ships', () => {
+    // `color-scheme` inherits and `light-dark()` reads the used scheme, so a
+    // fragment that declares nothing follows the page it is dropped into.
+    // Declaring `light dark` on these roots is an override: it discards the
+    // host's choice and answers the operating system alone, which put a dark
+    // card on a white document, and a light one on a black document, whenever
+    // the two disagreed. The browser lane holds the resolved colour in all six
+    // combinations of host and system; this holds the declaration, because the
+    // behaviour is only visible in a host that disagrees — and every fixture
+    // agreed for as long as the defect was there.
+    expect(declares(read('packages/client/src/cloudflare.css'))).toEqual([])
+  })
 })
 
 describe('every colour pair the stylesheet ships clears its ratio', () => {
@@ -1123,6 +1176,14 @@ describe('nothing the gates stand on is left unread', () => {
     // different, possibly smaller, suite.
     expect(json<StrykerRunner>('stryker.config.json').vitest.configFile).toBe('vitest.config.ts')
     expect(json<StrykerRunner>('stryker.config.json').testRunner).toBe('vitest')
+    // `configFile` is the whole of what this runner may be told. Its other
+    // options narrow: `dir` scopes the run to a subtree, and the runner
+    // already narrows by relatedness on its own — with `related` on by
+    // default, only test files importing an instrumented module are run at
+    // all. That default is sound, because a test importing no source can kill
+    // no mutant and a mutant left unkilled fails the threshold out loud. A
+    // second narrowing key on top of it would not be.
+    expect(Object.keys(json<StrykerRunner>('stryker.config.json').vitest)).toEqual(['configFile'])
   })
 
   it('hides no file from the mutator', () => {

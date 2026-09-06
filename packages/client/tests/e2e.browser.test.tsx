@@ -11,14 +11,11 @@
  * The bundle is built here rather than committed so the lane can never drift
  * from the source it claims to exercise.
  */
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { rolldown } from 'rolldown'
 import type { Browser, BrowserContext, Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { launch } from './surfaces.tsx'
-
-const css = readFileSync(fileURLToPath(new URL('../src/cloudflare.css', import.meta.url)), 'utf8')
+import { hostPage, launch } from './surfaces.tsx'
 
 let browser: Browser
 let script: string
@@ -50,13 +47,9 @@ async function mount(
     ...(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion }),
   })
   const page = await context.newPage()
-  await page.setContent(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
-      `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-      `<title>Cloudflare surfaces</title><style>body{margin:0}${css}</style></head>` +
-      `<body><header><h1>Cloudflare surfaces</h1></header><main id="root"></main>` +
-      `<script>${script}</script></body></html>`,
-  )
+  // The same host document every other browser lane loads, so what is operated
+  // here is what is scanned there.
+  await page.setContent(hostPage(`<div id="root"></div><script>${script}</script>`, 'light dark'))
   await page.waitForSelector('.cf-chip__toggle')
   return { page, context }
 }

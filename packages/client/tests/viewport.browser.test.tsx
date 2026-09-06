@@ -18,7 +18,7 @@
  */
 import type { Browser } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ASSEMBLED, OVERFLOWING, css, launch, open } from './surfaces.tsx'
+import { ASSEMBLED, type HostScheme, OVERFLOWING, css, launch, open } from './surfaces.tsx'
 
 let browser: Browser
 
@@ -169,26 +169,65 @@ describe('the size of what is rendered', () => {
 })
 
 describe('colour scheme', () => {
-  /** The dark foreground token, as the stylesheet declares it. */
-  const DARK_FG = 'rgb(242, 243, 245)'
+  /** The foreground tokens, as the stylesheet declares them. */
+  const FG = { light: 'rgb(22, 24, 29)', dark: 'rgb(242, 243, 245)' } as const
 
-  it('follows the operating system preference, as it always did', async () => {
-    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'dark' })
-    try {
-      const colour = await page.evaluate(
-        () => getComputedStyle(document.querySelector('.cf-settings') as Element).color,
-      )
-      expect(colour).toBe(DARK_FG)
-    } finally {
-      await context.close()
-    }
-  }, 30_000)
+  /**
+   * Whose choice these fragments follow, asked in every combination.
+   *
+   * `host` is what the page declares; `os` is what the reader's system prefers.
+   * A page declaring `light dark` is deferring, so the system decides; a page
+   * naming one has chosen, so the page decides. `color-scheme` inherits, and
+   * `light-dark()` reads the used scheme, so a fragment that declares nothing
+   * gets all six for free.
+   *
+   * The two crossed rows are the ones that were wrong. While these roots
+   * declared a `color-scheme` of their own, the fragment answered the system
+   * while the page answered itself: a dark card on a white document, and a
+   * light one on a black document, in a host that had done nothing unusual.
+   * Every fixture agreed with the system, so no lane ever disagreed with it.
+   */
+  const RESOLVED: ReadonlyArray<{
+    host: HostScheme
+    os: 'light' | 'dark'
+    used: 'light' | 'dark'
+  }> = [
+    { host: 'light dark', os: 'light', used: 'light' },
+    { host: 'light dark', os: 'dark', used: 'dark' },
+    { host: 'light', os: 'light', used: 'light' },
+    { host: 'light', os: 'dark', used: 'light' },
+    { host: 'dark', os: 'light', used: 'dark' },
+    { host: 'dark', os: 'dark', used: 'dark' },
+  ]
+
+  it.each(RESOLVED)(
+    'resolves $used where the host declares "$host" and the system prefers $os',
+    async ({ host, os, used }) => {
+      const { page, context } = await open(browser, ASSEMBLED, { scheme: os, hostScheme: host })
+      try {
+        const read = await page.evaluate(() => {
+          const card = document.querySelector('.cf-settings') as Element
+          return {
+            colour: getComputedStyle(card).color,
+            card: getComputedStyle(card).backgroundColor,
+            // The failure worth naming is not a wrong token but a fragment at
+            // odds with the page beneath it, so the page is read too.
+            page: getComputedStyle(document.body).backgroundColor,
+          }
+        })
+        expect(read.colour).toBe(FG[used])
+        expect(read.card).toBe(read.page)
+      } finally {
+        await context.close()
+      }
+    },
+    30_000,
+  )
 
   it('lets a host token win over both schemes, which is the extension point', async () => {
-    // `color-scheme: light dark` on these roots means an ancestor's scheme is
-    // not inherited — as with the media query this replaces. A host themes
-    // these surfaces through the `--dsh-*` tokens instead, and this is the test
-    // that says so.
+    // A scheme is the coarse control and the `--dsh-*` tokens are the fine one:
+    // a host with its own palette sets those, and they win in either scheme.
+    // This is the test that says so.
     const { page, context } = await open(browser, ASSEMBLED, { scheme: 'dark' })
     try {
       const colour = await page.evaluate(() => {
