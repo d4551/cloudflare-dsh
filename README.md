@@ -813,11 +813,6 @@ Not yet done, and worth knowing before you depend on this:
 - **The packages are not published to npm.** Build and pack work; publishing is
   a deliberate step that has not been taken, so the `dsh plugin add` command
   above will not resolve them yet.
-- **No live Cloudflare call has been made.** Paths, methods and SDK namespaces
-  were taken from Cloudflare's upstream API sources; request and response body
-  shapes are modelled and will be corrected against recorded fixtures.
-- **The tools have not been driven from a real agent session**, which needs a
-  DeepSeek key and Cloudflare credentials.
 - **R2 object access and D1 database creation are missing.** Buckets can be
   listed and created, and Vectorize indexes read and written; R2 object-level
   work needs the S3 API and is not wrapped yet.
