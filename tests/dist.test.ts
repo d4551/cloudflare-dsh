@@ -21,7 +21,7 @@ interface Manifest {
   exports: Record<string, unknown>
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
-  dsh?: { bundle?: { patch?: string } }
+  dsh?: { bundle?: { patch?: string }; client?: boolean }
 }
 
 function manifest(pkg: string): Manifest {
@@ -46,6 +46,14 @@ describe('published manifests', () => {
 
   it('the bundle declares its dsh patch, without which it installs inert', () => {
     expect(manifest('bundle').dsh?.bundle?.patch).toBe('./cordis.patch.yml')
+  })
+
+  it('the client declares itself a client plugin, without which the host never loads it', () => {
+    // The bundle's flag had this test and the client's identical one did not.
+    // Drop `dsh.client` and every surface this package contributes is inert —
+    // while the component tests, the Chromium scans and the viewport lane all
+    // keep passing, because none of them loads the package the way a host does.
+    expect(manifest('client').dsh?.client).toBe(true)
   })
 })
 

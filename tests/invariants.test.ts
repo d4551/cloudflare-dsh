@@ -46,6 +46,10 @@ interface StrykerConfig {
   readonly mutate: readonly string[]
   readonly thresholds: Readonly<Record<string, number>>
 }
+interface StrykerRunner {
+  readonly testRunner: string
+  readonly vitest: { readonly configFile: string }
+}
 interface OxlintConfig {
   readonly categories: Readonly<Record<string, string>>
   readonly plugins: readonly string[]
@@ -1026,6 +1030,92 @@ describe('CI reports on every commit it runs for', () => {
     expect(read('.github/workflows/ci.yml')).toContain(
       "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
     )
+  })
+})
+
+describe('nothing the gates stand on is left unread', () => {
+  // Every gate here measures the tree. None of them measured the things that
+  // decide what the tree is: which tests run, which files exist to be scanned,
+  // and whether a red step actually fails the build. A gate that passes because
+  // it never looked is the defect.
+
+  it('lets no CI step fail without failing the build', () => {
+    // A step marked `continue-on-error` still contains its command, so the
+    // check that every gate command appears in the workflow would keep passing
+    // while every one of them was allowed to go red.
+    expect(read('.github/workflows/ci.yml')).not.toContain('continue-on-error')
+  })
+
+  it('runs every gate step unconditionally', () => {
+    // One `if:` is legitimate — the mutation report is uploaded whether the run
+    // passed or failed. Any other would make a gate conditional, and a gate
+    // that can decline to run is not a gate.
+    const conditions = [...read('.github/workflows/ci.yml').matchAll(/^\s*if: (.+)$/gmu)].map(
+      (match) => match[1],
+    )
+    expect(conditions).toEqual(['always()'])
+  })
+
+  it('collects every test file, excluding only what is run by another lane', () => {
+    // Adding a glob here removes tests from the unit run, from coverage and
+    // from the mutation run at once, and every remaining number still reads as
+    // a full pass.
+    expect(read('vitest.config.ts')).toContain("exclude: ['**/node_modules/**', '**/*.browser.test.tsx']")
+  })
+
+  it.each([
+    ['build', "bun run --filter '*' build"],
+    ['typecheck', 'tsc -b --pretty false'],
+    ['lint', 'oxlint --deny-warnings .'],
+    ['format:check', 'oxfmt --check'],
+    ['test', 'vitest run'],
+    ['test:coverage', 'vitest run --coverage'],
+    ['test:a11y', 'vitest run --config vitest.a11y.config.ts'],
+    ['test:dist', 'vitest run --config vitest.dist.config.ts'],
+    ['test:invariants', 'vitest run --config vitest.invariants.config.ts'],
+    ['stryker', 'stryker run && bun scripts/verify-mutation-files.ts'],
+    ['knip', 'knip'],
+    ['publint', "bun run --filter '*' publint"],
+  ])('runs %s as the whole of what it claims to run', (script, command) => {
+    // CI invokes these by name. Narrowing one — a path argument on `test`, a
+    // filter on `publint` — shrinks what is measured while the workflow, the
+    // page and every count still say the gate ran.
+    expect(json<PackageJson>('package.json').scripts[script]).toBe(command)
+  })
+
+  it('mutates against the lane that runs every unit test', () => {
+    // Pointing the runner at another config would score the mutants against a
+    // different, possibly smaller, suite.
+    expect(json<StrykerRunner>('stryker.config.json').vitest.configFile).toBe('vitest.config.ts')
+    expect(json<StrykerRunner>('stryker.config.json').testRunner).toBe('vitest')
+  })
+
+  it('hides no file from the mutator', () => {
+    // `mutate` is asserted elsewhere; these are the other ways to shrink a run.
+    const config = json<Record<string, unknown>>('stryker.config.json')
+    expect(Object.keys(config).filter((key) => /ignore|disable|force/iu.test(key))).toEqual([])
+  })
+
+  it('ignores only build output, since every scan here starts from what git tracks', () => {
+    // `.gitignore` is the root of trust: the file list every invariant scans
+    // comes from git, and the formatter's and linter's ignore lists are checked
+    // against this one. A source directory added here would empty all three at
+    // once and leave every gate green.
+    expect(
+      read('.gitignore')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '' && !line.startsWith('#')),
+    ).toEqual([
+      'node_modules/',
+      'lib/',
+      'dist/',
+      'coverage/',
+      'reports/',
+      '.stryker-tmp/',
+      '*.tsbuildinfo',
+      '.DS_Store',
+    ])
   })
 })
 

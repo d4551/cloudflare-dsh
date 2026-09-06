@@ -9,7 +9,7 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 14**
+**I'm a fucking loser: 15**
 
 <details>
 <summary><strong>Restart 14 — the scans stopped short of where the defects were</strong></summary>
