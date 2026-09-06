@@ -16,7 +16,7 @@ import { BrowserRender } from '../src/toolviews/BrowserRender.tsx'
 import { D1Result } from '../src/toolviews/D1Result.tsx'
 
 /** The stylesheet the package ships, read rather than reconstructed. */
-const css = readFileSync(fileURLToPath(new URL('../src/cloudflare.css', import.meta.url)), 'utf8')
+export const css = readFileSync(fileURLToPath(new URL('../src/cloudflare.css', import.meta.url)), 'utf8')
 
 const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
 const settings = { apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: '', gatewayId: '' }

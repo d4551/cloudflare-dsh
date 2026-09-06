@@ -18,7 +18,7 @@
  */
 import type { Browser } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ASSEMBLED, OVERFLOWING, launch, open } from './surfaces.tsx'
+import { ASSEMBLED, OVERFLOWING, css, launch, open } from './surfaces.tsx'
 
 let browser: Browser
 
@@ -100,6 +100,72 @@ describe('reflow', () => {
       }
     }, 30_000)
   }
+})
+
+describe('forced colours', () => {
+  // Windows high-contrast mode replaces every colour the page chose. A
+  // component that opts out of that, or that draws a boundary the mode cannot
+  // repaint, becomes unreadable for the people who rely on it — and no other
+  // lane here runs with the mode on.
+  it('opts nothing out of the system palette', async () => {
+    const context = await browser.newContext({ forcedColors: 'active' })
+    const page = await context.newPage()
+    try {
+      await page.setContent(
+        `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title>` +
+          `<style>${css}</style></head><body><main>${ASSEMBLED}</main></body></html>`,
+      )
+      const optedOut = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('main *')]
+          .filter((node) => getComputedStyle(node).forcedColorAdjust === 'none')
+          .map((node) => `${node.tagName.toLowerCase()}.${node.className}`),
+      )
+      expect(optedOut).toEqual([])
+    } finally {
+      await context.close()
+    }
+  }, 30_000)
+
+  it('keeps a field and a table cell bounded by a border the mode can repaint', async () => {
+    const context = await browser.newContext({ forcedColors: 'active' })
+    const page = await context.newPage()
+    try {
+      await page.setContent(
+        `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title>` +
+          `<style>${css}</style></head><body><main>${ASSEMBLED}</main></body></html>`,
+      )
+      // Written without a helper: this function is serialised into the page,
+      // so anything it calls has to be inside it.
+      const widths = await page.evaluate(() => {
+        const field = document.querySelector('.cf-field input')
+        const cell = document.querySelector('.cf-d1 td')
+        return {
+          field: field === null ? 0 : Number.parseFloat(getComputedStyle(field).borderTopWidth),
+          cell: cell === null ? 0 : Number.parseFloat(getComputedStyle(cell).borderTopWidth),
+        }
+      })
+      // A background alone disappears in this mode; a border does not.
+      expect(widths.field).toBeGreaterThanOrEqual(1)
+      expect(widths.cell).toBeGreaterThanOrEqual(1)
+    } finally {
+      await context.close()
+    }
+  }, 30_000)
+})
+
+describe('the size of what is rendered', () => {
+  it('keeps a large result from becoming a large document', async () => {
+    // The row cap is asserted in jsdom against the rendered rows. This is the
+    // claim that matters for a conversation card: whatever the query returned,
+    // the document a browser has to lay out stays bounded.
+    const { page, context } = await open(browser, OVERFLOWING, { scheme: 'light' })
+    try {
+      const nodes = await page.evaluate(() => document.querySelectorAll('main *').length)
+      expect(nodes).toBeLessThan(400)
+    } finally {
+      await context.close()
+    }
+  }, 30_000)
 })
 
 describe('colour scheme', () => {

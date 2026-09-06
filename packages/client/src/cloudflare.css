@@ -4,6 +4,14 @@
  * Colours come from CSS custom properties so the host's theme wins where it
  * defines them, with fallbacks that are self-sufficient when it does not.
  *
+ * These surfaces animate nothing: no transition, no animation, no keyframes.
+ * That is a rule the invariants lane enforces rather than a coincidence, and it
+ * is why there is no `prefers-reduced-motion` block here — there was one, and
+ * it set `transition: none` on elements the stylesheet never gave a transition,
+ * neither property being inherited, so a host could not have given them one
+ * either. It guarded nothing. Introduce motion and the gate fails, which is the
+ * point at which a reduced-motion story has to be written.
+ *
  * Two lanes check those fallbacks, because one cannot reach both criteria.
  * The Chromium lane runs axe over every surface in both colour schemes, which
  * covers text contrast (SC 1.4.3) on the copy actually rendered — jsdom cannot
@@ -273,16 +281,5 @@
   .cf-chip__toggle,
   .cf-settings button {
     min-inline-size: 44px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cf-chip,
-  .cf-settings,
-  .cf-d1,
-  .cf-render,
-  .cf-axtree {
-    transition: none;
-    animation: none;
   }
 }

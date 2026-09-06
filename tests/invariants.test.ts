@@ -841,6 +841,22 @@ function contrastPairs(css: string): ContrastPair[] {
   return pairs
 }
 
+describe('the stylesheet introduces no motion', () => {
+  it.each(['transition', 'animation', 'keyframes'])(
+    'declares no %s, so there is no motion to reduce',
+    (property) => {
+      // There was a `prefers-reduced-motion` block setting `transition: none`
+      // on elements the stylesheet never gave a transition — and neither
+      // property is inherited, so a host could not have given them one either.
+      // It guarded nothing. This is the claim that can be enforced instead:
+      // introduce motion and this fails, which is when a reduced-motion story
+      // has to be written rather than assumed.
+      const css = read('packages/client/src/cloudflare.css').replaceAll(/\/\*[\s\S]*?\*\//gu, '')
+      expect(css).not.toContain(property)
+    },
+  )
+})
+
 describe('every colour pair the stylesheet ships clears its ratio', () => {
   // The analyzer is proven on snippets before it is trusted on the stylesheet.
   const PROBE = [
@@ -982,8 +998,27 @@ describe('accessibility cannot be filtered', () => {
     ],
     ['applies the text-spacing overrides', 'letter-spacing:0.12em'],
     ['asks what `hidden` computes to, which jsdom cannot', `getComputedStyle(node).display !== 'none'`],
+    ['runs with the forced-colours mode active', `forcedColors: 'active'`],
+    ['bounds how much document a large result produces', "querySelectorAll('main *').length"],
   ])('%s', (_label, needle) => {
     expect(read('packages/client/tests/viewport.browser.test.tsx')).toContain(needle)
+  })
+
+  it.each([
+    // Static markup has no React attached, so a toggle that never toggles and a
+    // form that never submits produce markup identical to ones that work. Only
+    // this lane can tell them apart.
+    ['mounts the real components with the real React', 'createRoot('],
+    ['records the callback a host supplies, so an assertion can see it was reached', 'savedCalls'],
+  ])('%s', (_label, needle) => {
+    expect(read('packages/client/tests/e2e-entry.tsx')).toContain(needle)
+  })
+
+  it.each([
+    ['bundles the source it claims to exercise rather than a committed copy', 'rolldown('],
+    ['operates the client by keyboard as well as by pointer', `keyboard.press('Enter')`],
+  ])('%s', (_label, needle) => {
+    expect(read('packages/client/tests/e2e.browser.test.tsx')).toContain(needle)
   })
 
   it('runs the browser lane rather than leaving those tests unrun', () => {

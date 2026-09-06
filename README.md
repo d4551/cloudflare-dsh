@@ -652,7 +652,7 @@ sentence above sat here unchecked.
 Upstream DSH ships no accessibility guidance for plugin authors. This project
 sets its own bar: **WCAG 2.2 AA, zero axe violations, enforced in CI**.
 
-Accessibility runs in four lanes, because no one of them reaches every
+Accessibility runs in five lanes, because no one of them reaches every
 criterion:
 
 ```mermaid
@@ -672,12 +672,16 @@ graph LR
     end
     subgraph viewport["Lane 4 — laid out, 320px to 1920px"]
         I["Reflow, target size, text spacing"]
-        J["What hidden computes to"]
+        J["What hidden computes to, forced colours"]
+    end
+    subgraph e2e["Lane 5 — mounted and operated"]
+        K["Keyboard and pointer, form and live regions"]
     end
     jsdom --> G["0 violations, 0 left for review"]
     chromium --> G
     computed --> G
     viewport --> G
+    e2e --> G
 ```
 
 Each split exists for a measured reason.
@@ -721,6 +725,28 @@ lane asks what `hidden` computes to, because jsdom applies no CSS — a class
 setting `display: grid` outranks the user agent's `[hidden] { display: none }`,
 and the chip's collapsed detail was on screen with a passing test asserting the
 attribute was set.
+
+Every one of those lanes renders these components to **static markup**, which
+has no React attached: a toggle that never toggles, a form that never submits
+and a live region that never updates all produce markup identical to ones that
+work. The fifth lane bundles the real components with the real React, mounts
+them, and operates them — activating the toggle with `Enter` and with `Space`,
+because a real button answers both and a `div` with a click handler answers
+neither; typing an invalid reference and reading what the assertive region
+says; saving and watching the secret field clear; and submitting with `Enter`
+from a field. The bundle is built during the run rather than committed, so the
+lane cannot drift from the source it claims to exercise.
+
+Two more things only a browser can answer. In **forced-colours** mode — Windows
+high contrast — nothing may opt out of the system palette, and a field and a
+table cell must still be bounded by a border the mode can repaint, because a
+background alone disappears there. And these surfaces **animate nothing**: no
+transition, no animation, no keyframes, enforced by the invariants lane. There
+was a `prefers-reduced-motion` block here, and it set `transition: none` on
+elements the stylesheet never gave a transition — neither property being
+inherited, so a host could not have given them one either. It guarded nothing.
+Introducing motion now fails a gate, which is the point at which a
+reduced-motion story has to be written rather than assumed.
 
 **No lane filters axe.** No tag scope, no disabled rules, no excluded
 selectors — and the run is read for what it left for a human to review as well
