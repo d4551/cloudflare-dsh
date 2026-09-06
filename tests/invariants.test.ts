@@ -924,12 +924,35 @@ describe('accessibility cannot be filtered', () => {
   it.each([
     // Each of these was absent while the lane's own doc claimed it, or while
     // the gate read only the outcome that happened to be empty.
-    ['scans the client as a host assembles it', 'const ASSEMBLED = renderToStaticMarkup('],
+    ['scans the client as a host assembles it', 'ASSEMBLED'],
     ['fails on what axe leaves for review, not only on what it fails', 'results.incomplete'],
     ['walks the page by keyboard', `keyboard.press('Tab')`],
     ['reads the focus ring the stylesheet declares', 'computed.outlineStyle'],
   ])('%s', (_label, needle) => {
     expect(read('packages/client/tests/a11y.browser.test.tsx')).toContain(needle)
+  })
+
+  it('assembles that page as a host does, from one render rather than a join', () => {
+    // Rendering each surface separately and concatenating restarts `useId`, so
+    // the page would carry id collisions no host could produce and the scan
+    // would be reporting on a fixture rather than on the client.
+    expect(read('packages/client/tests/surfaces.tsx')).toContain(
+      'export const ASSEMBLED = renderToStaticMarkup(',
+    )
+  })
+
+  it.each([
+    // The viewport lane is the only place these are observable, and every one
+    // of them found a defect the first time it ran.
+    ['lays the client out at 320 CSS pixels, the reflow criterion’s own width', 'width: 320'],
+    [
+      'measures a rendered control rather than trusting the declared minimum',
+      'getBoundingClientRect().width',
+    ],
+    ['applies the text-spacing overrides', 'letter-spacing:0.12em'],
+    ['asks what `hidden` computes to, which jsdom cannot', `getComputedStyle(node).display !== 'none'`],
+  ])('%s', (_label, needle) => {
+    expect(read('packages/client/tests/viewport.browser.test.tsx')).toContain(needle)
   })
 
   it('runs the browser lane rather than leaving those tests unrun', () => {

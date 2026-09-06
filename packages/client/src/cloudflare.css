@@ -44,6 +44,17 @@
   }
 }
 
+/* Every box this package draws sizes by its border box.
+   Scoped to our own subtrees rather than declared on `*`: these are fragments
+   inside a host page, and a global rule here would reach the host's markup.
+   Without it a field at `inline-size: 100%` adds its padding and border on top
+   of the width it was given — 18px past its card, and 2px past the viewport,
+   at every width. */
+:is(.cf-chip, .cf-settings, .cf-d1, .cf-render, .cf-axtree, .cf-toolview__raw),
+:is(.cf-chip, .cf-settings, .cf-d1, .cf-render, .cf-axtree, .cf-toolview__raw) * {
+  box-sizing: border-box;
+}
+
 .cf-chip {
   display: flex;
   flex-wrap: wrap;
@@ -70,7 +81,9 @@
   color: var(--cf-muted);
 }
 
-/* Minimum 24x24 target, per WCAG 2.2 SC 2.5.8. */
+/* 24x24 is the floor SC 2.5.8 sets for any pointer. A finger is not any
+   pointer: Apple's HIG asks for 44pt and Material for 48dp, so a coarse
+   pointer gets 44 (below). */
 .cf-chip__toggle,
 .cf-settings button {
   min-block-size: 24px;
@@ -83,7 +96,11 @@
   cursor: pointer;
 }
 
-.cf-chip__detail {
+/* `:not([hidden])`, because a class setting `display` outranks the user agent's
+   `[hidden] { display: none }` — the collapsed detail was on screen the whole
+   time, with `hidden` set and a jsdom test asserting the attribute rather than
+   what it does. */
+.cf-chip__detail:not([hidden]) {
   display: grid;
   grid-template-columns: auto auto;
   gap: 0.125rem 0.5rem;
@@ -95,8 +112,17 @@
   color: var(--cf-muted);
 }
 
+/* A measure, not a width. Below this the card is fluid and fills whatever the
+   host gives it; above it, prose stops running to 1200 characters a line and a
+   text field stops being a metre wide. `ch` because the limit is about how far
+   the eye travels, not about a device. */
 .cf-settings {
   padding: 1rem;
+  max-inline-size: 78ch;
+}
+
+.cf-settings p {
+  max-inline-size: 66ch;
 }
 
 .cf-field {
@@ -109,7 +135,13 @@
   font-weight: 600;
 }
 
+/* `font: inherit`, because a form control otherwise uses the user agent's own
+   13px face: it reads smaller than the copy around it, `ch` units resolve
+   against the wrong font, and iOS Safari zooms the page whenever a field below
+   16px takes focus. The card's measure already bounds the field, so it needs no
+   cap of its own. */
 .cf-field input {
+  font: inherit;
   inline-size: 100%;
   min-block-size: 24px;
   padding: 0.25rem 0.5rem;
@@ -159,6 +191,9 @@
 
 .cf-d1 {
   overflow-x: auto;
+  /* Reserved, so the row that first overflows does not shift everything
+     beside it when the scrollbar appears. */
+  scrollbar-gutter: stable;
 }
 
 .cf-d1 table {
@@ -228,6 +263,21 @@
   padding: 0.5rem;
   border: 1px solid var(--cf-border);
   border-radius: 4px;
+}
+
+/* A touch pointer has no hover and no pixel precision, so every control it can
+   reach is given a finger-sized target rather than the conformance minimum. */
+@media (pointer: coarse) {
+  .cf-chip__toggle,
+  .cf-settings button,
+  .cf-field input {
+    min-block-size: 44px;
+  }
+
+  .cf-chip__toggle,
+  .cf-settings button {
+    min-inline-size: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
