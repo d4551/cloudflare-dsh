@@ -86,6 +86,18 @@ What it found, and what changed:
    of anything. A claim that a rewrite closes a hole is a claim like any other,
    and this one had not been measured.
 
+9. **A superseded doc block still sat above a live one.** `listAll` in the
+   core client carried two: the first described a generator "yielding items",
+   which it stopped being, and TypeScript treats only the last as the
+   declaration's documentation — so the stale one kept its place at the top,
+   where a reader meets it first. The second audit raised it and declined to
+   call it a violation. It is the same class as everything above, so it is
+   gone, and an invariant reads the leading comment ranges of every declaration
+   under `src` and `tests` and refuses two doc blocks separated by nothing but
+   a line break. A module's own block sits a blank line above the first
+   declaration's, which is what tells the two apart; the scanner was watched to
+   find the real one and to pass all six shapes that are not it.
+
 The gates that would have caught the first four did not exist. `readme.test.ts`
 reads what the tree actually is out of its syntax trees — `defineTool` is what
 makes a tool and a `Schema.object` shape is what a row accepts, so a `name` in
@@ -109,12 +121,12 @@ another is not a trade this repository makes, so the check that does run Mermaid
 is the out-of-tree one in point 1.
 
 Measured on this tree, after the last change to it: typecheck 0, lint 0 under
-`--deny-warnings`, `oxfmt --check` clean across 113 files, 126 invariant and
+`--deny-warnings`, `oxfmt --check` clean across 113 files, 135 invariant and
 README tests, 1330 unit tests at 100% coverage (1145 statements, 621 branches,
 364 functions, 1016 lines), 35 built-artifact tests, 13 Chromium axe tests with
 no rule or selector filtering, knip 0, publint clean on all three packages, and
-a mutation score of **100.00%** — 3635 mutants over 38 instrumented files, 3623
-killed and 12 detected by timeout, none surviving and none without coverage,
+a mutation score of **100.00%** — 3635 mutants over 38 instrumented files, 3622
+killed and 13 detected by timeout, none surviving and none without coverage,
 with the escape guard confirming every file that emits JavaScript was mutated.
 The seven Mermaid diagrams were rendered by `mmdc` in a real Chromium, all
 seven succeeding.

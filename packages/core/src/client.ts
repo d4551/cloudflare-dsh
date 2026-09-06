@@ -268,12 +268,8 @@ export class CloudflareClient {
   }
 
   /**
-   * Walk a paginated list endpoint, yielding items.
-   *
-   * The step function decides how the endpoint paginates; see `paginate.ts`.
-   */
-  /**
-   * Collect every page of a list endpoint.
+   * Collect every page of a list endpoint. The step function decides how the
+   * endpoint paginates; see `paginate.ts`.
    *
    * Returns the walk's outcome with the items: stopping at the page ceiling is
    * not the same as running out of data, and a caller that cannot tell them

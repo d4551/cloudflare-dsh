@@ -232,6 +232,67 @@ describe('no type escape hatch', () => {
   })
 })
 
+/**
+ * Declarations with a superseded doc block above their current one.
+ *
+ * A rewrite that leaves the old block in place stacks two, and TypeScript
+ * treats only the last as the declaration's documentation — so the superseded
+ * one keeps sitting there describing what the code used to do, and a reader
+ * meets it first. One did: `listAll` was documented as "yielding items" long
+ * after it stopped being a generator. The comment ranges are read from the
+ * text, because the syntax tree drops the block it does not consider current.
+ *
+ * Two blocks are stacked when nothing but one line break separates them. A
+ * module's own doc block sits above the first declaration's with a blank line
+ * between, which is what tells the two apart.
+ */
+function stackedDocs(name: string, text: string): string[] {
+  const kind = name.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  const source = ts.createSourceFile(name, text, ts.ScriptTarget.ESNext, true, kind)
+  const found = new Set<string>()
+  const visit = (node: ts.Node): void => {
+    const docs = (ts.getLeadingCommentRanges(text, node.getFullStart()) ?? []).filter(
+      (range) => text.slice(range.pos, range.pos + 3) === '/**',
+    )
+    const stacked = docs.some((range, index) => {
+      const next = docs[index + 1]
+      return next !== undefined && text.slice(range.end, next.pos).split('\n').length === 2
+    })
+    if (stacked) {
+      found.add(`${name}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return [...found]
+}
+
+describe('no superseded doc block', () => {
+  // The scanner is proven on snippets before it is trusted on the tree.
+  it.each([
+    ['two blocks above one declaration', '/** old */\n/** new */\nexport const a = 1', ['probe.ts:3']],
+    ['two blocks above a method', 'class C {\n  /** old */\n  /** new */\n  m(): void {}\n}', ['probe.ts:4']],
+  ])('finds %s', (_label, snippet, expected) => {
+    expect(stackedDocs('probe.ts', snippet)).toEqual(expected)
+  })
+
+  it.each([
+    ['one block', '/** only */\nexport const a = 1'],
+    ['no block', 'export const a = 1'],
+    ['a block each on two declarations', '/** a */\nexport const a = 1\n/** b */\nexport const b = 2'],
+    ['a line comment above a block', '// note\n/** doc */\nexport const a = 1'],
+    ['a plain block above a doc block', '/* note */\n/** doc */\nexport const a = 1'],
+    ['a module doc a blank line above the first', '/** module */\n\n/** doc */\nexport const a = 1'],
+  ])('passes %s', (_label, snippet) => {
+    expect(stackedDocs('probe.ts', snippet)).toEqual([])
+  })
+
+  it('finds none under src or tests', () => {
+    const modules = [...sources, ...tests].filter((file) => /\.tsx?$/.test(file))
+    expect(modules.flatMap((file) => stackedDocs(file, read(file)))).toEqual([])
+  })
+})
+
 describe('mutation testing cannot be narrowed', () => {
   it('mutates every source extension, with no negated pattern', () => {
     expect(json<StrykerConfig>('stryker.config.json').mutate).toEqual([
