@@ -918,16 +918,19 @@ describe('accessibility cannot be filtered', () => {
     expect(containing(tests, needle)).toEqual([])
   })
 
-  // The builder's scoping methods, matched as calls on a receiver. A bare
-  // substring cannot tell a method call on the builder from a spread of a
-  // local fixture that happens to share the name, and the difference is a
-  // false failure on a test that has nothing to do with axe.
+  // The builder's scoping methods, matched as a call rather than as a bare
+  // substring, which cannot tell one from a spread of a local fixture that
+  // happens to share the name. The only thing that distinguishes the spread is
+  // the dot before it, so that is the whole of what is excluded — anything
+  // else, including a call the formatter has wrapped onto its own line, still
+  // matches. An earlier version of this required a word character before the
+  // dot and would have missed exactly that wrapped call.
   it.each([
     ['selector exclusion', `exc${'lude'}`],
     ['selector scoping', `inc${'lude'}`],
     ['builder options', `opt${'ions'}`],
   ])('calls no %s method on an axe builder', (_label, method) => {
-    expect(matching(tests, new RegExp(`[\\w)\\]]\\.${method}\\(`, 'u'))).toEqual([])
+    expect(matching(tests, new RegExp(`(?<!\\.)\\.${method}\\(`, 'u'))).toEqual([])
   })
 
   it('scans every surface with the whole rule set', () => {
