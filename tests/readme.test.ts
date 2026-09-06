@@ -17,8 +17,11 @@
  * separator wherever one appears — inside the text of a `Note over` exactly as
  * much as between two statements — so a sentence written with one ended the
  * note early, the clause after it was read as an actor, and "How a model call
- * flows" became a parse error on the project page. The separator has to be
- * written as the entity `#59;` to survive.
+ * flows" became a parse error on the project page. Mermaid documents the entity
+ * `#59;` as the way to write one that survives its lexer, and this suite
+ * refuses that too: a reader of the source meets the escape rather than the
+ * punctuation, and a diagram label that needs one is a sentence to rewrite. So
+ * the rule is that no diagram carries a semicolon in any form.
  *
  * What this suite does not do is parse the diagrams. Parsing would mean the
  * `mermaid` package, whose published declarations import `type-fest` without
