@@ -13,7 +13,6 @@
  * and a base64 PDF in the session log would be a blob nothing can consume;
  * PDF capture is therefore not offered rather than offered broken.
  */
-import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentId, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -31,13 +30,8 @@ import {
   browserScreenshotSpec,
 } from '../specs/web.ts'
 import type { JsonValue } from './_shared/json.ts'
-import { json, text, truncate } from './_shared/render.ts'
-
-interface CloudflareContext extends Context {
-  cloudflare: CloudflareService
-}
-
-/** Longest rendered body handed to the model; the canonical value keeps it all. */
+import { boundedJson, json, text, truncate } from './_shared/render.ts'
+import { seam } from '../seam.ts'
 
 /** Formats the render tool accepts, in the order they appear to the model. */
 const FORMATS: readonly RenderFormat[] = ['markdown', 'content', 'links', 'scrape', 'json']
@@ -133,7 +127,7 @@ export const Config: Schema<Partial<WebToolsConfig>, WebToolsConfig> = Schema.ob
 })
 
 export function apply(ctx: Context, config: WebToolsConfig): void {
-  const cf = (ctx as CloudflareContext).cloudflare
+  const cf = seam(ctx)
 
   ctx.tools.register(
     defineTool({
@@ -320,11 +314,8 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
             },
           },
         },
-        render: (args, value) => {
-          return text(
-            `Accessibility tree for ${args.url}\n${truncate(JSON.stringify(value.tree, null, 2), config.renderLimit)}`,
-          )
-        },
+        render: (args, value) =>
+          text(`Accessibility tree for ${args.url}\n${boundedJson(value.tree, config.renderLimit)}`),
       },
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,

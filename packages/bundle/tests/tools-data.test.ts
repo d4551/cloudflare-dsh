@@ -496,6 +496,16 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
     expect(blocks).toEqual(json({ results: [] }))
   })
 
+  it('bounds a wide result set by the configured render limit', () => {
+    // The budget was declared for this and applied to one tool; a wide result
+    // set reached the model whole.
+    const h = makeHarness(dataTools, async () => envelope([]), {}, { renderLimit: 20 })
+    const results = [{ value: 'x'.repeat(200) }]
+    const blocks = h.render('cloudflare_d1_query', { databaseId: 'd', sql: 's' }, { results })
+    expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated') }])
+    expect(blocks[0]).toMatchObject({ text: expect.stringMatching(/^.{20}\n… truncated \d+ characters$/su) })
+  })
+
   it('surfaces a SQL error from Cloudflare', async () => {
     const h = makeHarness(dataTools, async () => failure(7500, 'no such table: nope'))
     await expect(

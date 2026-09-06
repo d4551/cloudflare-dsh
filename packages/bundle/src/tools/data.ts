@@ -5,7 +5,6 @@
  * `../specs/data.ts` as a pure function, and every rendering decision in
  * `./_shared/render.ts`, so this module stays a thin, declarative layer.
  */
-import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
@@ -30,30 +29,25 @@ import {
   PAGE_OUTCOME_PROPERTIES,
   cursorNote,
   cursorOutcome,
+  cursorOutcomeProperties,
   pageNote,
   pageOutcome,
   requestedPage,
   wholeListNote,
   wholeListOutcome,
 } from './_shared/paging.ts'
-import { json, listing, plural, text, truncate } from './_shared/render.ts'
-
-/** Context shape these tools require. */
-interface CloudflareContext extends Context {
-  cloudflare: CloudflareService
-}
-
-/** Longest value body rendered to the model; the canonical value keeps it all. */
+import { apiRecords, listing, plural, text, truncate, truncatedJson } from './_shared/render.ts'
+import { seam } from '../seam.ts'
 
 export const name = 'cloudflare-tools-data'
 export const inject = ['tools', 'cloudflare']
 
 export interface DataToolsConfig {
-  /** Default page size for namespace, database, queue and bucket listings. */
+  /** Default page size for namespace, database and bucket listings. */
   pageSize: number
   /** Default number of keys `cloudflare_kv_list_keys` returns per page. */
   keyListLimit: number
-  /** Characters of a KV value shown to the model before truncation. */
+  /** Characters of a KV value or a query result shown to the model before truncation. */
   renderLimit: number
   /** Default number of messages `cloudflare_queue_pull` takes. */
   queueBatchSize: number
@@ -126,7 +120,7 @@ export const Config: Schema<Partial<DataToolsConfig>, DataToolsConfig> = Schema.
 })
 
 export function apply(ctx: Context, config: DataToolsConfig): void {
-  const cf = (ctx as CloudflareContext).cloudflare
+  const cf = seam(ctx)
 
   ctx.tools.register(
     defineTool({
@@ -143,12 +137,7 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
           additionalProperties: false,
           description: 'One page of KV namespaces, and where it sits in the whole.',
           properties: {
-            namespaces: {
-              type: 'array',
-              required: true,
-              description: 'Namespace records as the API returns them.',
-              items: { type: 'object', additionalProperties: true },
-            },
+            namespaces: apiRecords('Namespace'),
             ...PAGE_OUTCOME_PROPERTIES,
           },
         },
@@ -196,16 +185,7 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
               description: 'Key entries as the API returns them.',
               items: { type: 'object', additionalProperties: true },
             },
-            cursor: {
-              type: 'string',
-              required: true,
-              description: 'Cursor for the next page; empty when complete.',
-            },
-            complete: {
-              type: 'boolean',
-              required: true,
-              description: 'Whether every key has been returned.',
-            },
+            ...cursorOutcomeProperties('key'),
           },
         },
         render: (_args, value) => listing(value.keys.length, 'key', value, cursorNote(value)),
@@ -215,11 +195,11 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
         // The envelope, not just its result: `result_info.cursor` is the paging
         // state this tool exists to hand back. The API ends a listing by
         // omitting the cursor (or sending an empty one).
-        const page = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
           ...kvListKeysSpec(args.namespaceId, args.prefix, args.limit ?? config.keyListLimit, args.cursor),
           signal: exec.signal,
         })
-        return { keys: page.result, ...cursorOutcome(page.result_info) }
+        return { keys: envelope.result, ...cursorOutcome(envelope.result_info) }
       },
     }),
   )
@@ -384,12 +364,7 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
           additionalProperties: false,
           description: 'One page of D1 databases, and where it sits in the whole.',
           properties: {
-            databases: {
-              type: 'array',
-              required: true,
-              description: 'Database records as the API returns them.',
-              items: { type: 'object', additionalProperties: true },
-            },
+            databases: apiRecords('Database'),
             ...PAGE_OUTCOME_PROPERTIES,
           },
         },
@@ -434,7 +409,9 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
             results: { type: 'json', required: true, description: 'Result sets as the API returns them.' },
           },
         },
-        render: (_args, value) => json(value),
+        // Bounded: a wide result set reached the model whole, and `renderLimit`
+        // was declared for exactly this and applied to one tool.
+        render: (_args, value) => truncatedJson(value, config.renderLimit),
       },
       async execute(args, exec) {
         const results = await cf.accountRequest<JsonValue>({
@@ -458,12 +435,7 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
           additionalProperties: false,
           description: 'The queues in the account, and whether the API reported more than it returned.',
           properties: {
-            queues: {
-              type: 'array',
-              required: true,
-              description: 'Queue records as the API returns them.',
-              items: { type: 'object', additionalProperties: true },
-            },
+            queues: apiRecords('Queue'),
             total: {
               oneOf: [{ type: 'integer' }, { type: 'null' }],
               required: true,
@@ -617,22 +589,8 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
           additionalProperties: false,
           description: 'One page of R2 buckets and the cursor for the next.',
           properties: {
-            buckets: {
-              type: 'array',
-              required: true,
-              description: 'Bucket records as the API returns them.',
-              items: { type: 'object', additionalProperties: true },
-            },
-            cursor: {
-              type: 'string',
-              required: true,
-              description: 'Cursor for the next page; empty when complete.',
-            },
-            complete: {
-              type: 'boolean',
-              required: true,
-              description: 'Whether every bucket has been returned.',
-            },
+            buckets: apiRecords('Bucket'),
+            ...cursorOutcomeProperties('bucket'),
           },
         },
         render: (_args, value) => listing(value.buckets.length, 'bucket', value, cursorNote(value)),

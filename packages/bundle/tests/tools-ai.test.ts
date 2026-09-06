@@ -866,6 +866,21 @@ describe('summariseSessionLogs', () => {
   })
 })
 
+describe('page numbers are refused before the first, on every page-numbered tool', () => {
+  // Four of the five called `requestedPage`; `cloudflare_aigateway_logs` read
+  // `args.page ?? 1` and put `page=0` on the wire. Every one is asserted here,
+  // so the next tool to skip the check has a test to fail.
+  it.each([
+    ['cloudflare_ai_models_search', {}],
+    ['cloudflare_aigateway_list', {}],
+    ['cloudflare_aigateway_logs', { gatewayId: 'gw1' }],
+  ])('%s refuses a page before the first without a request', async (name, args) => {
+    const h = makeHarness(aiTools, async () => envelope([]))
+    await expect(h.run(name, { ...args, page: 0 })).rejects.toThrow('page must be 1 or more, got 0')
+    expect(h.requests).toHaveLength(0)
+  })
+})
+
 describe('AiToolsConfig', () => {
   it('defaults every tunable the tools used to hard-code', () => {
     expect(aiTools.Config({})).toStrictEqual({

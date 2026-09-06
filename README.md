@@ -860,6 +860,7 @@ packages/
     src/    client.ts is the only module that performs I/O;
             config, credentials, errors, paginate, request, retry, scope are pure
   bundle/   cloudflare-dsh               — the bundle
+    src/seam.ts reaching ctx.cloudflare, in one place rather than five
     src/ai/     adapter, transducer, sse, headers, request, errors
     src/tools/  ai, data, web, meta
     src/tools/_shared/  json, render, paging, batch — what every tool group shares

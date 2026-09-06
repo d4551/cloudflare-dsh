@@ -6,11 +6,7 @@
  * network or a Cordis context.
  */
 import type { RequestSpec } from '@d4551/dsh-cloudflare-core'
-
-/** Percent-encode one path segment. */
-function seg(value: string): string {
-  return encodeURIComponent(value)
-}
+import { seg } from './_segment.ts'
 
 // --- Workers KV -----------------------------------------------------------
 
