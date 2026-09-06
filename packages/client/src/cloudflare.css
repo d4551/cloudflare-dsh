@@ -48,7 +48,8 @@
 .cf-settings,
 .cf-d1,
 .cf-render,
-.cf-axtree {
+.cf-axtree,
+.cf-toolview {
   --cf-fg: var(--dsh-fg, light-dark(#16181d, #f2f3f5));
   --cf-bg: var(--dsh-bg, light-dark(#ffffff, #16181d));
   --cf-muted: var(--dsh-fg-muted, light-dark(#55595f, #b3b8c0));
@@ -66,8 +67,8 @@
    Without it a field at `inline-size: 100%` adds its padding and border on top
    of the width it was given — 18px past its card, and 2px past the viewport,
    at every width. */
-:is(.cf-chip, .cf-settings, .cf-d1, .cf-render, .cf-axtree, .cf-toolview__raw),
-:is(.cf-chip, .cf-settings, .cf-d1, .cf-render, .cf-axtree, .cf-toolview__raw) * {
+:is(.cf-chip, .cf-settings, .cf-d1, .cf-render, .cf-axtree, .cf-toolview),
+:is(.cf-chip, .cf-settings, .cf-d1, .cf-render, .cf-axtree, .cf-toolview) * {
   box-sizing: border-box;
 }
 
@@ -216,7 +217,8 @@
 .cf-chip :focus-visible,
 .cf-settings :focus-visible,
 .cf-d1:focus-visible,
-.cf-render:focus-visible {
+.cf-render:focus-visible,
+.cf-toolview:focus-visible {
   outline: 2px solid var(--cf-accent);
   outline-offset: 2px;
 }
@@ -256,6 +258,7 @@
 }
 
 .cf-render__caption,
+.cf-toolview__caption,
 .cf-axtree {
   font-size: 0.875rem;
 }
@@ -265,7 +268,12 @@
   margin: 0;
 }
 
-.cf-render {
+/* The two cards that scroll their own overflow: a rendered page, and a settled
+   result whose projection no view could read. One rule, because they are the
+   same box — the second was a second copy of it, and drifted into a bare `<pre>`
+   with no focus stop, which no fixture rendered and so no lane ever laid out. */
+.cf-render,
+.cf-toolview {
   max-block-size: 24rem;
   overflow: auto;
   margin: 0;
@@ -276,25 +284,16 @@
 
 /* The caption names the focus stop, so it stays put while the body scrolls
    under it rather than leaving the reader without it. */
-.cf-render__caption {
+.cf-render__caption,
+.cf-toolview__caption {
   position: sticky;
   inset-block-start: 0;
   background: var(--cf-bg);
 }
 
-.cf-render__body {
-  margin: 0;
-}
-
-/* A settled result whose projection a view could not read: the text the model
-   saw, rather than an empty card. */
+.cf-render__body,
 .cf-toolview__raw {
-  max-block-size: 24rem;
-  overflow: auto;
   margin: 0;
-  padding: 0.5rem;
-  border: 1px solid var(--cf-border);
-  border-radius: 4px;
 }
 
 /* A touch pointer has no hover and no pixel precision, so every control it can

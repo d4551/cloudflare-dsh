@@ -49,6 +49,7 @@ export const en = {
     queryCaption: (sql: string) => `Results for query: ${sql}`,
     rowsShown: (shown: number, total: number) => `Showing the first ${shown} of ${total} rows.`,
     emptyResult: 'The query returned no rows.',
+    rawHeading: (toolName: string) => `Result from ${toolName}`,
   },
 }
 

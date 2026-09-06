@@ -23,7 +23,9 @@
  * declared; a running call carries no `kind`, which is what tells the two apart.
  */
 
+import { useId } from 'react'
 import { SessionCostChip } from '../SessionCostChip.tsx'
+import { en } from '../locales/en.ts'
 import type { SessionUsage } from '../format.ts'
 import { AccessibilityTree, type AxNode } from './AccessibilityTree.tsx'
 import { BrowserRender } from './BrowserRender.tsx'
@@ -106,12 +108,40 @@ export function resultText(block: unknown): string {
     .join('\n')
 }
 
-/** A settled result the projection could not be read from, as plain text. */
-function ToolResultFallback({ block }: { readonly block: unknown }): React.JSX.Element | null {
+/**
+ * A settled result the projection could not be read from, as plain text.
+ *
+ * Built like `BrowserRender`, because it is the same thing: a box that scrolls
+ * its own overflow. That makes `tabIndex` a requirement rather than a
+ * decoration — without it a keyboard user cannot reach the scroll at all
+ * (SC 2.1.1) — and it makes the figure's name come from a caption, since
+ * `aria-label` on a `<pre>` addresses the `generic` role ARIA prohibits naming.
+ * A figure rather than a section, because tool views repeat and two identically
+ * named landmarks is a `landmark-unique` violation.
+ *
+ * It was a bare `<pre>` with neither, and no fixture rendered it, so no lane
+ * ever laid it out: the reflow lane listed it among the containers allowed to
+ * scroll and never saw one.
+ */
+function ToolResultFallback({
+  block,
+  toolName,
+}: {
+  readonly block: unknown
+  readonly toolName: string
+}): React.JSX.Element | null {
+  const captionId = useId()
   // Nothing while the call runs: the host draws its own pending card, and a
   // second empty one under it says less than nothing.
   if (settledResult(block) === undefined) return null
-  return <pre className="cf-toolview__raw">{resultText(block)}</pre>
+  return (
+    <figure className="cf-toolview" tabIndex={0} aria-labelledby={captionId}>
+      <figcaption id={captionId} className="cf-toolview__caption">
+        {en.toolView.rawHeading(toolName)}
+      </figcaption>
+      <pre className="cf-toolview__raw">{resultText(block)}</pre>
+    </figure>
+  )
 }
 
 /** Projection `cloudflare_d1_query` publishes for its view. */
@@ -142,23 +172,23 @@ function isUsageMeta(value: unknown): value is SessionUsage {
 }
 
 /** `cloudflare_d1_query` as a table, from the block the host supplies. */
-export function D1ResultToolView({ block }: ToolCallOwnerProps): React.JSX.Element | null {
+export function D1ResultToolView({ block, toolName }: ToolCallOwnerProps): React.JSX.Element | null {
   const meta = presentationMetaOf(block)
-  if (!isD1Meta(meta)) return <ToolResultFallback block={block} />
+  if (!isD1Meta(meta)) return <ToolResultFallback block={block} toolName={toolName} />
   return <D1Result sql={meta.sql} resultSets={meta.resultSets} />
 }
 
 /** `cloudflare_browser_render` as captioned text, from the block the host supplies. */
-export function BrowserRenderToolView({ block }: ToolCallOwnerProps): React.JSX.Element | null {
+export function BrowserRenderToolView({ block, toolName }: ToolCallOwnerProps): React.JSX.Element | null {
   const meta = presentationMetaOf(block)
-  if (!isRenderMeta(meta)) return <ToolResultFallback block={block} />
+  if (!isRenderMeta(meta)) return <ToolResultFallback block={block} toolName={toolName} />
   return <BrowserRender url={meta.url} body={meta.body} />
 }
 
 /** `cloudflare_browser_accessibility_tree` as nested lists, from the host's block. */
-export function AccessibilityTreeToolView({ block }: ToolCallOwnerProps): React.JSX.Element | null {
+export function AccessibilityTreeToolView({ block, toolName }: ToolCallOwnerProps): React.JSX.Element | null {
   const meta = presentationMetaOf(block)
-  if (!isTreeMeta(meta)) return <ToolResultFallback block={block} />
+  if (!isTreeMeta(meta)) return <ToolResultFallback block={block} toolName={toolName} />
   return <AccessibilityTree url={meta.url} tree={meta.tree} />
 }
 

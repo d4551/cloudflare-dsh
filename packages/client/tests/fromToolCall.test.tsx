@@ -2,6 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ToolCallOwnerProps } from '../src/toolviews/fromToolCall.tsx'
+import { expectNoViolations } from './axe.ts'
 import {
   AccessibilityTreeToolView,
   BrowserRenderToolView,
@@ -176,6 +177,36 @@ describe('D1ResultToolView', () => {
   it('renders nothing while the call is still running', () => {
     const { container } = render(<D1ResultToolView {...owner(running)} />)
     expect(container.innerHTML).toBe('')
+  })
+
+  it('renders the fallback in a keyboard-reachable region named for the tool', () => {
+    // The fallback is a box that scrolls its own overflow, exactly like the
+    // render card, so it needs the same two things and had neither: it was a
+    // bare `<pre>`, unreachable by keyboard (SC 2.1.1) and unnameable, because
+    // ARIA prohibits `aria-label` on the `generic` role a `<pre>` maps to.
+    const { container } = render(
+      <D1ResultToolView {...owner(settled(undefined, [{ type: 'text', text: 'raw' }]))} />,
+    )
+    const card = screen.getByRole('figure', { name: 'Result from t' })
+    expect(card.getAttribute('tabindex')).toBe('0')
+    expect(card.querySelector('pre')?.textContent).toBe('raw')
+    expect(container.querySelector('pre')?.getAttribute('aria-label')).toBeNull()
+    const labelledBy = card.getAttribute('aria-labelledby')
+    expect(container.ownerDocument.getElementById(labelledBy ?? '')).toBe(
+      container.querySelector('figcaption'),
+    )
+  })
+
+  it('keeps the fallback out of the landmark map, since tool views repeat', () => {
+    render(<D1ResultToolView {...owner(settled(undefined, [{ type: 'text', text: 'raw' }]))} />)
+    expect(screen.queryByRole('region')).toBeNull()
+  })
+
+  it('leaves the fallback with no accessibility violations', async () => {
+    const { container } = render(
+      <D1ResultToolView {...owner(settled(undefined, [{ type: 'text', text: 'raw' }]))} />,
+    )
+    await expectNoViolations(container)
   })
 })
 

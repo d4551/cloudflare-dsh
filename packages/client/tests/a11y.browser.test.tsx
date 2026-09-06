@@ -22,12 +22,32 @@ import { AxeBuilder } from '@axe-core/playwright'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Browser, Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ASSEMBLED, STATES, THEMES, launch, open } from './surfaces.tsx'
+import { ASSEMBLED, OVERFLOWING, STATES, THEMES, css, launch, open } from './surfaces.tsx'
 
 const SURFACES: ReadonlyArray<{ name: string; markup: string }> = [
   ...STATES.map((state) => ({ name: state.name, markup: renderToStaticMarkup(state.element) })),
   { name: 'the assembled client', markup: ASSEMBLED },
 ]
+
+/**
+ * Classes the stylesheet styles that no fixture here renders.
+ *
+ * Comments are stripped first, so a class named in prose is not mistaken for
+ * one that is styled.
+ */
+function unrendered(sheet: string, markups: readonly string[]): string[] {
+  const styled = new Set(
+    [...sheet.replaceAll(/\/\*[\s\S]*?\*\//gu, '').matchAll(/\.(cf-[\w-]+)/gu)].flatMap((match) =>
+      match[1] === undefined ? [] : [match[1]],
+    ),
+  )
+  const rendered = new Set(
+    markups
+      .flatMap((markup) => [...markup.matchAll(/class="([^"]+)"/gu)])
+      .flatMap((match) => (match[1] ?? '').split(/\s+/u)),
+  )
+  return [...styled].filter((name) => !rendered.has(name)).toSorted()
+}
 
 let browser: Browser
 
@@ -109,10 +129,13 @@ describe('accessibility in Chromium', () => {
       try {
         const stops = await page.locator('button, input, [tabindex="0"]').count()
         // Four fields and a submit in the settings card, the chip's toggle,
-        // and one focus stop per scrollable tool card — two D1 results and two
-        // rendered pages. A drop here means a control stopped being reachable,
-        // which is the other half of what this checks.
-        expect(stops).toBe(10)
+        // and one focus stop per scrollable tool card — two D1 results, two
+        // rendered pages and two unreadable results. A drop here means a
+        // control stopped being reachable, which is the other half of what this
+        // checks: the unreadable result was a bare `<pre>` that scrolled its
+        // own overflow with no way to reach it, and this counted 10 while it
+        // was in the tree, because no fixture put it there.
+        expect(stops).toBe(12)
         const rings = await walk(page, stops)
         const expected = {
           style: 'solid',
@@ -160,4 +183,27 @@ describe('accessibility in Chromium', () => {
       await context.close()
     }
   }, 30_000)
+})
+
+describe('the surfaces this lane scans', () => {
+  it('names a styled class the markup never renders', () => {
+    expect(
+      unrendered('.cf-ghost { color: red }\n.cf-chip { color: red }', ['<p class="cf-chip"></p>']),
+    ).toEqual(['cf-ghost'])
+  })
+
+  it('reads class names from rules rather than from prose about them', () => {
+    expect(
+      unrendered('/* .cf-ghost is gone */\n.cf-chip { color: red }', ['<p class="cf-chip"></p>']),
+    ).toEqual([])
+  })
+
+  it('renders every class the shipped stylesheet styles', () => {
+    // A class no fixture renders is styled by a file no lane lays out: axe
+    // never scans it, the viewport lane never measures it, the focus walk never
+    // reaches it, and every gate stays green. `.cf-toolview__raw` sat there as
+    // a scroll container with no focus stop — named by the reflow lane among
+    // the containers allowed to scroll, and never once rendered for it.
+    expect(unrendered(css, [...SURFACES.map((surface) => surface.markup), OVERFLOWING])).toEqual([])
+  })
 })

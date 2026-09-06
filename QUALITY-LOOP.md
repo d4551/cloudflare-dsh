@@ -9,7 +9,66 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 16**
+**I'm a fucking loser: 17**
+
+<details>
+<summary><strong>Restart 17 — a gate that named the thing it never once saw</strong></summary>
+
+A ninth adversarial audit of `9422213` reported a violation and, by design, not
+where: assume a gate is passing for the wrong reason, and go looking for the
+thing it never actually reached.
+
+It was `.cf-toolview__raw` — the card the tool-view adapter draws when a
+replayed log carries a projection no view can read. Every browser lane names it.
+The reflow lane lists it among the three containers allowed to scroll sideways.
+No fixture in this repository has ever rendered one, so that entry has never
+matched an element, axe has never scanned the card, the viewport lane has never
+laid it out, and the keyboard walk has never reached it.
+
+Behind that, the defect the lanes could not see. `.cf-toolview__raw` sets
+`max-block-size` and `overflow: auto`, which makes it a box that scrolls its own
+content, and it was rendered as a bare `<pre>` with no `tabIndex` — so a
+keyboard user could not reach the scroll at all (SC 2.1.1) — and with no name,
+because `aria-label` on a `<pre>` addresses the `generic` role ARIA prohibits
+naming. Its two siblings in the same stylesheet, the D1 result and the rendered
+page, are both focus stops named by a caption, and `BrowserRender`'s own doc
+block says why. The third copy of that box had drifted away from both, and the
+page committed to "a scroll container is keyboard-reachable and named" while
+citing one test of the three containers that claim covers.
+
+It is a `<figure>` now, captioned with the tool the result came from, reachable
+by keyboard, out of the landmark map because tool views repeat, and folded into
+one rule with the render card rather than being a second copy of it. It also
+never had the token block, so `var(--cf-border)` resolved to nothing and its
+border fell back to `currentColor`; it is on the token root with the others.
+
+Every browser fixture renders it now — alone, twice in the assembled page, and
+with content too long to wrap in the overflowing one — and the three lanes that
+should always have seen it do. Removing the focus stop fails the jsdom test and
+both halves of the keyboard walk, which counted ten stops while the unreachable
+one sat outside every fixture.
+
+The gate that closes the class: **every class the stylesheet styles must be
+rendered by a surface the lanes scan.** One class was not, and that one class
+was the defect. It is proved on synthetic sheets first — including one that
+names a class only in a comment, so prose about a rule is not mistaken for the
+rule — and adding an unrendered rule to the stylesheet now fails it.
+
+The commitments table names all three scroll containers, all four landmark
+checks and the new gate, rather than one test standing in for a claim about
+several.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings` with seven plugins, `oxfmt --check` clean across 122 files,
+247 invariant and README tests, 1,417 unit tests at 100% coverage (1,206
+statements, 666 branches, 391 functions, 1,069 lines), 91 Chromium tests across
+two colour schemes, six pairings of host and system scheme, two pointers and
+seven viewports, with no rule or selector filtering and nothing left for review,
+36 built-artifact tests, knip 0, and publint clean on all three packages. The
+mutation run is still going as this is written; the commit that finishes it adds
+its number here rather than this line predicting one.
+
+</details>
 
 <details>
 <summary><strong>Restart 16 — a criterion the page said was measured, and no lane ever measured</strong></summary>

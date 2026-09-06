@@ -14,6 +14,7 @@ import { SettingsCard } from '../src/SettingsCard.tsx'
 import { AccessibilityTree } from '../src/toolviews/AccessibilityTree.tsx'
 import { BrowserRender } from '../src/toolviews/BrowserRender.tsx'
 import { D1Result } from '../src/toolviews/D1Result.tsx'
+import { D1ResultToolView } from '../src/toolviews/fromToolCall.tsx'
 
 /** The stylesheet the package ships, read rather than reconstructed. */
 export const css = readFileSync(fileURLToPath(new URL('../src/cloudflare.css', import.meta.url)), 'utf8')
@@ -21,6 +22,20 @@ export const css = readFileSync(fileURLToPath(new URL('../src/cloudflare.css', i
 const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
 const settings = { apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: '', gatewayId: '' }
 const tree = { role: 'document', name: 'Page', children: [{ role: 'heading', name: 'Title' }] }
+
+/**
+ * A settled tool result carrying no projection a view can read.
+ *
+ * Goes through the registered view rather than the fallback component, because
+ * the fallback is reached by the adapter and reaching it the same way is what
+ * makes this the card a host would actually draw. A replayed log written before
+ * a tool published its projection is exactly this shape.
+ */
+const unreadable = {
+  kind: 'tool-result',
+  isError: false,
+  content: [{ type: 'text', text: 'id\n1' }],
+}
 
 /**
  * Every state each surface can be rendered into from its props.
@@ -53,6 +68,10 @@ export const STATES: ReadonlyArray<{ name: string; element: React.JSX.Element }>
     name: 'AccessibilityTree (leaf)',
     element: <AccessibilityTree url="https://example.test" tree={{ role: 'document' }} />,
   },
+  {
+    name: 'a settled result no view could read',
+    element: <D1ResultToolView callId="call-1" toolName="cloudflare_d1_query" block={unreadable} />,
+  },
 ]
 
 /**
@@ -79,6 +98,8 @@ export const ASSEMBLED = renderToStaticMarkup(
     <BrowserRender url="https://example.test" body="# Title" />
     <AccessibilityTree url="https://example.test" tree={tree} />
     <AccessibilityTree url="https://example.test" tree={tree} />
+    <D1ResultToolView callId="call-1" toolName="cloudflare_d1_query" block={unreadable} />
+    <D1ResultToolView callId="call-2" toolName="cloudflare_d1_query" block={unreadable} />
   </>,
 )
 
@@ -112,6 +133,15 @@ export const OVERFLOWING = renderToStaticMarkup(
     <BrowserRender
       url="https://example.test/a/rather/long/path/that/will/not/wrap"
       body={`# Title\n${'no-spaces-in-this-line-so-it-cannot-wrap-'.repeat(8)}`}
+    />
+    <D1ResultToolView
+      callId="call-1"
+      toolName="cloudflare_d1_query"
+      block={{
+        kind: 'tool-result',
+        isError: false,
+        content: [{ type: 'text', text: 'no-spaces-in-this-line-so-it-cannot-wrap-'.repeat(8) }],
+      }}
     />
   </>,
 )
