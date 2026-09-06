@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AccessibilityTree, describeNode } from '../src/toolviews/AccessibilityTree.tsx'
-import { BrowserRender, isImageFormat } from '../src/toolviews/BrowserRender.tsx'
+import { BrowserRender } from '../src/toolviews/BrowserRender.tsx'
 import { D1Result, cellText, columnsOf } from '../src/toolviews/D1Result.tsx'
 import { expectNoViolations } from './axe.ts'
 
@@ -113,43 +113,21 @@ describe('D1Result', () => {
   })
 })
 
-describe('isImageFormat', () => {
-  it('treats a screenshot as an image', () => {
-    expect(isImageFormat('screenshot')).toBe(true)
-  })
-
-  it.each(['markdown', 'content', 'links', 'pdf'])('treats %s as text', (format) => {
-    expect(isImageFormat(format)).toBe(false)
-  })
-})
-
 describe('BrowserRender', () => {
   it('captions the output with the page it came from', () => {
-    render(<BrowserRender url="https://x.test" format="markdown" body="# Title" />)
+    render(<BrowserRender url="https://x.test" body="# Title" />)
     expect(screen.getByText('Rendered https://x.test')).toBeInstanceOf(HTMLElement)
   })
 
   it('renders text output in a keyboard-reachable region', () => {
-    render(<BrowserRender url="https://x.test" format="markdown" body="# Title" />)
+    render(<BrowserRender url="https://x.test" body="# Title" />)
     const body = screen.getByLabelText('Rendered https://x.test')
     expect(body.tagName).toBe('PRE')
     expect(body.getAttribute('tabindex')).toBe('0')
   })
 
-  it('gives a screenshot a meaningful alternative text', () => {
-    render(<BrowserRender url="https://x.test" format="screenshot" body="data:image/png;base64,AAA" />)
-    expect(screen.getByAltText('Screenshot of https://x.test')).toBeInstanceOf(HTMLImageElement)
-  })
-
   it('has no accessibility violations for text output', async () => {
-    const { container } = render(<BrowserRender url="https://x.test" format="markdown" body="hi" />)
-    await expectNoViolations(container)
-  })
-
-  it('has no accessibility violations for a screenshot', async () => {
-    const { container } = render(
-      <BrowserRender url="https://x.test" format="screenshot" body="data:image/png;base64,AAA" />,
-    )
+    const { container } = render(<BrowserRender url="https://x.test" body="hi" />)
     await expectNoViolations(container)
   })
 })

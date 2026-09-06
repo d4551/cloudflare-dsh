@@ -9,7 +9,45 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 8**
+**I'm a fucking loser: 9**
+
+<details>
+<summary><strong>Restart 9 — what the plan still scheduled was still in the tree</strong></summary>
+
+A fresh adversarial audit of the tree at `4d1486c` reported a violation and, by
+design, not where. The self-audit started from the tree itself and from the
+remediation plan's register, treating every defect the plan still scheduled as
+present.
+
+What it found, and what changed:
+
+1. **The worktree carried five stale Stryker sandboxes** — copies of the sources
+   and tests with `@ts-nocheck` and old `eslint-disable` directives, left by
+   runs that were killed before they could clean up. They were ignored by git
+   and by every gate, but a scan of the worktree sees them. They are gone, and
+   `cleanTempDir` is `"always"` so an interrupted run leaves none behind.
+2. **`cloudflare_browser_render` offered `screenshot` and `pdf` through a path
+   that reads a JSON envelope**, so neither could ever have worked, and the
+   client's `BrowserRender` carried a screenshot branch nothing could feed. The
+   screenshot is now its own tool: the core gained a bytes path (`requestBytes`,
+   with the `accept` type on the spec), the tool stores the image in the
+   harness's attachment store and returns an image block — a route that accepts
+   images sees the page, a text-only route is told the image was omitted — and
+   refuses a non-image answer or a composition without a store by name. PDF
+   capture is not offered, and the README says why: a PDF is not a raster image,
+   so the store cannot hold it. The client's screenshot branch, its locale
+   string and its CSS are removed; the tool count is 33.
+3. **The client's views take props no host supplies** — the README's "Project
+   status" said as much — and its slot registrations named `id` where the
+   published registry keys a tool view by `key`. The published packages
+   (`@deepseek-ai/dsh-client-ui-slots`, `-ui-tool`, `-ui-conversation`,
+   `-ui-settings`, `-client-runtime`) now ground the contract; the wiring is
+   this restart's remaining work and is recorded below as it lands.
+4. **Six list tools presented one page as the whole listing**, with no page
+   number in and no total or completeness out; the queue listing sent a
+   `per_page` its endpoint does not take. The fix is recorded below as it lands.
+
+</details>
 
 <details>
 <summary><strong>Restart 8 — a known and scheduled anti-pattern is still an anti-pattern</strong></summary>

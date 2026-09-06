@@ -153,6 +153,8 @@ export function buildUrl(
 export interface HeaderInput {
   readonly token: string
   readonly hasBody: boolean
+  /** The media type the caller can read. */
+  readonly accept: string
 }
 
 /**
@@ -163,7 +165,7 @@ export interface HeaderInput {
  */
 export function buildHeaders(input: HeaderInput): Headers {
   const headers = new Headers()
-  headers.set('accept', 'application/json')
+  headers.set('accept', input.accept)
   if (input.hasBody) headers.set('content-type', 'application/json')
   headers.set('authorization', `Bearer ${input.token}`)
   return headers
@@ -189,6 +191,7 @@ export function buildRequest(input: BuildRequestInput): Request {
   const headers = buildHeaders({
     token: input.token,
     hasBody: sendsBody,
+    accept: spec.accept === undefined ? 'application/json' : spec.accept,
   })
   const init: RequestInit = { method: spec.method, headers }
   if (sendsBody) init.body = JSON.stringify(spec.body)

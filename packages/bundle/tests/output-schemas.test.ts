@@ -25,8 +25,8 @@ function propertiesOf(schema: OutputSchema): [string, OutputSchema][] {
 }
 
 describe('every tool declares a typed output object', () => {
-  it('covers all 32 tools', () => {
-    expect(TOOLS).toHaveLength(32)
+  it('covers all 33 tools', () => {
+    expect(TOOLS).toHaveLength(33)
   })
 
   // The canonical value is a programmatic API under PTC, so generated code

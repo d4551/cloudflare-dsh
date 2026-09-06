@@ -42,7 +42,6 @@ export const en = {
     treeHeading: (url: string) => `Accessibility tree for ${url}`,
     queryCaption: (sql: string) => `Results for query: ${sql}`,
     emptyResult: 'The query returned no rows.',
-    screenshotAlt: (url: string) => `Screenshot of ${url}`,
   },
 }
 

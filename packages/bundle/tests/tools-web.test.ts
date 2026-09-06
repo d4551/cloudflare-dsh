@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { ToolRuntime } from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
 import * as webTools from '../src/tools/web.ts'
-import { envelope, makeHarness } from './harness.ts'
+import { PNG_1X1, envelope, makeHarness } from './harness.ts'
 
 interface ToolsContext extends Context {
   tools: ToolRuntime
@@ -15,25 +15,28 @@ describe('web tools plugin', () => {
     expect(webTools.inject).toEqual(['tools', 'cloudflare'])
   })
 
-  it('registers both rendering tools', () => {
+  it('registers the three browser tools', () => {
     const h = makeHarness(webTools, async () => envelope(null))
     expect(h.names().toSorted()).toEqual([
       'cloudflare_browser_accessibility_tree',
       'cloudflare_browser_render',
+      'cloudflare_browser_screenshot',
     ])
   })
 
-  it('gives both tools a generous timeout, since real Chrome is slow', () => {
+  it('gives every tool a generous timeout, since real Chrome is slow', () => {
     const h = makeHarness(webTools, async () => envelope(null))
     expect(h.tool('cloudflare_browser_render').timeoutMs).toBe(120_000)
+    expect(h.tool('cloudflare_browser_screenshot').timeoutMs).toBe(120_000)
     expect(h.tool('cloudflare_browser_accessibility_tree').timeoutMs).toBe(120_000)
   })
 
-  it('marks both as concurrency safe', () => {
+  it('marks every tool as concurrency safe', () => {
     const h = makeHarness(webTools, async () => envelope(null))
     expect(
       h.tool('cloudflare_browser_render').isConcurrencySafe?.({ url: 'https://x.test', format: 'markdown' }),
     ).toBe(true)
+    expect(h.tool('cloudflare_browser_screenshot').isConcurrencySafe?.({ url: 'https://x.test' })).toBe(true)
     expect(
       h.tool('cloudflare_browser_accessibility_tree').isConcurrencySafe?.({ url: 'https://x.test' }),
     ).toBe(true)
@@ -156,9 +159,163 @@ describe('cloudflare_browser_render', () => {
     await expect(
       h.run('cloudflare_browser_render', { url: 'https://x.test', format: 'exe' }),
     ).rejects.toThrow(
-      'invalid arguments: "format" must be one of ["markdown","content","links","screenshot","pdf","scrape","json"]',
+      'invalid arguments: "format" must be one of ["markdown","content","links","scrape","json"]',
     )
     expect(h.requests).toHaveLength(0)
+  })
+})
+
+/** The screenshot endpoint's answer: image bytes under the declared type, or under none when `null`. */
+function image(contentType: string | null = 'image/png', bytes: Uint8Array<ArrayBuffer> = PNG_1X1): Response {
+  return new Response(bytes, {
+    status: 200,
+    ...(contentType === null ? {} : { headers: { 'content-type': contentType } }),
+  })
+}
+
+const SHOT = { url: 'https://x.test' }
+
+describe('cloudflare_browser_screenshot', () => {
+  it('posts to the screenshot endpoint asking for the image type', async () => {
+    const h = makeHarness(webTools, async () => image())
+    await h.run('cloudflare_browser_screenshot', SHOT)
+    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/browser-rendering/screenshot')
+    expect(h.requests[0]!.method).toBe('POST')
+    expect(h.requests[0]!.headers.get('accept')).toBe('image/png')
+    await expect(h.requests[0]!.text()).resolves.toBe(
+      '{"url":"https://x.test","screenshotOptions":{"type":"png","fullPage":false}}',
+    )
+  })
+
+  it('stores the image and returns the reference field by field', async () => {
+    const h = makeHarness(webTools, async () => image())
+    await expect(h.run('cloudflare_browser_screenshot', SHOT)).resolves.toEqual({
+      url: 'https://x.test',
+      attachmentId: 'sha256:497790947d4666760ce38f3c00e852c71fdb66cae849bae8e9ede352719e1581',
+      mediaType: 'image/png',
+      bytes: 70,
+      width: 1,
+      height: 1,
+    })
+    expect(h.attachments?.saved).toEqual([{ data: PNG_1X1, mediaType: 'image/png' }])
+  })
+
+  it('honours the type and full-page choices of the call', async () => {
+    const h = makeHarness(webTools, async () => image('image/jpeg'))
+    await h.run('cloudflare_browser_screenshot', { ...SHOT, type: 'jpeg', fullPage: true })
+    expect(h.requests[0]!.headers.get('accept')).toBe('image/jpeg')
+    await expect(h.requests[0]!.text()).resolves.toBe(
+      '{"url":"https://x.test","screenshotOptions":{"type":"jpeg","fullPage":true}}',
+    )
+  })
+
+  it('forwards navigation options and resource blocks like the other tools', async () => {
+    const h = makeHarness(webTools, async () => image())
+    await h.run('cloudflare_browser_screenshot', {
+      ...SHOT,
+      gotoTimeoutMs: 5000,
+      waitForSelector: 'main',
+      rejectResourceTypes: ['font'],
+    })
+    await expect(h.requests[0]!.text()).resolves.toBe(
+      '{"url":"https://x.test","gotoOptions":{"timeout":5000,"waitUntil":"networkidle0"},"waitForSelector":{"selector":"main"},"rejectResourceTypes":["font"],"screenshotOptions":{"type":"png","fullPage":false}}',
+    )
+  })
+
+  it('rejects an image type outside the documented set before any request', async () => {
+    const h = makeHarness(webTools, async () => image())
+    await expect(h.run('cloudflare_browser_screenshot', { ...SHOT, type: 'gif' })).rejects.toThrow(
+      'invalid arguments: "type" must be one of ["png","jpeg","webp"]',
+    )
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it.each([
+    ['image/jpeg', 'image/jpeg'],
+    ['image/jpg', 'image/jpeg'],
+    ['image/webp', 'image/webp'],
+    ['IMAGE/PNG; charset=binary', 'image/png'],
+  ])('declares the type Cloudflare answered with, %s, to the store as %s', async (answered, declared) => {
+    const h = makeHarness(webTools, async () => image(answered))
+    await expect(h.run('cloudflare_browser_screenshot', SHOT)).resolves.toMatchObject({ mediaType: declared })
+    expect(h.attachments?.saved[0]?.mediaType).toBe(declared)
+  })
+
+  it('refuses an answer that is not an image, and stores nothing', async () => {
+    const h = makeHarness(webTools, async () => image('application/json', new TextEncoder().encode('{}')))
+    await expect(h.run('cloudflare_browser_screenshot', SHOT)).rejects.toThrow(
+      'Cloudflare answered the screenshot request with application/json rather than an image',
+    )
+    expect(h.attachments?.saved).toEqual([])
+  })
+
+  it('refuses an answer without a content type, and stores nothing', async () => {
+    const h = makeHarness(webTools, async () => image(null))
+    await expect(h.run('cloudflare_browser_screenshot', SHOT)).rejects.toThrow(
+      'Cloudflare answered the screenshot request without a content type',
+    )
+    expect(h.attachments?.saved).toEqual([])
+  })
+
+  it('fails before any request when no attachment store is mounted', async () => {
+    const h = makeHarness(webTools, async () => image(), {}, {}, { attachments: false })
+    await expect(h.run('cloudflare_browser_screenshot', SHOT)).rejects.toThrow(
+      'cloudflare_browser_screenshot keeps the image in the attachment store, and none is mounted; mount @deepseek-ai/dsh-attachment-local or another provider of ctx.attachments',
+    )
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('renders a summary line and the image block that lets a capable route see the page', () => {
+    const h = makeHarness(webTools, async () => image())
+    const blocks = h.render('cloudflare_browser_screenshot', SHOT, {
+      url: 'https://x.test',
+      attachmentId: 'sha256:497790947d4666760ce38f3c00e852c71fdb66cae849bae8e9ede352719e1581',
+      mediaType: 'image/png',
+      bytes: 70,
+      width: 1,
+      height: 1,
+    })
+    expect(blocks).toEqual([
+      { type: 'text', text: 'Screenshot of https://x.test: 1×1 image/png, 70 bytes.' },
+      {
+        type: 'image',
+        attachment: {
+          attachmentId: 'sha256:497790947d4666760ce38f3c00e852c71fdb66cae849bae8e9ede352719e1581',
+          mediaType: 'image/png',
+          bytes: 70,
+          width: 1,
+          height: 1,
+        },
+      },
+    ])
+  })
+
+  it.each([
+    ['NoAttachmentStoreError', new webTools.NoAttachmentStoreError()],
+    ['ScreenshotShapeError', new webTools.ScreenshotShapeError(null)],
+  ])('names its %s so a caller can tell it from a provider failure', (name, error) => {
+    expect(error).toMatchObject({ name })
+  })
+})
+
+describe('screenshotMediaType', () => {
+  it.each([
+    ['image/png', 'image/png'],
+    ['image/jpeg', 'image/jpeg'],
+    ['image/jpg', 'image/jpeg'],
+    ['image/webp', 'image/webp'],
+    [' Image/WebP ; q=1', 'image/webp'],
+  ])('maps %s to %s', (contentType, mediaType) => {
+    expect(webTools.screenshotMediaType(contentType)).toBe(mediaType)
+  })
+
+  it.each([
+    ['null', null],
+    ['a GIF, which a screenshot never is', 'image/gif'],
+    ['JSON', 'application/json'],
+    ['text', 'text/plain'],
+  ])('maps %s to undefined', (_label, contentType) => {
+    expect(webTools.screenshotMediaType(contentType)).toBeUndefined()
   })
 })
 
@@ -224,27 +381,49 @@ describe('lifecycle', () => {
 
     const fiber = await ctx.plugin(webTools)
     expect(tools.get('cloudflare_browser_render')?.name).toBe('cloudflare_browser_render')
+    expect(tools.get('cloudflare_browser_screenshot')?.name).toBe('cloudflare_browser_screenshot')
     expect(tools.get('cloudflare_browser_accessibility_tree')?.name).toBe(
       'cloudflare_browser_accessibility_tree',
     )
     await fiber.dispose()
     expect(tools.get('cloudflare_browser_render')).toBeUndefined()
+    expect(tools.get('cloudflare_browser_screenshot')).toBeUndefined()
     expect(tools.get('cloudflare_browser_accessibility_tree')).toBeUndefined()
   })
 })
 
 describe('WebToolsConfig', () => {
   it('defaults every tunable the tools used to hard-code', () => {
-    expect(webTools.Config({})).toStrictEqual({ renderLimit: 8000, renderTimeoutMs: 120_000 })
+    expect(webTools.Config({})).toStrictEqual({
+      renderLimit: 8000,
+      renderTimeoutMs: 120_000,
+      screenshotType: 'png',
+      screenshotFullPage: false,
+    })
+  })
+
+  it('applies the configured screenshot defaults to a call that chooses neither', async () => {
+    const h = makeHarness(
+      webTools,
+      async () => image('image/webp'),
+      {},
+      { screenshotType: 'webp', screenshotFullPage: true },
+    )
+    await h.run('cloudflare_browser_screenshot', SHOT)
+    expect(h.requests[0]!.headers.get('accept')).toBe('image/webp')
+    await expect(h.requests[0]!.text()).resolves.toBe(
+      '{"url":"https://x.test","screenshotOptions":{"type":"webp","fullPage":true}}',
+    )
   })
 
   it('rejects a zero render limit at configuration time', () => {
     expect(() => webTools.Config({ renderLimit: 0 })).toThrow('$.renderLimit expected number >= 1 but got 0')
   })
 
-  it('applies a configured render budget to both tools', () => {
+  it('applies a configured render budget to every tool', () => {
     const h = makeHarness(webTools, async () => envelope(''), {}, { renderTimeoutMs: 5_000 })
     expect(h.tool('cloudflare_browser_render').timeoutMs).toBe(5_000)
+    expect(h.tool('cloudflare_browser_screenshot').timeoutMs).toBe(5_000)
     expect(h.tool('cloudflare_browser_accessibility_tree').timeoutMs).toBe(5_000)
   })
 

@@ -20,6 +20,7 @@ export default defineConfig({
       '@deepseek-ai/schemastery',
       '@deepseek-ai/dsh-tools',
       '@deepseek-ai/dsh-llm',
+      '@deepseek-ai/dsh-attachment',
       '@d4551/dsh-cloudflare-core',
     ],
   },

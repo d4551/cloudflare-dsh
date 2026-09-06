@@ -57,6 +57,11 @@ export interface RequestSpec {
   /** Parameters whose order and repetition are significant; appended after `query`. */
   readonly orderedQuery?: readonly QueryPair[]
   readonly body?: unknown
+  /**
+   * Media type the caller can read, sent as the `accept` header;
+   * `application/json` when absent. Only a request read as bytes names another.
+   */
+  readonly accept?: string | undefined
   /** Caller cancellation, fused with the client's own request timeout. */
   readonly signal?: AbortSignal | undefined
   /**

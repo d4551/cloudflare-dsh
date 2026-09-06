@@ -7,7 +7,7 @@
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import { CloudflareClient, type FetchLike, realSleep } from './client.ts'
+import { type BinaryBody, CloudflareClient, type FetchLike, realSleep } from './client.ts'
 import type { CloudflareConfig } from './config.ts'
 import type { CredentialResolver } from './credentials.ts'
 import { CloudflareError } from './errors.ts'
@@ -162,6 +162,16 @@ export class CloudflareService extends Service {
   async accountRequestText(spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<string> {
     const scope = await this.accountScope(spec.signal)
     return this.client.requestText({ ...spec, path: scopedPath(scope, spec.path) })
+  }
+
+  /**
+   * Issue an account-scoped request whose response is bytes.
+   *
+   * See `CloudflareClient.requestBytes`.
+   */
+  async accountRequestBytes(spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<BinaryBody> {
+    const scope = await this.accountScope(spec.signal)
+    return this.client.requestBytes({ ...spec, path: scopedPath(scope, spec.path) })
   }
 
   /**

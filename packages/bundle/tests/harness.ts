@@ -4,8 +4,18 @@
  * loop uses — argument validation, execution, output validation against the
  * declared schema, freezing, rendering — without a network.
  */
+import { createHash } from 'node:crypto'
 import { CloudflareConfig, CloudflareService } from '@d4551/dsh-cloudflare-core'
 import { Context } from '@deepseek-ai/cordis'
+import {
+  AttachmentError,
+  AttachmentId,
+  AttachmentStore,
+  type ImageAttachmentLimits,
+  type ImageAttachmentRef,
+  type SaveImageAttachment,
+  type StoredImageAttachment,
+} from '@deepseek-ai/dsh-attachment'
 import { ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   ToolRuntime,
@@ -51,6 +61,74 @@ export function failure(code: number, message: string, status = 400): Response {
   )
 }
 
+/** A 1×1 PNG, the smallest image the screenshot tests can hand to the store. */
+export const PNG_1X1 = Uint8Array.from(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64',
+  ),
+)
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+
+/**
+ * Dimensions from a PNG's IHDR chunk, and 0×0 for anything else: a test double
+ * does not decode images, and the real store verifies bytes against their type.
+ */
+function pngDimensions(data: Uint8Array): { width: number; height: number } {
+  const isPng = data.length >= 24 && PNG_SIGNATURE.every((byte, index) => data[index] === byte)
+  if (!isPng) return { width: 0, height: 0 }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  return { width: view.getUint32(16), height: view.getUint32(20) }
+}
+
+/**
+ * An in-memory attachment store: every saved image is kept and can be read
+ * back, and its id is the digest of its bytes, as a content-addressed store's
+ * would be. Constructing it registers it as `ctx.attachments`.
+ */
+export class MemoryAttachmentStore extends AttachmentStore {
+  readonly imageLimits: ImageAttachmentLimits = {
+    maxImageBytes: 10_000_000,
+    maxImagesPerMessage: 10,
+    maxMessageImageBytes: 50_000_000,
+    maxImagePixels: 100_000_000,
+    maxImageDimension: 20_000,
+    mediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+  }
+  /** Every image handed to `saveImage`, in order. */
+  readonly saved: SaveImageAttachment[] = []
+  // A plain field: cordis hands the service out through a Proxy, which a `#private` field cannot cross.
+  private readonly stored = new Map<string, StoredImageAttachment>()
+
+  validateImage(): Promise<void> {
+    return Promise.resolve()
+  }
+
+  saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef> {
+    this.saved.push(input)
+    const digest = createHash('sha256').update(input.data).digest('hex')
+    const ref: ImageAttachmentRef = {
+      attachmentId: AttachmentId(`sha256:${digest}`),
+      mediaType: input.mediaType,
+      bytes: input.data.byteLength,
+      ...pngDimensions(input.data),
+    }
+    this.stored.set(ref.attachmentId, { ref, data: input.data })
+    return Promise.resolve(ref)
+  }
+
+  readImage(ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
+    const stored = this.stored.get(ref.attachmentId)
+    if (stored === undefined) {
+      return Promise.reject(
+        new AttachmentError(`no image ${ref.attachmentId} was saved`, 'ATTACHMENT_NOT_FOUND'),
+      )
+    }
+    return Promise.resolve(stored)
+  }
+}
+
 /**
  * A tool run the registry materialized as a failure. The message is the one
  * the model would read; `failure` is the whole record, including the
@@ -68,6 +146,8 @@ class ToolRunError extends Error {
 
 export interface Harness {
   readonly requests: Request[]
+  /** The attachment store the harness provided, or undefined when built without one. */
+  readonly attachments: MemoryAttachmentStore | undefined
   /** Every tool the plugin registered, by name. */
   names(): string[]
   tool(name: string): ToolDefinition
@@ -97,9 +177,12 @@ export function makeHarness<C>(
   fetchImpl: (request: Request) => Promise<Response>,
   config: Partial<Parameters<typeof CloudflareConfig>[0]> = {},
   pluginConfig: Partial<C> = {},
+  /** `attachments: false` builds the composition without a store, the case where a screenshot must fail. */
+  options: { readonly attachments?: boolean } = {},
 ): Harness {
   const requests: Request[] = []
   const ctx = new Context()
+  const attachments = options.attachments === false ? undefined : new MemoryAttachmentStore(ctx)
 
   // The registry injects the system-prompt service to publish tool guidance.
   // There is no prompt here, so the three members it calls are inert.
@@ -139,6 +222,7 @@ export function makeHarness<C>(
 
   return {
     requests,
+    attachments,
     names: () => tools.schemas().map((schema) => schema.name),
     tool(name) {
       const found = tools.get(name)

@@ -47,9 +47,7 @@ const SURFACES: ReadonlyArray<{ name: string; markup: string }> = [
   },
   {
     name: 'BrowserRender',
-    markup: renderToStaticMarkup(
-      <BrowserRender url="https://example.test" format="markdown" body="# Title" />,
-    ),
+    markup: renderToStaticMarkup(<BrowserRender url="https://example.test" body="# Title" />),
   },
   {
     name: 'AccessibilityTree',

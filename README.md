@@ -88,7 +88,7 @@ that value. The correlation is exact, not inferred from timestamps.
 
 |                              |                                                                                                                                                     |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **32 tools**                 | Workers AI, AI Gateway, AI Search, Vectorize, KV, D1, Queues, R2, Browser Rendering, plus one bounded generic REST tool                             |
+| **33 tools**                 | Workers AI, AI Gateway, AI Search, Vectorize, KV, D1, Queues, R2, Browser Rendering, plus one bounded generic REST tool                             |
 | **A model provider**         | Two routes — `cloudflare-workers-ai` and `cloudflare-ai-gateway` — registered as a real `LlmAdapter`, streaming SSE into the harness chunk contract |
 | **Session cost attribution** | `cf-aig-metadata` carries the harness session id and call purpose, so gateway logs and billing join to sessions exactly                             |
 | **Web Client surfaces**      | A settings card, a per-session usage chip, and three tool views, all WCAG 2.2 AA                                                                    |
@@ -409,16 +409,25 @@ profile takes only the groups it wants.
 | `cloudflare_queue_list` / `_send` / `_pull` / `_ack` | Queue operations, lease-based              |
 | `cloudflare_r2_bucket_list` / `_create`              | R2 bucket management                       |
 
-### Web — `cloudflare-dsh/tools/web` (2)
+### Web — `cloudflare-dsh/tools/web` (3)
 
-| Tool                                    | Purpose                                                                 |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| `cloudflare_browser_render`             | Markdown, screenshot, PDF, scrape, links, JSON, content                 |
-| `cloudflare_browser_accessibility_tree` | The roles, names and structure a screen reader would expose for any URL |
+| Tool                                    | Purpose                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| `cloudflare_browser_render`             | Markdown, content, links, scrape, JSON                                          |
+| `cloudflare_browser_screenshot`         | A screenshot, kept as a durable image attachment and returned as an image block |
+| `cloudflare_browser_accessibility_tree` | The roles, names and structure a screen reader would expose for any URL         |
 
 `cloudflare_browser_accessibility_tree` is the standout: it hands an agent the
 same tree an assistive technology would consume, which is exactly what a WCAG
 review needs and what a screenshot cannot provide.
+
+`cloudflare_browser_screenshot` needs an attachment store in the composition
+(`@deepseek-ai/dsh-attachment-local` in the shipped `dsh`), because that store
+is the harness's one durable home for image bytes. A model that accepts images
+sees the page, the client shows it, and a text-only model is told the image was
+omitted. PDF capture is not offered: a PDF is not a raster image, so the store
+cannot hold it, and a base64 PDF in the session log would be a blob nothing
+can consume.
 
 ### Meta — `cloudflare-dsh/tools/meta` (2)
 
@@ -524,10 +533,12 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 
 ### `cloudflare-tools-web` (`cloudflare-dsh/tools/web`)
 
-| Field             | Default  | Meaning                                                                     |
-| ----------------- | -------- | --------------------------------------------------------------------------- |
-| `renderLimit`     | `8000`   | Characters of a rendered page or accessibility tree shown before truncation |
-| `renderTimeoutMs` | `120000` | Budget for a real browser render: the tool's own, and its request deadline  |
+| Field                | Default  | Meaning                                                                     |
+| -------------------- | -------- | --------------------------------------------------------------------------- |
+| `renderLimit`        | `8000`   | Characters of a rendered page or accessibility tree shown before truncation |
+| `renderTimeoutMs`    | `120000` | Budget for a real browser render: the tool's own, and its request deadline  |
+| `screenshotType`     | `png`    | Image encoding of a screenshot when the call does not choose one            |
+| `screenshotFullPage` | `false`  | Whether a screenshot captures the whole page when the call does not say     |
 
 ### `cloudflare-tools-meta` — the escape hatch (`cloudflare-dsh/tools/meta`)
 
@@ -571,7 +582,7 @@ receive `ctx`; they take props.
 | `SettingsCard`      | `settings.plugin.cloudflare`                                   | Credential reference, account and gateway selection. Write-only for secrets |
 | `SessionCostChip`   | `conversation.session.header.actions`                          | This session's requests, cost, cache hit rate and token counts              |
 | `D1Result`          | `tool.call.toolview` → `cloudflare_d1_query`                   | A real table with column headers and a caption naming the query             |
-| `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered output, with meaningful alternative text for screenshots           |
+| `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered text, captioned with the page it came from                         |
 | `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump                            |
 
 The package ships `cloudflare.css`. Colours are CSS custom properties, so a

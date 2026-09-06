@@ -64,6 +64,13 @@ export function realSleep(ms: number): Promise<void> {
   })
 }
 
+/** A response body read as bytes, with the media type the server declared for it. */
+export interface BinaryBody {
+  readonly bytes: Uint8Array
+  /** The response's `content-type` header, or `null` when it sent none. */
+  readonly contentType: string | null
+}
+
 /**
  * Outcome of reading a response body.
  *
@@ -211,19 +218,48 @@ export class CloudflareClient {
     const token = await requireCredential(this.#options.credentials, ref)
     const response = await this.#options.fetch(this.#buildRequest(spec, token))
     const body = await response.text()
-    if (!response.ok) {
-      // An error body is still an envelope when the endpoint sends one, and it
-      // carries the Cloudflare code — which outranks the status class, so a
-      // 10000 here is an auth failure rather than whatever the status implies.
-      const read = parseEnvelope(body)
-      throw classifyFailure({
-        status: response.status,
-        credentialRef: ref,
-        retryAfter: response.headers.get('retry-after'),
-        ...(read.ok ? { envelope: read.envelope } : { body }),
-      })
-    }
+    if (!response.ok) throw this.#rawFailure(response, body, ref)
     return body
+  }
+
+  /**
+   * Issue a request whose response body is bytes.
+   *
+   * The screenshot endpoint answers with the image itself. The spec names the
+   * media type it can read, and the caller gets the type the server declared
+   * beside the bytes, so it can refuse an answer of the wrong kind.
+   */
+  async requestBytes(spec: RequestSpec): Promise<BinaryBody> {
+    return this.#withRetry(() => this.#sendBytes(spec))
+  }
+
+  /** One attempt at a bytes response. */
+  async #sendBytes(spec: RequestSpec): Promise<BinaryBody> {
+    const ref = this.#options.apiTokenRef
+    const token = await requireCredential(this.#options.credentials, ref)
+    const response = await this.#options.fetch(this.#buildRequest(spec, token))
+    if (!response.ok) throw this.#rawFailure(response, await response.text(), ref)
+    return {
+      bytes: new Uint8Array(await response.arrayBuffer()),
+      contentType: response.headers.get('content-type'),
+    }
+  }
+
+  /**
+   * Classify a failed raw-body response.
+   *
+   * An error body is still an envelope when the endpoint sends one, and it
+   * carries the Cloudflare code — which outranks the status class, so a 10000
+   * here is an auth failure rather than whatever the status implies.
+   */
+  #rawFailure(response: Response, body: string, ref: string): CloudflareError {
+    const read = parseEnvelope(body)
+    return classifyFailure({
+      status: response.status,
+      credentialRef: ref,
+      retryAfter: response.headers.get('retry-after'),
+      ...(read.ok ? { envelope: read.envelope } : { body }),
+    })
   }
 
   /** Issue a request and return the whole envelope, for pagination callers. */

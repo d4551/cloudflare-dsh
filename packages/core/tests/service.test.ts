@@ -243,6 +243,23 @@ describe('CloudflareService requests', () => {
     expect(requests[0]!.url).toBe('https://api.test/v4/accounts/a9/storage/kv/namespaces/n/values/k')
   })
 
+  it('prefixes an account-scoped bytes request and returns the declared type', async () => {
+    const { service, requests } = build(
+      { accountId: 'a9' },
+      async () =>
+        new Response(new Uint8Array([1, 2]), { status: 200, headers: { 'content-type': 'image/png' } }),
+    )
+    await expect(
+      service.accountRequestBytes({
+        method: 'POST',
+        path: '/browser-rendering/screenshot',
+        accept: 'image/png',
+      }),
+    ).resolves.toEqual({ bytes: new Uint8Array([1, 2]), contentType: 'image/png' })
+    expect(requests[0]!.url).toBe('https://api.test/v4/accounts/a9/browser-rendering/screenshot')
+    expect(requests[0]!.headers.get('accept')).toBe('image/png')
+  })
+
   it('carries method and body through to the request', async () => {
     const { service, requests } = build({ accountId: 'a9' }, async () => json(ok(null)))
     await service.accountRequest({

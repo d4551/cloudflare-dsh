@@ -182,12 +182,6 @@
   border-radius: 4px;
 }
 
-.cf-render__image {
-  max-inline-size: 100%;
-  block-size: auto;
-  border: 1px solid var(--cf-border);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .cf-chip,
   .cf-settings,

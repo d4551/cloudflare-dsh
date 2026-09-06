@@ -109,17 +109,26 @@ describe('buildUrl', () => {
 })
 
 describe('buildHeaders', () => {
-  it('always sets accept', () => {
-    expect(buildHeaders({ token: 't', hasBody: false }).get('accept')).toBe('application/json')
+  it('sets the accept type it is given', () => {
+    expect(buildHeaders({ token: 't', hasBody: false, accept: 'application/json' }).get('accept')).toBe(
+      'application/json',
+    )
+    expect(buildHeaders({ token: 't', hasBody: false, accept: 'image/png' }).get('accept')).toBe('image/png')
   })
 
   it('sets the bearer token', () => {
-    expect(buildHeaders({ token: 'tok', hasBody: false }).get('authorization')).toBe('Bearer tok')
+    expect(
+      buildHeaders({ token: 'tok', hasBody: false, accept: 'application/json' }).get('authorization'),
+    ).toBe('Bearer tok')
   })
 
   it('sets content-type only when a body is sent', () => {
-    expect(buildHeaders({ token: 't', hasBody: true }).get('content-type')).toBe('application/json')
-    expect(buildHeaders({ token: 't', hasBody: false }).get('content-type')).toBeNull()
+    expect(buildHeaders({ token: 't', hasBody: true, accept: 'application/json' }).get('content-type')).toBe(
+      'application/json',
+    )
+    expect(
+      buildHeaders({ token: 't', hasBody: false, accept: 'application/json' }).get('content-type'),
+    ).toBeNull()
   })
 })
 
@@ -135,6 +144,17 @@ describe('buildRequest', () => {
     expect(req.method).toBe('GET')
     expect(req.url).toBe(`${base}/accounts`)
     expect(req.body).toBeNull()
+  })
+
+  it('asks for JSON unless the spec names another type', () => {
+    const plain = buildRequest({ baseUrl: base, spec: { method: 'GET', path: '/x' }, token: 't' })
+    expect(plain.headers.get('accept')).toBe('application/json')
+    const image = buildRequest({
+      baseUrl: base,
+      spec: { method: 'POST', path: '/x', accept: 'image/webp' },
+      token: 't',
+    })
+    expect(image.headers.get('accept')).toBe('image/webp')
   })
 
   it('serializes a JSON body on POST', async () => {

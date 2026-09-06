@@ -21,5 +21,6 @@
   "plugins": ["@stryker-mutator/vitest-runner"],
   "jsonReporter": {
     "fileName": "reports/mutation/mutation.json"
-  }
+  },
+  "cleanTempDir": "always"
 }

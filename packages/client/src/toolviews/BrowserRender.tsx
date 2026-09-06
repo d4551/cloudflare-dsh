@@ -1,36 +1,25 @@
 /**
- * Browser Rendering output.
- *
- * A screenshot gets a meaningful `alt` naming the page it shows, and — because
- * an image alone is not an accessible representation of a page — the source URL
- * is always available as text alongside it (SC 1.1.1).
+ * Browser Rendering output: the rendered text, captioned with the page it came
+ * from. A screenshot is not rendered here — `cloudflare_browser_screenshot`
+ * returns an image block that the host shows as it shows any image in a tool
+ * result — so this view has no image branch.
  */
 import { en } from '../locales/en.ts'
 
 /** Props for the render view. */
 export interface BrowserRenderProps {
   readonly url: string
-  readonly format: string
-  /** Rendered body: text for markdown and content, a data URI for screenshots. */
+  /** Rendered body: markdown, HTML, or serialized structured data. */
   readonly body: string
 }
 
-/** Whether a rendered body should be shown as an image. */
-export function isImageFormat(format: string): boolean {
-  return format === 'screenshot'
-}
-
-export function BrowserRender({ url, format, body }: BrowserRenderProps): React.JSX.Element {
+export function BrowserRender({ url, body }: BrowserRenderProps): React.JSX.Element {
   return (
     <figure className="cf-render">
       <figcaption>{en.toolView.renderHeading(url)}</figcaption>
-      {isImageFormat(format) ? (
-        <img className="cf-render__image" src={body} alt={en.toolView.screenshotAlt(url)} />
-      ) : (
-        <pre className="cf-render__body" tabIndex={0} aria-label={en.toolView.renderHeading(url)}>
-          {body}
-        </pre>
-      )}
+      <pre className="cf-render__body" tabIndex={0} aria-label={en.toolView.renderHeading(url)}>
+        {body}
+      </pre>
     </figure>
   )
 }

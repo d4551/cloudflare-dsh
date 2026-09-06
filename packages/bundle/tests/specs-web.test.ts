@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { accessibilityTreeSpec, browserRenderSpec, renderBody } from '../src/specs/web.ts'
+import {
+  accessibilityTreeSpec,
+  browserRenderSpec,
+  browserScreenshotSpec,
+  renderBody,
+} from '../src/specs/web.ts'
 
 describe('renderBody', () => {
   it('sends only the url when no options are given', () => {
@@ -45,7 +50,7 @@ describe('renderBody', () => {
 })
 
 describe('browserRenderSpec', () => {
-  it.each(['markdown', 'content', 'links', 'screenshot', 'pdf', 'scrape', 'json'] as const)(
+  it.each(['markdown', 'content', 'links', 'scrape', 'json'] as const)(
     'posts to the %s endpoint',
     (format) => {
       expect(browserRenderSpec(format, { url: 'https://x.test' })).toStrictEqual({
@@ -55,6 +60,30 @@ describe('browserRenderSpec', () => {
       })
     },
   )
+})
+
+describe('browserScreenshotSpec', () => {
+  it.each(['png', 'jpeg', 'webp'] as const)('asks for a %s image and says so in the body', (type) => {
+    expect(browserScreenshotSpec({ url: 'https://x.test' }, { type, fullPage: false })).toStrictEqual({
+      method: 'POST',
+      path: '/browser-rendering/screenshot',
+      body: { url: 'https://x.test', screenshotOptions: { type, fullPage: false } },
+      accept: `image/${type}`,
+    })
+  })
+
+  it('carries the full-page choice and the render options through', () => {
+    expect(
+      browserScreenshotSpec(
+        { url: 'https://x.test', waitForSelector: '#app' },
+        { type: 'png', fullPage: true },
+      ).body,
+    ).toStrictEqual({
+      url: 'https://x.test',
+      waitForSelector: { selector: '#app' },
+      screenshotOptions: { type: 'png', fullPage: true },
+    })
+  })
 })
 
 describe('accessibilityTreeSpec', () => {

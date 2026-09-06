@@ -3,7 +3,7 @@ import * as aiTools from '../src/tools/ai.ts'
 import * as dataTools from '../src/tools/data.ts'
 import * as metaTools from '../src/tools/meta.ts'
 import * as webTools from '../src/tools/web.ts'
-import { type Harness, envelope, makeHarness } from './harness.ts'
+import { type Harness, PNG_1X1, envelope, makeHarness } from './harness.ts'
 
 type Fetch = (request: Request) => Promise<Response>
 
@@ -112,6 +112,12 @@ const CASES: [string, (fetchImpl: Fetch) => Harness, Record<string, unknown>, ()
     () => envelope('# x'),
   ],
   [
+    'cloudflare_browser_screenshot',
+    (f) => makeHarness(webTools, f),
+    { url: 'https://x.test' },
+    () => new Response(PNG_1X1, { status: 200, headers: { 'content-type': 'image/png' } }),
+  ],
+  [
     'cloudflare_browser_accessibility_tree',
     (f) => makeHarness(webTools, f),
     { url: 'https://x.test' },
@@ -127,8 +133,8 @@ const CASES: [string, (fetchImpl: Fetch) => Harness, Record<string, unknown>, ()
 ]
 
 describe('every tool forwards the caller signal to Cloudflare', () => {
-  it('covers all 32 tools', () => {
-    expect(CASES).toHaveLength(32)
+  it('covers all 33 tools', () => {
+    expect(CASES).toHaveLength(33)
   })
 
   // `timeoutMs` is declarative: the registry does not interrupt a body, so a
@@ -184,6 +190,11 @@ describe('a tool with its own budget applies it to the request', () => {
 
   it.each([
     ['cloudflare_browser_render', { url: 'https://x.test', format: 'markdown' }, () => envelope('# x')],
+    [
+      'cloudflare_browser_screenshot',
+      { url: 'https://x.test' },
+      () => new Response(PNG_1X1, { status: 200, headers: { 'content-type': 'image/png' } }),
+    ],
     ['cloudflare_browser_accessibility_tree', { url: 'https://x.test' }, () => envelope({})],
   ])('%s: the request deadline is the render budget, not the client default', async (name, args, respond) => {
     let aborted: boolean | undefined

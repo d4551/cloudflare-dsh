@@ -77,7 +77,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
   },
   cloudflare_browser_render: {
     description:
-      'Render a web page with Cloudflare Browser Rendering (real headless Chrome, so JavaScript runs). Use markdown for reading a page, links to enumerate its links, screenshot or pdf for a visual capture.',
+      'Render a web page with Cloudflare Browser Rendering (real headless Chrome, so JavaScript runs). Use markdown for reading a page, links to enumerate its links, and cloudflare_browser_screenshot for a picture of it.',
     parameters: {
       type: 'object',
       properties: {
@@ -88,7 +88,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
         format: {
           type: 'string',
           description: 'What to return for the page.',
-          enum: ['markdown', 'content', 'links', 'screenshot', 'pdf', 'scrape', 'json'],
+          enum: ['markdown', 'content', 'links', 'scrape', 'json'],
         },
         gotoTimeoutMs: {
           type: 'integer',
@@ -138,7 +138,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
         },
         format: {
           type: 'string',
-          enum: ['markdown', 'content', 'links', 'screenshot', 'pdf', 'scrape', 'json'],
+          enum: ['markdown', 'content', 'links', 'scrape', 'json'],
           description: 'The format that was requested.',
         },
         body: {
@@ -147,6 +147,98 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
       },
       required: ['url', 'format', 'body'],
       description: 'The rendered result, plus the url and format that produced it.',
+    },
+  },
+  cloudflare_browser_screenshot: {
+    description:
+      'Capture a screenshot of a web page with Cloudflare Browser Rendering (real headless Chrome). The image is kept as a durable attachment and returned as an image block: a model that accepts images sees the page and the client can show it; a text-only model is told the image was omitted. Needs an attachment store in the composition.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'Absolute URL to capture.',
+        },
+        type: {
+          type: 'string',
+          description: 'Image encoding; the configured default (png unless changed) when omitted.',
+          enum: ['png', 'jpeg', 'webp'],
+        },
+        fullPage: {
+          type: 'boolean',
+          description:
+            'Capture the whole scrollable page rather than the viewport; the configured default when omitted.',
+        },
+        gotoTimeoutMs: {
+          type: 'integer',
+          description: 'Navigation timeout in milliseconds.',
+        },
+        waitForSelector: {
+          type: 'string',
+          description: 'Wait for this CSS selector before capturing.',
+        },
+        rejectResourceTypes: {
+          type: 'array',
+          description: 'Resource types to block while the page loads, for example image or script.',
+          items: {
+            type: 'string',
+            enum: [
+              'document',
+              'stylesheet',
+              'image',
+              'media',
+              'font',
+              'script',
+              'texttrack',
+              'xhr',
+              'fetch',
+              'prefetch',
+              'eventsource',
+              'websocket',
+              'manifest',
+              'signedexchange',
+              'ping',
+              'cspviolationreport',
+              'preflight',
+              'other',
+            ],
+          },
+        },
+      },
+      required: ['url'],
+    },
+    output: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        url: {
+          type: 'string',
+          description: 'The URL that was captured.',
+        },
+        attachmentId: {
+          type: 'string',
+          description: 'Durable attachment id of the stored image.',
+        },
+        mediaType: {
+          type: 'string',
+          enum: ['image/png', 'image/jpeg', 'image/webp'],
+          description: 'Media type of the stored image, verified from its bytes by the store.',
+        },
+        bytes: {
+          type: 'integer',
+          description: 'Encoded size in bytes.',
+        },
+        width: {
+          type: 'integer',
+          description: 'Width in pixels.',
+        },
+        height: {
+          type: 'integer',
+          description: 'Height in pixels.',
+        },
+      },
+      required: ['url', 'attachmentId', 'mediaType', 'bytes', 'width', 'height'],
+      description: 'The stored screenshot and the page it shows.',
     },
   },
 }
