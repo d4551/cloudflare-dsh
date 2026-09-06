@@ -13,35 +13,31 @@
  * token below and fails on a pair beneath its ratio.
  */
 
+/* One declaration per token carrying both schemes, rather than the whole block
+   repeated inside a `prefers-color-scheme` query.
+
+   `color-scheme: light dark` is what makes `light-dark()` follow the operating
+   system here. It also means these roots stop inheriting a scheme the host set
+   on an ancestor — the same as the media query it replaces, which answered to
+   the OS alone too. A host that themes its own surfaces does it through the
+   `--dsh-*` tokens below, which win over both schemes; that is the extension
+   point, and a test holds it. */
 .cf-chip,
 .cf-settings,
 .cf-d1,
 .cf-render,
 .cf-axtree {
-  --cf-fg: var(--dsh-fg, #16181d);
-  --cf-bg: var(--dsh-bg, #ffffff);
-  --cf-muted: var(--dsh-fg-muted, #55595f);
-  --cf-border: var(--dsh-border, #82878f);
-  --cf-accent: var(--dsh-accent, #0b5cab);
-  --cf-danger: var(--dsh-danger, #a3131c);
+  color-scheme: light dark;
+
+  --cf-fg: var(--dsh-fg, light-dark(#16181d, #f2f3f5));
+  --cf-bg: var(--dsh-bg, light-dark(#ffffff, #16181d));
+  --cf-muted: var(--dsh-fg-muted, light-dark(#55595f, #b3b8c0));
+  --cf-border: var(--dsh-border, light-dark(#82878f, #6f757e));
+  --cf-accent: var(--dsh-accent, light-dark(#0b5cab, #7db4ff));
+  --cf-danger: var(--dsh-danger, light-dark(#a3131c, #ff9ba1));
 
   color: var(--cf-fg);
   background: var(--cf-bg);
-}
-
-@media (prefers-color-scheme: dark) {
-  .cf-chip,
-  .cf-settings,
-  .cf-d1,
-  .cf-render,
-  .cf-axtree {
-    --cf-fg: var(--dsh-fg, #f2f3f5);
-    --cf-bg: var(--dsh-bg, #16181d);
-    --cf-muted: var(--dsh-fg-muted, #b3b8c0);
-    --cf-border: var(--dsh-border, #6f757e);
-    --cf-accent: var(--dsh-accent, #7db4ff);
-    --cf-danger: var(--dsh-danger, #ff9ba1);
-  }
 }
 
 /* Every box this package draws sizes by its border box.

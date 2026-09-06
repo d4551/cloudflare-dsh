@@ -102,6 +102,41 @@ describe('reflow', () => {
   }
 })
 
+describe('colour scheme', () => {
+  /** The dark foreground token, as the stylesheet declares it. */
+  const DARK_FG = 'rgb(242, 243, 245)'
+
+  it('follows the operating system preference, as it always did', async () => {
+    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'dark' })
+    try {
+      const colour = await page.evaluate(
+        () => getComputedStyle(document.querySelector('.cf-settings') as Element).color,
+      )
+      expect(colour).toBe(DARK_FG)
+    } finally {
+      await context.close()
+    }
+  }, 30_000)
+
+  it('lets a host token win over both schemes, which is the extension point', async () => {
+    // `color-scheme: light dark` on these roots means an ancestor's scheme is
+    // not inherited — as with the media query this replaces. A host themes
+    // these surfaces through the `--dsh-*` tokens instead, and this is the test
+    // that says so.
+    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'dark' })
+    try {
+      const colour = await page.evaluate(() => {
+        const main = document.querySelector('main') as HTMLElement
+        main.style.setProperty('--dsh-fg', 'rgb(1, 2, 3)')
+        return getComputedStyle(document.querySelector('.cf-settings') as Element).color
+      })
+      expect(colour).toBe('rgb(1, 2, 3)')
+    } finally {
+      await context.close()
+    }
+  }, 30_000)
+})
+
 describe('measure', () => {
   // A fragment inherits its host's width, and at a desktop width that meant a
   // metre-wide text field and prose running to hundreds of characters a line.

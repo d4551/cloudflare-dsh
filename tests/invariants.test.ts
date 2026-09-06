@@ -769,14 +769,24 @@ const declaration = (body: string, property: string): string | undefined =>
 const tokenIn = (value: string | undefined): string | undefined =>
   value === undefined ? undefined : /var\(\s*(--cf-[a-z-]+)/u.exec(value)?.[1]
 
-/** Token values for one colour scheme, taking the dark block's overrides. */
+/**
+ * Token values for one colour scheme.
+ *
+ * A token is declared once and carries both schemes in a `light-dark()` pair,
+ * so the scheme picks the argument: first for light, second for dark. A
+ * declaration inside a `prefers-color-scheme: dark` block still counts for the
+ * dark scheme only, so either spelling is read correctly.
+ */
 function tokensOf(rules: readonly CssRule[], dark: boolean): Record<string, string> {
   const values: Record<string, string> = {}
   for (const rule of rules) {
     const inDark = rule.media.some((query) => query.includes('prefers-color-scheme: dark'))
     if (inDark && !dark) continue
-    for (const [, name, hex] of rule.body.matchAll(/(--cf-[a-z-]+)\s*:[^;]*?(#[0-9a-f]{6})/gu)) {
-      if (name !== undefined && hex !== undefined) values[name] = hex
+    for (const [, name, declaration_] of rule.body.matchAll(/(--cf-[a-z-]+)\s*:([^;]*)/gu)) {
+      if (name === undefined || declaration_ === undefined) continue
+      const pair = /light-dark\(\s*(#[0-9a-f]{6})\s*,\s*(#[0-9a-f]{6})\s*\)/u.exec(declaration_)
+      const chosen = pair === null ? /#[0-9a-f]{6}/u.exec(declaration_)?.[0] : pair[dark ? 2 : 1]
+      if (chosen !== undefined) values[name] = chosen
     }
   }
   return values
@@ -849,6 +859,20 @@ describe('every colour pair the stylesheet ships clears its ratio', () => {
     expect(border.filter((pair) => pair.ratio < pair.minimum).map((pair) => pair.where)).toEqual([
       '.b [light] border #b9bdc4 on #ffffff',
     ])
+  })
+
+  it('reads both schemes out of one light-dark pair', () => {
+    const css = [
+      ':root { --cf-bg: light-dark(#ffffff, #000000);',
+      '--cf-border: light-dark(#b9bdc4, #6f757e) }',
+      '.b { border: 1px solid var(--cf-border) }',
+    ].join('')
+    // Light takes the first argument and fails; dark takes the second and passes.
+    expect(
+      contrastPairs(css)
+        .filter((pair) => pair.where.startsWith('.b'))
+        .map((pair) => `${pair.where} ${pair.ratio >= pair.minimum ? 'ok' : 'under'}`),
+    ).toEqual(['.b [light] border #b9bdc4 on #ffffff under', '.b [dark] border #6f757e on #000000 ok'])
   })
 
   it('takes a rule’s own background over the surface', () => {
