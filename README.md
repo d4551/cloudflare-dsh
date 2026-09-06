@@ -729,7 +729,7 @@ wrap stay reachable. It is a bounded capability, not a bypass:
 
 ## Quality
 
-CI runs on Node 22 and 24 and must be green to merge:
+CI runs on Node 22 and 24, and every gate below fails the build:
 
 | Gate               | Bar                                                                                                                                                       |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -815,6 +815,12 @@ pinned to exact versions.
 
 Not yet done, and worth knowing before you depend on this:
 
+- **Nothing enforces a green run at the merge button.** The gates fail the
+  build, but `main` carries no branch protection, so a red or unfinished run
+  does not block a merge. The commit that carried this bundle onto `main` is the
+  proof: its run was cancelled by the push that followed and never finished, so
+  no gate ever reported on it. Turning protection on is a repository setting, not
+  something this tree can assert.
 - **The packages are not published to npm.** Build and pack work; publishing is
   a deliberate step that has not been taken, so the `dsh plugin add` command
   above will not resolve them yet.

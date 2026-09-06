@@ -470,6 +470,35 @@ describe('accessibility cannot be filtered', () => {
   })
 })
 
+/** Source modules whose text matches a capability pattern, in path order. */
+const usersOf = (pattern: RegExp): string[] => sources.filter((file) => pattern.test(read(file))).toSorted()
+
+describe('the pure/impure split holds', () => {
+  // Three rules the README states about purity, none of which anything checked
+  // until now: presenters replay from a session log, so a clock or a random
+  // number in one makes a replay differ from the run it replays; and the
+  // network is confined to the modules that are supposed to reach it.
+  it('reads a clock in no source module at all', () => {
+    expect(usersOf(/\bDate\.now\b|\bnew Date\b|\bperformance\.now\b/)).toEqual([])
+  })
+
+  it('takes randomness only where retry jitter is injected from', () => {
+    expect(usersOf(/\bMath\.random\b/)).toEqual(['packages/core/src/service.ts'])
+  })
+
+  it('reaches the network from these modules and no others', () => {
+    // `client.ts` and `adapter.ts` dispatch; the two plugin entries do nothing
+    // with it but hand the global in as the default dependency. A fifth module
+    // naming `fetch` is a new I/O site, which is what this is here to notice.
+    expect(usersOf(/\bfetch\s*\(/)).toEqual([
+      'packages/bundle/src/ai/adapter.ts',
+      'packages/bundle/src/ai/index.ts',
+      'packages/core/src/client.ts',
+      'packages/core/src/index.ts',
+    ])
+  })
+})
+
 describe('CI reports on every commit it runs for', () => {
   // `cancel-in-progress: true` cancels the previous run in the group. On a pull
   // request the superseded run is noise; on the default branch it is a commit

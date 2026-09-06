@@ -9,7 +9,58 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 10**
+**I'm a fucking loser: 11**
+
+<details>
+<summary><strong>Restart 11 — the gate that was checkable by omission was the one I had just added</strong></summary>
+
+A third adversarial audit of `a200bb9` reported a violation and, by design, not
+where, noting that every gate on the tree passed while it sat there. It did.
+
+1. **`readme.test.ts` discovered nothing.** The tool modules and the configured
+   rows came from two lists written into the test file. A tool module nobody
+   added to `MODULES`, or a configured row nobody added to `CONFIGS`, was
+   invisible to the gate: the page could under-document it and every check
+   stayed green. That is the shape this repository refuses everywhere else —
+   `verify-mutation-files.ts` says in as many words that it decides by
+   transpiling "not by a maintained list that anyone could append to", and the
+   oxlint invariant exists because asserting only what is present "is checkable
+   by omission". I wrote the same hole into the gate I added to close a
+   documentation hole. Both lists are gone: the modules are every file under the
+   tools directory that defines a tool, and the rows are every file exporting a
+   top-level `name` whose module (or its directory) holds a `Schema.object`. The
+   page is now held to both sets in both directions — nothing undocumented,
+   nothing invented. Probed with a new tool module carrying a new configured
+   row: seven checks fire where none did before.
+2. **"CI runs on Node 22 and 24 and must be green to merge" was not true.**
+   `main` carries no branch protection, so nothing blocks a merge on a red or
+   unfinished run, and the commit that carried this bundle onto `main` is the
+   proof: its run was cancelled by the push that followed and never finished, so
+   no gate ever reported on it. The sentence now says what CI does — every gate
+   fails the build — and Project status records the enforcement gap, because
+   turning protection on is a repository setting no test in this tree can
+   assert.
+3. **Three purity rules the README states had no gate.** Presenters replay from
+   a session log, so "performs no I/O, reads no clock and uses no randomness"
+   is what makes a replay match the run it replays; the transducer is described
+   the same way. Nothing checked any of it. An invariant now names the modules
+   allowed to reach the network and requires the source to read no clock at all
+   and take randomness only where retry jitter is injected from. Watched to fail
+   on a `Date.now()` added to a presenter module.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings`, `oxfmt --check` clean across 113 files, 141
+invariant and README tests, 1330 unit tests at 100% coverage (1145 statements,
+621 branches, 364 functions, 1016 lines), 35 built-artifact tests, 13 Chromium
+axe tests with no rule or selector filtering, knip 0, publint clean on all three
+packages, and a mutation score of **100.00%** — 3635 mutants over 38
+instrumented files, 3622 killed and 13 detected by timeout, none surviving and
+none without coverage. No source or test module under `packages/` changed in
+this restart; a probe that proved the purity gate fails did move one file's
+timestamp, so the guard refused the report as predating the tree and the run was
+repeated rather than the report's date laundered.
+
+</details>
 
 <details>
 <summary><strong>Restart 10 — a page no gate read, and a client that could not have loaded</strong></summary>
@@ -99,7 +150,9 @@ What it found, and what changed:
    find the real one and to pass all six shapes that are not it.
 
 The gates that would have caught the first four did not exist. `readme.test.ts`
-reads what the tree actually is out of its syntax trees — `defineTool` is what
+reads what the tree actually is out of its syntax trees — though it took
+Restart 11 to stop it reading the _set_ of modules and rows from two lists
+written into the test file, which is the same hole in a different place — — `defineTool` is what
 makes a tool and a `Schema.object` shape is what a row accepts, so a `name` in
 an output schema cannot be counted as either — and holds the page to it: every
 catalogue heading's count, every label in the architecture diagram, the headline
