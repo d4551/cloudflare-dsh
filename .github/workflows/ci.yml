@@ -78,6 +78,10 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -85,11 +89,11 @@ jobs:
           bun-version: latest
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node }}
       - run: bun install --frozen-lockfile
       - run: bun run build
       # Loads the built artifacts the way a consumer resolves them, and rejects
       # a `workspace:` range surviving into a published manifest.
       - run: bun run test:dist
       - run: bun run knip
-      - run: bun run --filter '*' publint
+      - run: bun run publint

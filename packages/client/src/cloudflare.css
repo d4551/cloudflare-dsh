@@ -47,6 +47,15 @@
   padding: 0.25rem 0.5rem;
 }
 
+/* The live region carries the same row layout the chip used to, so moving the
+   control out of it changes what is announced and nothing that is seen. */
+.cf-chip__live {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .cf-chip__figure,
 .cf-chip__status {
   font-size: 0.8125rem;
@@ -123,6 +132,7 @@
 }
 
 .cf-saved {
+  display: block;
   margin: 0.5rem 0 0;
   font-size: 0.8125rem;
   color: var(--cf-muted);
@@ -175,11 +185,18 @@
 }
 
 .cf-render__body {
+  display: block;
   max-block-size: 24rem;
   overflow: auto;
   padding: 0.5rem;
   border: 1px solid var(--cf-border);
   border-radius: 4px;
+}
+
+/* The scroll container owns the box; the `pre` inside it only preserves the
+   whitespace of what was rendered. */
+.cf-render__body pre {
+  margin: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

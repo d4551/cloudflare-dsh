@@ -8,68 +8,95 @@ afterEach(cleanup)
 
 const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
 
+/**
+ * The chip's figures, in document order.
+ *
+ * Read as a list rather than asserted one at a time: the order and the count
+ * are part of what the chip shows, and a query per figure proves neither.
+ */
+const figures = (container: HTMLElement): (string | null)[] =>
+  [...container.querySelectorAll('.cf-chip__figure')].map((node) => node.textContent)
+
+/** The single status line, or null when the chip is showing figures instead. */
+const status = (container: HTMLElement): string | null | undefined =>
+  container.querySelector('.cf-chip__status')?.textContent
+
 describe('SessionCostChip', () => {
   it('names the region so it is findable without sight of the layout', () => {
     render(<SessionCostChip usage={usage} />)
-    expect(
-      screen.getByRole('region', { name: 'Cloudflare AI Gateway usage for this session' }),
-    ).toBeInstanceOf(HTMLElement)
+    const region = screen.getByRole('region', { name: 'Cloudflare AI Gateway usage for this session' })
+    // The named region is the chip itself. An ancestor carrying the name would
+    // satisfy the query while leaving the chip unnamed.
+    expect(region.className).toBe('cf-chip')
   })
 
   it('announces updates politely rather than stealing focus', () => {
     const { container } = render(<SessionCostChip usage={usage} />)
-    expect(container.querySelector('section')?.getAttribute('aria-live')).toBe('polite')
+    expect(container.querySelector('[aria-live]')?.getAttribute('aria-live')).toBe('polite')
+  })
+
+  it('keeps the toggle out of the live region, so activating it announces no flat copy of the chip', () => {
+    const { container } = render(<SessionCostChip usage={usage} />)
+    const live = container.querySelector('[aria-live]')
+    expect(live?.className).toBe('cf-chip__live')
+    expect(live?.querySelector('button')).toBeNull()
+    expect(live?.querySelector('.cf-chip__detail')).toBeNull()
   })
 
   it('shows request count, cost and cache rate as labelled text, never colour alone', () => {
-    render(<SessionCostChip usage={usage} />)
-    expect(screen.getByText('4 requests')).toBeInstanceOf(HTMLElement)
-    expect(screen.getByText('cost $0.01')).toBeInstanceOf(HTMLElement)
-    expect(screen.getByText('25% cache hit rate')).toBeInstanceOf(HTMLElement)
+    const { container } = render(<SessionCostChip usage={usage} />)
+    expect(figures(container)).toEqual(['4 requests', 'cost $0.01', '25% cache hit rate'])
   })
 
   it('keeps sub-cent costs legible rather than rounding them to zero', () => {
-    render(<SessionCostChip usage={{ ...usage, cost: 0.00042 }} />)
-    expect(screen.getByText('cost $0.00042')).toBeInstanceOf(HTMLElement)
+    const { container } = render(<SessionCostChip usage={{ ...usage, cost: 0.00042 }} />)
+    expect(figures(container)[1]).toBe('cost $0.00042')
   })
 
   it('uses the singular for a single request', () => {
-    render(<SessionCostChip usage={{ ...usage, requests: 1, cached: 0 }} />)
-    expect(screen.getByText('1 request')).toBeInstanceOf(HTMLElement)
+    const { container } = render(<SessionCostChip usage={{ ...usage, requests: 1, cached: 0 }} />)
+    expect(figures(container)[0]).toBe('1 request')
   })
 
   it('reports the empty state when the session has made no gateway requests', () => {
-    render(<SessionCostChip usage={{ ...usage, requests: 0 }} />)
-    expect(
-      screen.getByText('No Cloudflare AI Gateway requests recorded for this session yet.'),
-    ).toBeInstanceOf(HTMLElement)
+    const { container } = render(<SessionCostChip usage={{ ...usage, requests: 0 }} />)
+    expect(status(container)).toBe('No Cloudflare AI Gateway requests recorded for this session yet.')
   })
 
   it('reports the empty state when usage is not yet known', () => {
-    render(<SessionCostChip />)
-    expect(
-      screen.getByText('No Cloudflare AI Gateway requests recorded for this session yet.'),
-    ).toBeInstanceOf(HTMLElement)
+    const { container } = render(<SessionCostChip />)
+    expect(status(container)).toBe('No Cloudflare AI Gateway requests recorded for this session yet.')
   })
 
   it('reports loading', () => {
-    render(<SessionCostChip loading />)
-    expect(screen.getByText('Loading Cloudflare usage for this session')).toBeInstanceOf(HTMLElement)
+    const { container } = render(<SessionCostChip loading />)
+    expect(status(container)).toBe('Loading Cloudflare usage for this session')
   })
 
   it('reports failure', () => {
-    render(<SessionCostChip failed />)
-    expect(screen.getByText('Cloudflare usage could not be loaded.')).toBeInstanceOf(HTMLElement)
+    const { container } = render(<SessionCostChip failed />)
+    expect(status(container)).toBe('Cloudflare usage could not be loaded.')
   })
 
   it('prefers the failure state over loading', () => {
-    render(<SessionCostChip failed loading />)
-    expect(screen.getByText('Cloudflare usage could not be loaded.')).toBeInstanceOf(HTMLElement)
+    const { container } = render(<SessionCostChip failed loading />)
+    expect(status(container)).toBe('Cloudflare usage could not be loaded.')
+  })
+
+  it.each([
+    ['while loading', { loading: true }],
+    ['after a failure', { failed: true }],
+    ['when empty', {}],
+  ])('offers no figures and no toggle %s', (_name, props) => {
+    const { container } = render(<SessionCostChip {...props} />)
+    expect(figures(container)).toEqual([])
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('exposes the detail toggle as a button with an accessible name', () => {
     render(<SessionCostChip usage={usage} />)
-    expect(screen.getByRole('button', { name: 'Show detail' })).toBeInstanceOf(HTMLButtonElement)
+    // `type` matters: a button with no type submits the form it sits in.
+    expect(screen.getByRole('button', { name: 'Show detail' }).getAttribute('type')).toBe('button')
   })
 
   it('starts collapsed and reports that state', () => {
@@ -82,7 +109,9 @@ describe('SessionCostChip', () => {
     const button = screen.getByRole('button')
     fireEvent.click(button)
     expect(button.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByRole('button', { name: 'Hide detail' })).toBeInstanceOf(HTMLButtonElement)
+    // The same control relabels; a second button appearing would also satisfy
+    // a query for the new name.
+    expect(button.textContent).toBe('Hide detail')
   })
 
   it('collapses again on a second activation', () => {
@@ -91,13 +120,18 @@ describe('SessionCostChip', () => {
     fireEvent.click(button)
     fireEvent.click(button)
     expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect(button.textContent).toBe('Show detail')
   })
 
   it('associates the toggle with the detail it controls', () => {
     const { container } = render(<SessionCostChip usage={usage} />)
     const controls = screen.getByRole('button').getAttribute('aria-controls')
     expect(controls).not.toBeNull()
-    expect(container.ownerDocument.getElementById(controls!)).not.toBeNull()
+    // Resolved to the element it names, not counted: an id that resolves to
+    // anything at all is true of any id on the page.
+    expect(container.ownerDocument.getElementById(controls!)).toBe(
+      container.querySelector('.cf-chip__detail'),
+    )
   })
 
   it('hides the detail while collapsed', () => {
@@ -111,11 +145,17 @@ describe('SessionCostChip', () => {
     expect(container.querySelector<HTMLElement>('.cf-chip__detail')?.hidden).toBe(false)
   })
 
-  it('shows cached and token detail once expanded', () => {
-    render(<SessionCostChip usage={usage} />)
+  it('pairs each detail term with the figure it describes', () => {
+    const { container } = render(<SessionCostChip usage={usage} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(screen.getByText('1 served from cache')).toBeInstanceOf(HTMLElement)
-    expect(screen.getByText('120 in, 40 out')).toBeInstanceOf(HTMLElement)
+    // Terms and definitions in order, so a term describing the wrong figure
+    // fails — which a check for the presence of each string would not.
+    expect([...container.querySelectorAll('.cf-chip__detail > *')].map((n) => n.textContent)).toEqual([
+      'Cached',
+      '1 served from cache',
+      'Tokens',
+      '120 in, 40 out',
+    ])
   })
 
   it.each([

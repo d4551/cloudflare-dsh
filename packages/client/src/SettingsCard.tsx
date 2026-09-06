@@ -9,7 +9,9 @@
  *    `aria-describedby` rather than left as adjacent text;
  *  - the validation error is announced in an assertive live region and
  *    referenced by `aria-describedby` with `aria-invalid` (SC 3.3.1, 4.1.3);
- *  - the save confirmation is a polite live region, so it does not interrupt;
+ *  - the save confirmation is a polite live region (`<output>`, whose implicit
+ *    role is `status`), so it does not interrupt, and it is withdrawn the
+ *    moment an edit makes it untrue;
  *  - `autoComplete="off"` on the secret keeps password managers from storing a
  *    harness credential as a site login.
  */
@@ -55,6 +57,20 @@ export function SettingsCard({ settings, tokenStored, onSave }: SettingsCardProp
 
   const invalid = error !== undefined
 
+  /**
+   * Wrap a field setter so editing withdraws a stale confirmation.
+   *
+   * Any edit makes a previous "saved" false: it described the values that were
+   * stored, not the ones now in the form, and leaving it up tells the user
+   * their current input is persisted when it is not.
+   */
+  const editing =
+    (apply: (value: string) => void) =>
+    (event: React.ChangeEvent<HTMLInputElement>): void => {
+      apply(event.target.value)
+      setSaved(false)
+    }
+
   return (
     <section className="cf-settings" aria-labelledby={headingId}>
       <h2 id={headingId}>{en.settings.heading}</h2>
@@ -82,9 +98,7 @@ export function SettingsCard({ settings, tokenStored, onSave }: SettingsCardProp
             value={tokenRef}
             aria-describedby={invalid ? `${tokenRefHintId} ${tokenRefErrorId}` : tokenRefHintId}
             aria-invalid={invalid}
-            onChange={(event) => {
-              setTokenRef(event.target.value)
-            }}
+            onChange={editing(setTokenRef)}
           />
           <p id={tokenRefHintId} className="cf-hint">
             {en.settings.tokenRefHint}
@@ -105,9 +119,7 @@ export function SettingsCard({ settings, tokenStored, onSave }: SettingsCardProp
             autoComplete="off"
             value={token}
             aria-describedby={`${tokenHintId} ${tokenStatusId}`}
-            onChange={(event) => {
-              setToken(event.target.value)
-            }}
+            onChange={editing(setToken)}
           />
           <p id={tokenHintId} className="cf-hint">
             {en.settings.tokenValueHint}
@@ -124,9 +136,7 @@ export function SettingsCard({ settings, tokenStored, onSave }: SettingsCardProp
             name="accountId"
             value={accountId}
             aria-describedby={accountHintId}
-            onChange={(event) => {
-              setAccountId(event.target.value)
-            }}
+            onChange={editing(setAccountId)}
           />
           <p id={accountHintId} className="cf-hint">
             {en.settings.accountHint}
@@ -140,9 +150,7 @@ export function SettingsCard({ settings, tokenStored, onSave }: SettingsCardProp
             name="gatewayId"
             value={gatewayId}
             aria-describedby={gatewayHintId}
-            onChange={(event) => {
-              setGatewayId(event.target.value)
-            }}
+            onChange={editing(setGatewayId)}
           />
           <p id={gatewayHintId} className="cf-hint">
             {en.settings.gatewayHint}
@@ -150,9 +158,7 @@ export function SettingsCard({ settings, tokenStored, onSave }: SettingsCardProp
         </div>
 
         <button type="submit">{en.settings.save}</button>
-        <p className="cf-saved" role="status">
-          {saved ? en.settings.saved : ''}
-        </p>
+        <output className="cf-saved">{saved ? en.settings.saved : ''}</output>
       </form>
     </section>
   )

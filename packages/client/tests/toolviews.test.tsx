@@ -54,10 +54,11 @@ describe('D1Result', () => {
   })
 
   it('captions the table with the query that produced it', () => {
-    render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
-    expect(screen.getByRole('table', { name: 'Results for query: SELECT 1' })).toBeInstanceOf(
-      HTMLTableElement,
-    )
+    const { container } = render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
+    // The table's name has to come from its own caption: an ancestor's label
+    // would answer the role query just as well and caption nothing.
+    expect(container.querySelector('table > caption')?.textContent).toBe('Results for query: SELECT 1')
+    expect(screen.getByRole('table', { name: 'Results for query: SELECT 1' }).tagName).toBe('TABLE')
   })
 
   it('renders one row per result', () => {
@@ -81,25 +82,25 @@ describe('D1Result', () => {
     expect(screen.getAllByRole('row')).toHaveLength(3)
   })
 
-  it('tolerates a result set with no rows field', () => {
-    render(<D1Result sql="s" resultSets={[{}]} />)
-    expect(screen.getByText('The query returned no rows.')).toBeInstanceOf(HTMLElement)
-  })
-
-  it('reports an empty result rather than an empty table', () => {
-    render(<D1Result sql="s" resultSets={[{ results: [] }]} />)
-    expect(screen.getByText('The query returned no rows.')).toBeInstanceOf(HTMLElement)
-  })
-
-  it('reports an empty result when rows carry no columns', () => {
-    render(<D1Result sql="s" resultSets={[{ results: [{}] }]} />)
-    expect(screen.getByText('The query returned no rows.')).toBeInstanceOf(HTMLElement)
+  it.each([
+    ['a result set with no rows field', [{}]],
+    ['a result set whose rows are empty', [{ results: [] }]],
+    ['rows that carry no columns', [{ results: [{}] }]],
+  ])('reports an empty result rather than an empty table for %s', (_label, sets) => {
+    const { container } = render(<D1Result sql="s" resultSets={sets} />)
+    expect(container.querySelector('.cf-d1__empty')?.textContent).toBe('The query returned no rows.')
+    // "rather than an empty table" is the half a text query cannot see.
+    expect(screen.queryByRole('table')).toBeNull()
   })
 
   it('makes the scroll container reachable by keyboard and gives it a name', () => {
-    render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
-    const group = screen.getByRole('group', { name: 'Results for query: SELECT 1' })
-    expect(group.getAttribute('tabindex')).toBe('0')
+    const { container } = render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
+    const region = screen.getByRole('region', { name: 'Results for query: SELECT 1' })
+    expect(region.getAttribute('tabindex')).toBe('0')
+    // The name comes from the caption itself, so the query is stated once and
+    // the two can never disagree.
+    const labelledBy = region.getAttribute('aria-labelledby')
+    expect(container.ownerDocument.getElementById(labelledBy ?? '')).toBe(container.querySelector('caption'))
   })
 
   it('has no accessibility violations', async () => {
@@ -115,15 +116,29 @@ describe('D1Result', () => {
 
 describe('BrowserRender', () => {
   it('captions the output with the page it came from', () => {
-    render(<BrowserRender url="https://x.test" body="# Title" />)
-    expect(screen.getByText('Rendered https://x.test')).toBeInstanceOf(HTMLElement)
+    const { container } = render(<BrowserRender url="https://x.test" body="# Title" />)
+    expect(container.querySelector('figcaption')?.textContent).toBe('Rendered https://x.test')
   })
 
   it('renders text output in a keyboard-reachable region', () => {
-    render(<BrowserRender url="https://x.test" body="# Title" />)
-    const body = screen.getByLabelText('Rendered https://x.test')
-    expect(body.tagName).toBe('PRE')
-    expect(body.getAttribute('tabindex')).toBe('0')
+    const { container } = render(<BrowserRender url="https://x.test" body="# Title" />)
+    const region = screen.getByRole('region', { name: 'Rendered https://x.test' })
+    expect(region.getAttribute('tabindex')).toBe('0')
+    // ARIA prohibits `aria-label` on the `generic` role a bare `pre` maps to,
+    // so the focus stop is an element that can carry a name, and the preformatted
+    // text sits inside it.
+    expect(region.tagName).toBe('SECTION')
+    expect(region.querySelector('pre')?.textContent).toBe('# Title')
+    expect(container.querySelector('pre')?.getAttribute('aria-label')).toBeNull()
+  })
+
+  it('names the region from its caption, so the page it came from is stated once', () => {
+    const { container } = render(<BrowserRender url="https://x.test" body="# Title" />)
+    const region = screen.getByRole('region', { name: 'Rendered https://x.test' })
+    const labelledBy = region.getAttribute('aria-labelledby')
+    expect(container.ownerDocument.getElementById(labelledBy ?? '')).toBe(
+      container.querySelector('figcaption'),
+    )
   })
 
   it('has no accessibility violations for text output', async () => {
@@ -155,8 +170,8 @@ describe('AccessibilityTree', () => {
 
   it('names the region by the page it describes', () => {
     render(<AccessibilityTree url="https://x.test" tree={tree} />)
-    expect(screen.getByRole('region', { name: 'Accessibility tree for https://x.test' })).toBeInstanceOf(
-      HTMLElement,
+    expect(screen.getByRole('region', { name: 'Accessibility tree for https://x.test' }).className).toBe(
+      'cf-axtree',
     )
   })
 

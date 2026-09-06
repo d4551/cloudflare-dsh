@@ -226,10 +226,26 @@ describe('readEnvelope', () => {
 })
 
 describe('realSleep', () => {
-  it('resolves only after the requested delay has elapsed', async () => {
-    const started = Date.now()
-    await realSleep(25)
-    expect(Date.now() - started).toBeGreaterThanOrEqual(20)
+  // Driven by fake timers rather than the wall clock. A tolerance below the
+  // requested delay makes the name a claim the assertion does not hold — a
+  // sleep of 20ms passed a test named for 25 — and a real clock makes the
+  // result depend on how loaded the machine is.
+  it('resolves once the requested delay has elapsed, and not a tick before', async () => {
+    vi.useFakeTimers()
+    try {
+      let resolved = false
+      const sleeping = (async () => {
+        await realSleep(25)
+        resolved = true
+      })()
+      await vi.advanceTimersByTimeAsync(24)
+      expect(resolved).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      await sleeping
+      expect(resolved).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

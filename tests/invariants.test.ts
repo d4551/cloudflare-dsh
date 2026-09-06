@@ -75,10 +75,30 @@ const code = tracked.filter((file) => /\.(ts|tsx|mjs|cjs|js|json|ya?ml)$/.test(f
  */
 const tests = code.filter((file) => /(^|\/)tests\//.test(file))
 const sources = code.filter((file) => /^packages\/[^/]+\/src\//.test(file))
+/**
+ * Every TypeScript module in the tree, not only those under `src` and `tests`.
+ *
+ * The gate configuration is itself TypeScript — four vitest configs, three
+ * tsdown configs and the two mutation-guard scripts — so a scan that stops at
+ * the package directories cannot see the files that decide what the other
+ * gates do. One escaped exactly there: a superseded doc block sat in
+ * `vitest.a11y.config.ts` while this suite reported the tree clean.
+ */
+const modules = code.filter((file) => /\.tsx?$/.test(file))
 
 /** Files containing a needle, so a failure names them. */
 const containing = (files: readonly string[], needle: string): string[] =>
   files.filter((file) => read(file).includes(needle))
+
+/**
+ * Files matching a pattern, for a shape a substring cannot express.
+ *
+ * The pattern is assembled from fragments for the same reason the needles are:
+ * this file is itself under `tests/`, so a literal would make the gate find
+ * its own definition.
+ */
+const matching = (files: readonly string[], pattern: RegExp): string[] =>
+  files.filter((file) => pattern.test(read(file)))
 
 describe('no suppression comments', () => {
   it.each([
@@ -115,8 +135,147 @@ describe('no test evasions', () => {
     // A rejection caught and discarded leaves the outcome the test exists to
     // observe unobserved.
     ['swallowed rejection', `.cat${'ch(() =>'}`],
+    // A snapshot records whatever the code did on the day it was written and
+    // calls that the expectation. There are none today; there is nothing to
+    // stop the first.
+    ['snapshot', `toMatch${'Snapshot('}`],
+    ['inline snapshot', `toMatchInline${'Snapshot('}`],
+    ['file snapshot', `toMatchFile${'Snapshot('}`],
+    // Every string contains the empty string, so this matcher accepts any
+    // string at all — the anything-matcher above, wearing a different name.
+    ['empty substring matcher', `stringContaining(${"''"})`],
+    // A clock in a test makes the result depend on how loaded the machine is.
+    // Source modules are already held to this; a test asserting on elapsed
+    // wall time was how it got in.
+    ['wall clock', `Date.${'now('}`],
+    ['clock construction', `new Da${'te('}`],
+    ['performance clock', `performance.${'now('}`],
   ])('no %s appears in a test file', (_label, needle) => {
     expect(containing(tests, needle)).toEqual([])
+  })
+})
+
+describe('no assertion that anything at all satisfies', () => {
+  it('never asserts merely that a query returned an element', () => {
+    // `getBy*` throws when nothing matches, so asserting that its result is an
+    // element adds nothing to the query — and it holds for every element on
+    // the page, so a query aimed at the wrong node still reads as wired. This
+    // is the defined-only assertion above under another name, and it was here
+    // 23 times. Matched as a pattern because the formatter wraps the long ones.
+    expect(matching(tests, new RegExp(`toBeInstance${'Of'}\\(\\s*HTML`, 'u'))).toEqual([])
+  })
+})
+
+/**
+ * Attributes whose value a user reads or hears.
+ *
+ * Everything else a component sets — `className`, `id`, `role`, `type`,
+ * `scope`, `autoComplete`, every `aria-*` that names an id — is addressed to
+ * the machine, so a literal there is not copy and its subtree is skipped.
+ */
+const USER_VISIBLE_ATTRIBUTES = new Set([
+  'alt',
+  'aria-label',
+  'aria-placeholder',
+  'aria-roledescription',
+  'aria-valuetext',
+  'label',
+  'placeholder',
+  'title',
+])
+
+/** `typeof x === 'string'` compares against a language keyword, not copy. */
+const isTypeofOperand = (node: ts.Node): boolean =>
+  ts.isBinaryExpression(node.parent) &&
+  (ts.isTypeOfExpression(node.parent.left) || ts.isTypeOfExpression(node.parent.right))
+
+/**
+ * User-visible copy written inline in a component instead of routed through
+ * the locale dictionary.
+ *
+ * The page states that all copy the client renders — "including accessible
+ * names" — lives in the client's locale module. It did not: a toggle's whole
+ * accessible name and two description terms were literals in the component,
+ * and the sentence was prose no gate read.
+ *
+ * Every literal in the module counts, not only the ones directly between tags:
+ * the name that escaped was `{expanded ? 'Hide detail' : 'Show detail'}`, a
+ * conditional inside an expression container, which a scan of text nodes and
+ * attributes walks straight past. Machine-facing attribute values are skipped
+ * by subtree, and an empty string or pure whitespace is never copy.
+ */
+function inlineCopy(name: string, text: string): string[] {
+  const source = ts.createSourceFile(name, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TSX)
+  const found: string[] = []
+  const at = (node: ts.Node): string =>
+    `${name}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`
+  const report = (node: ts.Node, value: string): void => {
+    if (value.trim() !== '') found.push(`${at(node)} ${value.trim()}`)
+  }
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxAttribute(node) && !USER_VISIBLE_ATTRIBUTES.has(node.name.getText(source))) return
+    // A module specifier is a path, not something anyone reads.
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return
+    if (ts.isJsxText(node)) report(node, node.text)
+    if (ts.isStringLiteralLike(node) && !isTypeofOperand(node)) report(node, node.text)
+    if (ts.isTemplateLiteral(node) && !ts.isNoSubstitutionTemplateLiteral(node)) {
+      report(node.head, node.head.text)
+      for (const span of node.templateSpans) report(span.literal, span.literal.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return found
+}
+
+describe('user-facing copy lives in the dictionary', () => {
+  // The scanner is proven on snippets before it is trusted on the tree.
+  it.each([
+    ['text between tags', 'const A = () => <b>Hide detail</b>', ['probe.tsx:1 Hide detail']],
+    ['a term in a list', 'const A = () => <dl><dt>Cached</dt></dl>', ['probe.tsx:1 Cached']],
+    [
+      'a literal in a conditional, which is how one escaped',
+      "const A = (p: { x: boolean }) => <b>{p.x ? 'Hide detail' : 'Show detail'}</b>",
+      ['probe.tsx:1 Hide detail', 'probe.tsx:1 Show detail'],
+    ],
+    ['a quoted accessible name', 'const A = () => <b aria-label="Usage" />', ['probe.tsx:1 Usage']],
+    ['alternative text', 'const A = () => <img alt="A chart" src="s" />', ['probe.tsx:1 A chart']],
+    [
+      'a literal returned by a helper the component renders',
+      "function d(): string {\n  return 'unknown'\n}",
+      ['probe.tsx:2 unknown'],
+    ],
+    [
+      'a separator interpolated into displayed text',
+      'const d = (a: string, b: string) => `${a}: ${b}`',
+      ['probe.tsx:1 :'],
+    ],
+  ])('finds %s', (_label, snippet, expected) => {
+    expect(inlineCopy('probe.tsx', snippet)).toEqual(expected)
+  })
+
+  it.each([
+    ['copy read from the dictionary', 'const A = () => <b>{en.cost.label}</b>'],
+    ['a name read from the dictionary', 'const A = () => <b aria-label={en.cost.label} />'],
+    ['a machine-facing attribute', 'const A = () => <b className="cf-chip" id="x" role="status" />'],
+    ['an interpolated value', 'const A = (p: { n: number }) => <b>{p.n}</b>'],
+    ['whitespace between elements', 'const A = () => (\n  <b>\n    <i>{en.x}</i>\n  </b>\n)'],
+    ['an empty string', "const [v, s] = useState('')"],
+    ['a whitespace-only join', 'const ids = (a: string, b: string) => `${a} ${b}`'],
+    // Assembled, because the needle above forbids this file naming that path.
+    ['an import specifier', `import { en } from './locales/${'en'}.ts'`],
+    ['a typeof comparison', "const f = (v: unknown) => typeof v === 'string'"],
+    ['a typeof comparison written the other way round', "const f = (v: unknown) => 'string' === typeof v"],
+  ])('passes %s', (_label, snippet) => {
+    expect(inlineCopy('probe.tsx', snippet)).toEqual([])
+  })
+
+  it('finds no inline copy in any client component', () => {
+    const components = sources.filter(
+      (file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'),
+    )
+    expect(components.length).toBeGreaterThan(0)
+    expect(components.flatMap((file) => inlineCopy(file, read(file)))).toEqual([])
   })
 })
 
@@ -226,8 +385,7 @@ describe('no type escape hatch', () => {
     expect(escapeHatches(_label.startsWith('a JSX') ? 'probe.tsx' : 'probe.ts', snippet)).toEqual([])
   })
 
-  it('finds none under src or tests', () => {
-    const modules = [...sources, ...tests].filter((file) => /\.tsx?$/.test(file))
+  it('finds none in any TypeScript module the tree carries', () => {
     expect(modules.flatMap((file) => escapeHatches(file, read(file)))).toEqual([])
   })
 })
@@ -287,8 +445,7 @@ describe('no superseded doc block', () => {
     expect(stackedDocs('probe.ts', snippet)).toEqual([])
   })
 
-  it('finds none under src or tests', () => {
-    const modules = [...sources, ...tests].filter((file) => /\.tsx?$/.test(file))
+  it('finds none in any TypeScript module the tree carries', () => {
     expect(modules.flatMap((file) => stackedDocs(file, read(file)))).toEqual([])
   })
 })
@@ -394,6 +551,25 @@ describe('formatting cannot drift', () => {
 
   it('pins the formatter exactly, since a new version can change what canonical means', () => {
     expect(json<PackageJson>('package.json').devDependencies['oxfmt']).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+})
+
+describe('the runner and the mutator are pinned', () => {
+  // A range here is not a version bump, it is a silent change of what the
+  // mutation score means. On Vitest 5 the Stryker vitest runner's per-test
+  // filter matches nothing and every covered mutant reports as surviving
+  // (stryker-js#6210, still open), so a caret on `vitest` would turn a 100%
+  // gate into a meaningless one with nothing going red.
+  it.each(['vitest', '@vitest/coverage-v8', '@stryker-mutator/core', '@stryker-mutator/vitest-runner'])(
+    'pins %s to an exact version',
+    (name) => {
+      expect(json<PackageJson>('package.json').devDependencies[name]).toMatch(/^\d+\.\d+\.\d+$/)
+    },
+  )
+
+  it('keeps the runner and its coverage provider on the same version', () => {
+    const { devDependencies } = json<PackageJson>('package.json')
+    expect(devDependencies['@vitest/coverage-v8']).toBe(devDependencies['vitest'])
   })
 })
 
@@ -522,7 +698,37 @@ describe('every gate runs in CI', () => {
     'bun run test:a11y',
     'bun run stryker',
     'bun run knip',
+    'bun run publint',
   ])('%s', (command) => {
     expect(read('.github/workflows/ci.yml')).toContain(command)
+  })
+
+  /** One job's block, from its name to the next job at the same indent. */
+  const ciJob = (name: string): string => {
+    const workflow = read('.github/workflows/ci.yml')
+    const start = workflow.indexOf(`\n  ${name}:\n`)
+    expect(start).toBeGreaterThan(-1)
+    const rest = workflow.slice(start + 1)
+    const next = rest.slice(1).search(/\n {2}\w[\w-]*:\n/u)
+    return next === -1 ? rest : rest.slice(0, next + 1)
+  }
+
+  // README states which lanes run on which Node majors. Asserting the command
+  // strings alone leaves that sentence unheld: deleting '24' from a matrix
+  // changes what CI proves and nothing goes red.
+  it.each([
+    ['check', "node: ['22', '24']"],
+    ['package', "node: ['22', '24']"],
+  ])('runs the %s lane on both supported Node majors', (job, matrix) => {
+    expect(ciJob(job)).toContain(matrix)
+  })
+
+  it.each([
+    ['accessibility', "node-version: '22'"],
+    ['mutation', "node-version: '22'"],
+  ])('pins the %s lane to one Node major, as the page states', (job, version) => {
+    const block = ciJob(job)
+    expect(block).toContain(version)
+    expect(block).not.toContain('matrix.node')
   })
 })

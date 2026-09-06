@@ -22,9 +22,9 @@ export interface AccessibilityTreeProps {
 
 /** Describe one node for display. */
 export function describeNode(node: AxNode): string {
-  const role = node.role ?? 'unknown'
+  const role = node.role ?? en.toolView.unknownRole
   const name = node.name
-  return name === undefined || name === '' ? role : `${role}: ${name}`
+  return name === undefined || name === '' ? role : en.toolView.node(role, name)
 }
 
 function TreeNode({ node }: { readonly node: AxNode }): React.JSX.Element {
