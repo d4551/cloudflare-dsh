@@ -738,8 +738,8 @@ commitment outlived the code by two restarts.
 
 ## MCP passthrough
 
-`cloudflare-dsh/mcp` exports patch rows for every hosted MCP server Cloudflare
-publishes — seventeen of them, each carrying a one-line summary so a profile can
+`cloudflare-dsh/mcp` exports patch rows for **17 hosted MCP servers** — every
+one Cloudflare publishes — each carrying a one-line summary so a profile can
 choose without leaving the file. They range from the Code Mode server, which
 reaches the whole Cloudflare API through code execution, to the per-product
 servers for docs, bindings, builds, observability, containers, browser

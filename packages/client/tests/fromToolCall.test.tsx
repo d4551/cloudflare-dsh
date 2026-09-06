@@ -38,7 +38,7 @@ describe('the host contract these views are modelled on', () => {
   it('takes the owner currency the tool-view slot supplies', () => {
     // @deepseek-ai/dsh-client-ui-tool 0.0.1-rc.1,
     // lib/types/client/contract/slots.d.ts → ToolCallOwnerProps.
-    const owner: ToolCallOwnerProps = {
+    const currency: ToolCallOwnerProps = {
       callId: 'c1',
       toolName: 'cloudflare_d1_query',
       block: running,
@@ -46,7 +46,7 @@ describe('the host contract these views are modelled on', () => {
       openFile: () => undefined,
       inspect: () => undefined,
     }
-    expect(Object.keys(owner).toSorted()).toEqual([
+    expect(Object.keys(currency).toSorted()).toEqual([
       'block',
       'callId',
       'cwd',
@@ -168,11 +168,14 @@ describe('BrowserRenderToolView', () => {
     expect(screen.getByRole('figure', { name: 'Rendered https://x.test' }).textContent).toContain('# Title')
   })
 
-  it('falls back when the body is not a string, which the view cannot render', () => {
+  it.each([
+    ['there is no projection', undefined],
+    ['the projection is not an object', 'flat'],
+    ['the url is not a string', { url: 7, body: '# Title' }],
+    ['the body is not a string, which the view cannot render', { url: 'https://x.test', body: 7 }],
+  ])('falls back to the result text when %s', (_label, meta) => {
     const { container } = render(
-      <BrowserRenderToolView
-        {...owner(settled({ url: 'https://x.test', body: 7 }, [{ type: 'text', text: 'raw' }]))}
-      />,
+      <BrowserRenderToolView {...owner(settled(meta, [{ type: 'text', text: 'raw' }]))} />,
     )
     expect(container.querySelector('.cf-toolview__raw')?.textContent).toBe('raw')
   })
@@ -188,11 +191,14 @@ describe('AccessibilityTreeToolView', () => {
     expect(screen.getByRole('listitem').textContent).toBe('document: Page')
   })
 
-  it('falls back when the tree is not an object', () => {
+  it.each([
+    ['there is no projection', undefined],
+    ['the projection is not an object', 'flat'],
+    ['the url is not a string', { url: 7, tree: { role: 'document' } }],
+    ['the tree is not an object', { url: 'https://x.test', tree: 'flat' }],
+  ])('falls back to the result text when %s', (_label, meta) => {
     const { container } = render(
-      <AccessibilityTreeToolView
-        {...owner(settled({ url: 'https://x.test', tree: 'flat' }, [{ type: 'text', text: 'raw' }]))}
-      />,
+      <AccessibilityTreeToolView {...owner(settled(meta, [{ type: 'text', text: 'raw' }]))} />,
     )
     expect(container.querySelector('.cf-toolview__raw')?.textContent).toBe('raw')
   })
@@ -213,10 +219,17 @@ describe('SessionCostToolView', () => {
     expect(screen.getByText('Loading Cloudflare usage for this session').className).toBe('cf-chip__status')
   })
 
+  // One case per figure, so each type check is the clause that decides. A
+  // single malformed example leaves the other four never exercised.
+  const figures = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
   it.each([
     ['there is no projection', undefined],
-    ['a figure is missing', { requests: 4, cost: 1, tokensIn: 1, tokensOut: 1 }],
-    ['a figure is not a number', { requests: '4', cost: 1, tokensIn: 1, tokensOut: 1, cached: 1 }],
+    ['the projection is not an object', 'flat'],
+    ['the request count is missing', { ...figures, requests: undefined }],
+    ['the cost is not a number', { ...figures, cost: '1' }],
+    ['the input tokens are not a number', { ...figures, tokensIn: '1' }],
+    ['the output tokens are not a number', { ...figures, tokensOut: '1' }],
+    ['the cache count is missing', { ...figures, cached: undefined }],
   ])('shows the chip failed when %s', (_label, meta) => {
     render(<SessionCostToolView {...owner(settled(meta))} />)
     expect(screen.getByText('Cloudflare usage could not be loaded.').className).toBe('cf-chip__status')

@@ -38,6 +38,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { CLOUDFLARE_MCP_SERVERS } from '../packages/bundle/src/mcp/index.ts'
 
 const root = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 const read = (file: string): string => readFileSync(root(`../${file}`), 'utf8')
@@ -522,6 +523,14 @@ describe('the Web Client surfaces', () => {
 })
 
 describe('the accessibility commitments', () => {
+  it('states the number of hosted MCP servers the module actually exports', () => {
+    // The page said "eight" while the module carried eight, and the two were
+    // kept in step by nobody: `mcp.test.ts` pinned the count independently, so
+    // editing one literal left the other orphaned.
+    const stated = [...readme.matchAll(/\*\*(\d+) hosted MCP servers\*\*/gu)].map((m) => Number(m[1]))
+    expect(stated).toEqual([CLOUDFLARE_MCP_SERVERS.length])
+  })
+
   it('names a test for every commitment it makes', () => {
     // A row whose second column carries no test name is a commitment nothing
     // holds, which is what the prose list allowed.
