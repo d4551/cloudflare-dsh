@@ -1,0 +1,38 @@
+# The layer this bundle contributes to a DSH profile.
+#
+# Rows are enabled individually so a profile can take only the tool groups it
+# wants. Each row carries its own config: a patch layer replaces a row's entire
+# `config` value rather than deep-merging, so keeping configuration small and
+# local means overriding one setting never forces restating the rest.
+- insert:
+    # The capability seam. Everything else injects this.
+    - id: cloudflare
+      name: '@d4551/dsh-cloudflare-core'
+      config:
+        apiTokenRef: CLOUDFLARE_API_TOKEN
+
+    # Workers AI, AI Gateway, AI Search and Vectorize.
+    - id: cloudflare-tools-ai
+      name: 'cloudflare-dsh/tools/ai'
+
+    # Workers KV, D1, Queues and R2 buckets.
+    - id: cloudflare-tools-data
+      name: 'cloudflare-dsh/tools/data'
+
+    # Browser Rendering, including the accessibility tree.
+    - id: cloudflare-tools-web
+      name: 'cloudflare-dsh/tools/web'
+
+    # Cloudflare as a model provider for the harness itself. Registration is
+    # inert until a session selects one of the two routes; the gateway route
+    # then needs a gatewayId, and says so loudly when it is missing.
+    - id: cloudflare-llm
+      name: 'cloudflare-dsh/ai'
+
+    # Account discovery and the bounded generic REST tool.
+    # `cloudflare_api` is read-only until allowMutations is set.
+    - id: cloudflare-tools-meta
+      name: 'cloudflare-dsh/tools/meta'
+      config:
+        allowMutations: false
+        denyPathPrefixes: []

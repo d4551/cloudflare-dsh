@@ -1,0 +1,35 @@
+{
+  "name": "@d4551/dsh-cloudflare-core",
+  "version": "0.1.0",
+  "description": "Cloudflare capability seam for DeepSeek Harness: the ctx.cloudflare service.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "./lib/index.mjs",
+  "types": "./lib/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.mts",
+      "default": "./lib/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "publint": "publint"
+  }
+}

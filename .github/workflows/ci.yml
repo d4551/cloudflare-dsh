@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      # --deny-warnings: a warning fails the build, so "lint clean" is enforced.
+      - run: bun run lint
+      # One canonical style, checked rather than applied: a file that departs
+      # from it fails here, so a tree-wide rewrite cannot pass unnoticed.
+      - run: bun run format:check
+      # Every rule the README states, asserted. A documented rule that nothing
+      # checks holds only until someone edits a config.
+      - run: bun run test:invariants
+      - run: bun run test:coverage
+
+  accessibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      # Real Chromium, both colour schemes. Fails on any WCAG 2.2 AA violation;
+      # no rule is disabled and no selector is excluded.
+      - run: bun run test:a11y
+
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      # Fails the build below a 100 mutation score, then fails it again if any
+      # file that emits JavaScript produced no mutants. No exclusions are
+      # permitted: a surviving mutant means the code is untested or dead.
+      - run: bun run stryker
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-report
+          path: reports/mutation
+          if-no-files-found: ignore
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      # Loads the built artifacts the way a consumer resolves them, and rejects
+      # a `workspace:` range surviving into a published manifest.
+      - run: bun run test:dist
+      - run: bun run knip
+      - run: bun run --filter '*' publint

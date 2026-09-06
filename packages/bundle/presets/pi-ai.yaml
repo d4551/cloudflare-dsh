@@ -1,0 +1,21 @@
+# Zero-code path: route the harness's own model calls through an AI Gateway
+# using the provider adapter DSH already ships.
+#
+# Merge this into $DSH_HOME/settings.yaml. Resolve <BASE_URL> once with:
+#   cloudflare_aigateway_list                 -> find your gateway id
+#   cloudflare_api GET /accounts/{account_id}/ai-gateway/gateways/{gateway_id}/url/{provider}
+#
+# The gateway URL is read from the API rather than hardcoded here, because
+# Cloudflare is the authority on its own endpoint shape.
+#
+# This path is deliberately simple. It cannot set cf-aig-* headers, so it gets
+# no per-session cost attribution; for that, use the Cloudflare model provider
+# in this bundle instead.
+llm-pi-ai:
+  providers:
+    cf-gateway:
+      apiKeyEnv: CLOUDFLARE_API_TOKEN
+      api: openai-completions # or: openai-responses | anthropic-messages
+      baseURL: <BASE_URL>
+      models:
+        - id: '@cf/meta/llama-3.1-8b-instruct'

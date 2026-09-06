@@ -1,0 +1,40 @@
+{
+  "name": "cloudflare-dsh-workspace",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "oxlint --deny-warnings .",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:a11y": "vitest run --config vitest.a11y.config.ts",
+    "stryker": "stryker run && bun scripts/verify-mutation-files.ts",
+    "publint": "bun run --filter '*' publint",
+    "knip": "knip",
+    "test:dist": "vitest run --config vitest.dist.config.ts",
+    "test:invariants": "vitest run --config vitest.invariants.config.ts"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@types/node": "^22.15.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "knip": "^5.66.0",
+    "oxfmt": "0.66.0",
+    "oxlint": "^1.81.0",
+    "publint": "^0.3.14",
+    "tsdown": "^0.23.0",
+    "typescript": "^5.9.0",
+    "vitest": "4.1.11"
+  }
+}

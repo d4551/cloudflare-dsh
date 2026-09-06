@@ -1,0 +1,8 @@
+node_modules/
+lib/
+dist/
+coverage/
+reports/
+.stryker-tmp/
+*.tsbuildinfo
+.DS_Store

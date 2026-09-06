@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "printWidth": 110,
+  "trailingComma": "all",
+  "arrowParens": "always",
+  "sortPackageJson": false,
+  "ignorePatterns": ["node_modules", "lib", "dist", "coverage", "reports", ".stryker-tmp"]
+}
