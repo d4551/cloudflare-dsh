@@ -64,9 +64,11 @@ Measured on this tree, after the last change to it: typecheck 0, lint 0 under
 statements, 666 branches, 391 functions, 1,069 lines), 91 Chromium tests across
 two colour schemes, six pairings of host and system scheme, two pointers and
 seven viewports, with no rule or selector filtering and nothing left for review,
-36 built-artifact tests, knip 0, and publint clean on all three packages. The
-mutation run is still going as this is written; the commit that finishes it adds
-its number here rather than this line predicting one.
+36 built-artifact tests, knip 0, publint clean on all three packages, and a
+mutation score of **100.00%** — 3,788 mutants over 41 instrumented files, 3,775
+killed and 13 detected by timeout, none surviving and none without coverage,
+scored over the 1,405 unit tests that import an instrumented module, with the
+escape guard confirming the report describes this tree.
 
 </details>
 
