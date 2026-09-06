@@ -15,6 +15,14 @@
  *  - **Text spacing (SC 1.4.12)**: with line height at 1.5x, letter spacing at
  *    0.12em, word spacing at 0.16em and paragraph spacing at 2em, no content
  *    may be lost or clipped. This is the criterion a fixed-height box fails.
+ *
+ * The lane has grown past those three, and this comment says so rather than
+ * describing the file it used to be. It also asks what forced-colours mode
+ * leaves, what `hidden` computes to in both directions, how much document a
+ * large result produces, what measure the settings card keeps, whose colour
+ * scheme these fragments follow when a host and a system disagree (SC 1.4.3),
+ * and what an engine below the `light-dark()` floor renders. Each is a computed
+ * style or a laid-out box, which is what puts them here and not in jsdom.
  */
 import type { Browser } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -48,13 +56,21 @@ const VIEWPORTS = [
 ] as const
 
 /**
- * The elements allowed to scroll sideways.
+ * The scroll containers this client ships, named so a new one is deliberate.
  *
  * A wide table and a preformatted body are the two things that legitimately
- * cannot reflow, and the criterion's own remedy for them is a scroll
- * container. Everything else that overflows is a defect.
+ * cannot reflow, and the criterion's own remedy for them is a scroll container.
+ * Everything else that overflows is a defect.
+ *
+ * The reflow check no longer excuses anything by this list — it asks the page
+ * which elements actually scroll — because a list of selectors drifts from what
+ * it describes. This one still named `.cf-toolview__raw` after that class
+ * stopped being the container and became the text inside one, so the entry
+ * excused the content and left the box it sits in unexcused. The list is kept
+ * only to pin which elements scroll, which is a fact worth reviewing when it
+ * changes rather than one to discover from a failure elsewhere.
  */
-const SCROLLERS = ['.cf-d1', '.cf-render', '.cf-toolview__raw']
+const SCROLL_CONTAINERS = ['figure.cf-d1', 'figure.cf-render', 'figure.cf-toolview']
 
 describe('reflow', () => {
   for (const viewport of VIEWPORTS) {
@@ -81,20 +97,45 @@ describe('reflow', () => {
         viewport: { width: viewport.width, height: viewport.height },
       })
       try {
-        const result = await page.evaluate((scrollers: string[]) => {
+        // Written inline: this function is serialised into the page, so a
+        // helper declared outside it would not exist by the time it runs.
+        const result = await page.evaluate(() => {
           const root = document.documentElement
+          const scrolling = new Set<Element>()
+          for (const node of document.querySelectorAll('main *')) {
+            const style = getComputedStyle(node)
+            if (/^(?:auto|scroll)$/u.test(style.overflowX) || /^(?:auto|scroll)$/u.test(style.overflowY)) {
+              scrolling.add(node)
+            }
+          }
           const offenders: string[] = []
           for (const node of document.querySelectorAll<HTMLElement>('main *')) {
-            const inScroller = scrollers.some((selector) => node.closest(selector) !== null)
-            if (inScroller) continue
+            let inside = false
+            // A proper ancestor, not the node itself: a scroll container that
+            // does not fit the viewport is a defect like any other, and
+            // excusing it by its own overflow is how one would hide.
+            for (let at = node.parentElement; at !== null; at = at.parentElement) {
+              if (scrolling.has(at)) {
+                inside = true
+                break
+              }
+            }
+            if (inside) continue
             if (node.getBoundingClientRect().right > root.clientWidth + 1) {
               offenders.push(`${node.tagName.toLowerCase()}.${node.className}`)
             }
           }
-          return { pageOverflow: root.scrollWidth - root.clientWidth, offenders }
-        }, SCROLLERS)
+          return {
+            pageOverflow: root.scrollWidth - root.clientWidth,
+            offenders,
+            containers: [...scrolling].map((node) => `${node.tagName.toLowerCase()}.${node.className}`),
+          }
+        })
         expect(result.offenders).toEqual([])
         expect(result.pageOverflow).toBeLessThanOrEqual(0)
+        // The list above is a claim about this markup, checked against it here
+        // rather than remembered.
+        expect([...new Set(result.containers)].toSorted()).toEqual([...SCROLL_CONTAINERS].toSorted())
       } finally {
         await context.close()
       }

@@ -1,9 +1,10 @@
 /**
  * Accessibility gate in real Chromium.
  *
- * jsdom cannot compute colour contrast (axe-core#595), so the component tests
- * cover roles, names and structure while this lane covers what only a real
- * browser can: computed styles, text contrast in both colour schemes, and
+ * jsdom runs axe's colour-contrast rule but cannot decide it — it comes back
+ * `incomplete` there, every time, measured — so the component tests cover
+ * roles, names and structure while this lane covers what only a real browser
+ * can: computed styles, text contrast in both colour schemes, and
  * whether a keyboard focus ring is actually drawn. That last one is checked
  * here rather than assumed: axe ships no focus-appearance rule, and the
  * stylesheet's focus block could be deleted with every other gate green.
@@ -173,12 +174,15 @@ describe('accessibility in Chromium', () => {
     try {
       // No rule filter even here: the full rule set runs, and the contrast rule
       // is proven to have executed by finding it in the results rather than by
-      // narrowing the run to it. A jsdom run reports it as inapplicable, so its
-      // presence among passes or incomplete is the real signal.
+      // narrowing the run to it.
+      //
+      // It has to be found among the rules axe *decided*. Under jsdom the rule
+      // runs and comes back `incomplete`, so looking for it among passes or
+      // incomplete is satisfied there too — that version of this assertion told
+      // the two environments apart in its comment and not in its code.
       const results = await new AxeBuilder({ page }).analyze()
       expect(results.violations).toEqual([])
-      const contrast = [...results.passes, ...results.incomplete].filter((r) => r.id === 'color-contrast')
-      expect(contrast).not.toEqual([])
+      expect(results.passes.map((rule) => rule.id)).toContain('color-contrast')
     } finally {
       await context.close()
     }

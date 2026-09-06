@@ -680,7 +680,7 @@ graph LR
     end
     subgraph viewport["Lane 4 — laid out, 320px to 1920px"]
         I["Reflow, target size, text spacing"]
-        J["What hidden computes to, forced colours, whose scheme wins"]
+        J["hidden, forced colours, whose scheme wins, the engine floor"]
     end
     subgraph e2e["Lane 5 — mounted and operated"]
         K["Keyboard and pointer, form and live regions"]
@@ -694,9 +694,10 @@ graph LR
 
 Each split exists for a measured reason.
 
-axe-core's colour-contrast rule cannot run under jsdom
-([axe-core#595](https://github.com/dequelabs/axe-core/issues/595)) because it
-needs computed styles, so text contrast is checked in a real browser, in both
+axe-core's colour-contrast rule runs under jsdom and cannot decide there: it
+comes back `incomplete` on every component this package renders, measured
+rather than taken from an issue tracker. So text contrast is checked in a real
+browser, where the rule reaches a verdict, in both
 colour schemes, across every state a surface can be rendered into from its
 props — an empty chip, a failed one, an empty result set each render copy no
 other state does.

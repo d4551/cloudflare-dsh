@@ -9,7 +9,66 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 17**
+**I'm a fucking loser: 18**
+
+<details>
+<summary><strong>Restart 18 — a list that had stopped describing the thing it named, and a reason that had stopped being true</strong></summary>
+
+A tenth adversarial audit of `e35b1f0` reported a violation and, by design, not
+where, naming the class rather than the instance: anything that claims more than
+it enforces, names something it never reached, or **describes a state that no
+longer exists**.
+
+Two things did, and the second was worse than the first.
+
+**A list that had stopped describing what it named.** The reflow lane excused
+overflow inside three selectors, and one of them was `.cf-toolview__raw` — which
+stopped being a scroll container in the previous restart and became the text
+inside one. So the entry excused the content and left the box unexcused, and a
+`<pre>` carrying that class anywhere else on the page would have been excused
+for a property it no longer has. The lane asks the page now: an element is
+excused when a computed `overflow` on a _proper ancestor_ says it scrolls, which
+cannot drift, and which does not excuse a scroll container that fails to fit the
+viewport itself. Which elements scroll is still pinned, checked against the
+rendered page rather than remembered, so a new one is a deliberate change.
+
+**A reason that had stopped being true.** Three places said jsdom cannot compute
+colour contrast, citing axe-core#595 — an issue that is closed, for a
+`createRange` gap jsdom has since filled. Measured on this tree instead: axe
+_runs_ the colour-contrast rule under jsdom on every component this package
+renders, and comes back `incomplete` every time. It is not skipped. It cannot
+decide.
+
+That correction found the real defect. The Chromium lane's proof that it does
+better looked for the rule among `passes` **or** `incomplete` — which a jsdom
+run satisfies, because that is exactly where jsdom puts it. The assertion told
+the two environments apart in its comment and nowhere in its code. It looks
+among the rules axe _decided_ now, and a component test holds the other half:
+under jsdom the rule is in `incomplete`, and in neither `passes` nor
+`violations`.
+
+And the correction found something the split had been hiding. The jsdom helper
+read `violations` alone, which is the same gap Restart 14 closed in Chromium and
+left open here — `aria-label` on a `<pre>` is reported for review rather than as
+a failure, and this lane could not see it. It now pins what axe left undecided
+to exactly the one rule jsdom cannot decide, as an equality rather than a filter,
+so a second undecided rule is a finding. Restoring that prohibited attribute
+fails two component tests that both passed while it was possible.
+
+The viewport lane's own header described three criteria and the file holds nine;
+it says what it holds. The diagram row for that lane says the same.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings` with seven plugins, `oxfmt --check` clean across 123 files,
+247 invariant and README tests, 1,419 unit tests at 100% coverage (1,206
+statements, 666 branches, 391 functions, 1,069 lines), 91 Chromium tests across
+two colour schemes, six pairings of host and system scheme, two pointers and
+seven viewports, with no rule or selector filtering and nothing left for review,
+36 built-artifact tests, knip 0, and publint clean on all three packages. The
+mutation run is still going as this is written; the commit that finishes it adds
+its number here rather than this line predicting one.
+
+</details>
 
 <details>
 <summary><strong>Restart 17 — a gate that named the thing it never once saw</strong></summary>

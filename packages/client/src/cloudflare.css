@@ -24,8 +24,8 @@
  *
  * Two lanes check those fallbacks, because one cannot reach both criteria.
  * The Chromium lane runs axe over every surface in both colour schemes, which
- * covers text contrast (SC 1.4.3) on the copy actually rendered — jsdom cannot
- * compute contrast at all (axe-core#595). axe has no rule for non-text
+ * covers text contrast (SC 1.4.3) on the copy actually rendered — under jsdom
+ * that rule runs and comes back undecided. axe has no rule for non-text
  * contrast, so borders and focus rings (SC 1.4.11) are computed straight from
  * this file by the invariants lane, which reads every rule here and every
  * token below and fails on a pair beneath its ratio.
