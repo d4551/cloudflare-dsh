@@ -57,10 +57,9 @@ describe('cordis.patch.yml', () => {
   it('is valid YAML shaped as a list of insert layers', () => {
     expect(Array.isArray(layers)).toBe(true)
     expect(rows.length).toBeGreaterThan(0)
-    for (const row of rows) {
-      expect(typeof row.id).toBe('string')
-      expect(typeof row.name).toBe('string')
-    }
+    // Named rather than counted: a boolean collapses the failure to
+    // `false !== true` and says nothing about which row is malformed.
+    expect(rows.filter((row) => typeof row.id !== 'string' || typeof row.name !== 'string')).toEqual([])
   })
 
   it('gives every row a unique id, since a collision would silently drop one', () => {
@@ -73,9 +72,14 @@ describe('cordis.patch.yml', () => {
 
   it('references each tool group by its published subpath specifier', () => {
     const names = rows.map((row) => row.name)
-    for (const group of ['ai', 'data', 'web', 'meta']) {
-      expect(names).toContain(`cloudflare-dsh/tools/${group}`)
-    }
+    // As a set, so an empty group list cannot make this pass by asserting
+    // nothing — which a loop over one would.
+    expect(names.filter((name) => name.startsWith('cloudflare-dsh/tools/')).toSorted()).toEqual([
+      'cloudflare-dsh/tools/ai',
+      'cloudflare-dsh/tools/data',
+      'cloudflare-dsh/tools/meta',
+      'cloudflare-dsh/tools/web',
+    ])
   })
 
   it('mounts the model provider, without which the adapter never activates', () => {

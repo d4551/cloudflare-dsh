@@ -95,12 +95,21 @@ describe('D1Result', () => {
 
   it('makes the scroll container reachable by keyboard and gives it a name', () => {
     const { container } = render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
-    const region = screen.getByRole('region', { name: 'Results for query: SELECT 1' })
-    expect(region.getAttribute('tabindex')).toBe('0')
+    const card = screen.getByRole('figure', { name: 'Results for query: SELECT 1' })
+    expect(card.getAttribute('tabindex')).toBe('0')
     // The name comes from the caption itself, so the query is stated once and
     // the two can never disagree.
-    const labelledBy = region.getAttribute('aria-labelledby')
+    const labelledBy = card.getAttribute('aria-labelledby')
     expect(container.ownerDocument.getElementById(labelledBy ?? '')).toBe(container.querySelector('caption'))
+  })
+
+  it('keeps the result card out of the landmark map, since tool views repeat', () => {
+    // A named section is a `region` landmark, and tool views repeat: two runs
+    // of one query would put two identically named landmarks on the page,
+    // which is what the assembled scan reported the first time it ran.
+    const { container } = render(<D1Result sql="SELECT 1" resultSets={resultSets} />)
+    expect(container.querySelector('.cf-d1')?.tagName).toBe('FIGURE')
+    expect(screen.queryByRole('region')).toBeNull()
   })
 
   it('has no accessibility violations', async () => {
@@ -122,20 +131,24 @@ describe('BrowserRender', () => {
 
   it('renders text output in a keyboard-reachable region', () => {
     const { container } = render(<BrowserRender url="https://x.test" body="# Title" />)
-    const region = screen.getByRole('region', { name: 'Rendered https://x.test' })
-    expect(region.getAttribute('tabindex')).toBe('0')
+    const card = screen.getByRole('figure', { name: 'Rendered https://x.test' })
+    expect(card.getAttribute('tabindex')).toBe('0')
     // ARIA prohibits `aria-label` on the `generic` role a bare `pre` maps to,
     // so the focus stop is an element that can carry a name, and the preformatted
     // text sits inside it.
-    expect(region.tagName).toBe('SECTION')
-    expect(region.querySelector('pre')?.textContent).toBe('# Title')
+    expect(card.querySelector('pre')?.textContent).toBe('# Title')
     expect(container.querySelector('pre')?.getAttribute('aria-label')).toBeNull()
   })
 
-  it('names the region from its caption, so the page it came from is stated once', () => {
+  it('keeps the render card out of the landmark map, since tool views repeat', () => {
+    render(<BrowserRender url="https://x.test" body="# Title" />)
+    expect(screen.queryByRole('region')).toBeNull()
+  })
+
+  it('names the card from its caption, so the page it came from is stated once', () => {
     const { container } = render(<BrowserRender url="https://x.test" body="# Title" />)
-    const region = screen.getByRole('region', { name: 'Rendered https://x.test' })
-    const labelledBy = region.getAttribute('aria-labelledby')
+    const card = screen.getByRole('figure', { name: 'Rendered https://x.test' })
+    const labelledBy = card.getAttribute('aria-labelledby')
     expect(container.ownerDocument.getElementById(labelledBy ?? '')).toBe(
       container.querySelector('figcaption'),
     )
@@ -168,11 +181,16 @@ describe('describeNode', () => {
 describe('AccessibilityTree', () => {
   const tree = { role: 'document', name: 'Page', children: [{ role: 'heading', name: 'Title' }] }
 
-  it('names the region by the page it describes', () => {
+  it('names the card by the page it describes', () => {
     render(<AccessibilityTree url="https://x.test" tree={tree} />)
-    expect(screen.getByRole('region', { name: 'Accessibility tree for https://x.test' }).className).toBe(
+    expect(screen.getByRole('figure', { name: 'Accessibility tree for https://x.test' }).className).toBe(
       'cf-axtree',
     )
+  })
+
+  it('keeps the tree card out of the landmark map, since tool views repeat', () => {
+    render(<AccessibilityTree url="https://x.test" tree={tree} />)
+    expect(screen.queryByRole('region')).toBeNull()
   })
 
   it('renders the hierarchy as nested lists, not a flat dump', () => {

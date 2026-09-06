@@ -3,11 +3,20 @@
  *
  * jsdom cannot compute colour contrast (axe-core#595), so the component tests
  * cover roles, names and structure while this lane covers what only a real
- * browser can: computed styles, contrast in both themes, and focus visibility.
+ * browser can: computed styles, text contrast in both colour schemes, and
+ * whether a keyboard focus ring is actually drawn. That last one is checked
+ * here rather than assumed: axe ships no focus-appearance rule, and the
+ * stylesheet's focus block could be deleted with every other gate green.
+ *
+ * Non-text contrast — borders and the focus ring itself (SC 1.4.11) — is not
+ * here, because axe has no rule for it either; the invariants lane computes
+ * every pair straight from the stylesheet.
  *
  * Components are server-rendered and served with the shipped stylesheet, so
- * the markup and CSS under test are exactly what a host would load. No axe
- * rule is disabled and no selector is excluded.
+ * the markup and CSS under test are exactly what a host would load. Each is
+ * scanned alone and then all of them together, because a duplicate id or a
+ * landmark collision only exists once they share a page. No axe rule is
+ * disabled and no selector is excluded.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -25,39 +34,78 @@ const css = readFileSync(fileURLToPath(new URL('../src/cloudflare.css', import.m
 
 const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
 
-/** Every surface this package contributes, as static markup. */
-const SURFACES: ReadonlyArray<{ name: string; markup: string }> = [
-  { name: 'SessionCostChip', markup: renderToStaticMarkup(<SessionCostChip usage={usage} />) },
-  { name: 'SessionCostChip (empty)', markup: renderToStaticMarkup(<SessionCostChip />) },
+const settings = { apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: '', gatewayId: '' }
+const tree = { role: 'document', name: 'Page', children: [{ role: 'heading', name: 'Title' }] }
+
+/**
+ * Every state each surface can be rendered into from its props.
+ *
+ * Not one state per component: the empty, loading and failed chips and the
+ * empty result each render copy no other state renders, and a scan of the
+ * happy path alone never sees them.
+ */
+const STATES: ReadonlyArray<{ name: string; element: React.JSX.Element }> = [
+  { name: 'SessionCostChip', element: <SessionCostChip usage={usage} /> },
+  { name: 'SessionCostChip (empty)', element: <SessionCostChip /> },
+  { name: 'SessionCostChip (loading)', element: <SessionCostChip loading /> },
+  { name: 'SessionCostChip (failed)', element: <SessionCostChip failed /> },
   {
     name: 'SettingsCard',
-    markup: renderToStaticMarkup(
-      <SettingsCard
-        settings={{ apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: '', gatewayId: '' }}
-        tokenStored
-        onSave={() => undefined}
-      />,
-    ),
+    element: <SettingsCard settings={settings} tokenStored onSave={() => undefined} />,
+  },
+  {
+    name: 'SettingsCard (no token stored)',
+    element: <SettingsCard settings={settings} tokenStored={false} onSave={() => undefined} />,
   },
   {
     name: 'D1Result',
-    markup: renderToStaticMarkup(
-      <D1Result sql="SELECT id, name FROM users" resultSets={[{ results: [{ id: 1, name: 'a' }] }]} />,
-    ),
+    element: <D1Result sql="SELECT id, name FROM users" resultSets={[{ results: [{ id: 1, name: 'a' }] }]} />,
   },
+  { name: 'D1Result (empty)', element: <D1Result sql="SELECT 1" resultSets={[]} /> },
   {
     name: 'BrowserRender',
-    markup: renderToStaticMarkup(<BrowserRender url="https://example.test" body="# Title" />),
+    element: <BrowserRender url="https://example.test" body="# Title" />,
   },
   {
     name: 'AccessibilityTree',
-    markup: renderToStaticMarkup(
-      <AccessibilityTree
-        url="https://example.test"
-        tree={{ role: 'document', name: 'Page', children: [{ role: 'heading', name: 'Title' }] }}
-      />,
-    ),
+    element: <AccessibilityTree url="https://example.test" tree={tree} />,
   },
+  {
+    name: 'AccessibilityTree (leaf)',
+    element: <AccessibilityTree url="https://example.test" tree={{ role: 'document' }} />,
+  },
+]
+
+/**
+ * The client as a host assembles it, in one React tree.
+ *
+ * One call, not a join of many: `useId` mints ids per render, so rendering
+ * each surface separately and concatenating would restart the counter and
+ * manufacture id collisions no host would ever produce.
+ *
+ * The composition is the real one, which is the point of scanning it. The chip
+ * and the settings card are singletons — one session header, one settings tab
+ * — while a tool view is rendered once per tool call, so each appears twice
+ * with identical props. That repetition is what a conversation running the
+ * same query twice produces, and it is what caught the tool views being
+ * `region` landmarks: two cards, one name, one `landmark-unique` violation.
+ */
+const ASSEMBLED = renderToStaticMarkup(
+  <>
+    <SessionCostChip usage={usage} />
+    <SettingsCard settings={settings} tokenStored onSave={() => undefined} />
+    <D1Result sql="SELECT id FROM users" resultSets={[{ results: [{ id: 1 }] }]} />
+    <D1Result sql="SELECT id FROM users" resultSets={[{ results: [{ id: 1 }] }]} />
+    <BrowserRender url="https://example.test" body="# Title" />
+    <BrowserRender url="https://example.test" body="# Title" />
+    <AccessibilityTree url="https://example.test" tree={tree} />
+    <AccessibilityTree url="https://example.test" tree={tree} />
+  </>,
+)
+
+const SURFACES: ReadonlyArray<{ name: string; markup: string }> = [
+  ...STATES.map((state) => ({ name: state.name, markup: renderToStaticMarkup(state.element) })),
+  { name: 'the assembled client', markup: ASSEMBLED },
 ]
 
 const THEMES: ReadonlyArray<{ name: string; scheme: 'light' | 'dark' }> = [
@@ -112,6 +160,32 @@ async function open(
   return { page, context }
 }
 
+/**
+ * Tab through `remaining` focus stops, reading the ring drawn on each.
+ *
+ * Recursive rather than a loop because the steps are genuinely sequential —
+ * a focus ring can only be read once focus has moved to the element that
+ * carries it, so there is nothing here to run in parallel.
+ */
+async function walk(page: Page, remaining: number, rings: unknown[] = []): Promise<unknown[]> {
+  if (remaining === 0) return rings
+  await page.keyboard.press('Tab')
+  rings.push(
+    await page.evaluate(() => {
+      const active = document.activeElement
+      if (active === null) return 'nothing focused'
+      const computed = getComputedStyle(active)
+      return {
+        style: computed.outlineStyle,
+        width: computed.outlineWidth,
+        offset: computed.outlineOffset,
+        color: computed.outlineColor,
+      }
+    }),
+  )
+  return walk(page, remaining - 1, rings)
+}
+
 describe('accessibility in Chromium', () => {
   for (const theme of THEMES) {
     for (const surface of SURFACES) {
@@ -135,6 +209,62 @@ describe('accessibility in Chromium', () => {
       }, 30_000)
     }
   }
+
+  /**
+   * The focus ring the stylesheet specifies, per scheme.
+   *
+   * Pinned to the declared treatment rather than to "an outline exists":
+   * Chromium draws its own `auto` ring when a page supplies none, so a test
+   * that only asks whether something is drawn passes with the stylesheet's
+   * focus block deleted — which is exactly the state this lane claimed to
+   * cover and did not.
+   */
+  const FOCUS_RING = {
+    light: 'rgb(11, 92, 171)',
+    dark: 'rgb(125, 180, 255)',
+  } as const
+
+  for (const theme of THEMES) {
+    it(`draws the declared focus ring on every focus stop in ${theme.name}`, async () => {
+      const { page, context } = await open(ASSEMBLED, theme.scheme)
+      try {
+        const stops = await page.locator('button, input, [tabindex="0"]').count()
+        // Four fields and a submit in the settings card, the chip's toggle,
+        // and one focus stop per scrollable tool card — two D1 results and two
+        // rendered pages. A drop here means a control stopped being reachable,
+        // which is the other half of what this checks.
+        expect(stops).toBe(10)
+        const rings = await walk(page, stops)
+        const expected = {
+          style: 'solid',
+          width: '2px',
+          // The offset is what puts the ring on the page background instead of
+          // a button's own fill, which is the pair the invariants lane computes.
+          offset: '2px',
+          color: FOCUS_RING[theme.scheme],
+        }
+        expect(rings).toEqual(Array.from({ length: stops }, () => expected))
+      } finally {
+        await context.close()
+      }
+    }, 30_000)
+  }
+
+  it('leaves nothing for a human to review, not merely nothing failing', async () => {
+    // axe reports a third outcome besides pass and fail. `aria-label` on a
+    // `<pre>` sat in `incomplete` for as long as this lane read `violations`
+    // alone, and the gate stayed green the whole time.
+    const { page, context } = await open(ASSEMBLED, 'light')
+    try {
+      const results = await new AxeBuilder({ page }).analyze()
+      const detail = results.incomplete
+        .map((r) => `${r.id}: ${r.nodes.map((n) => n.html).join(' | ')}`)
+        .join('\n')
+      expect(results.incomplete, detail).toEqual([])
+    } finally {
+      await context.close()
+    }
+  }, 30_000)
 
   it('computes real colour contrast, which jsdom cannot', async () => {
     const { page, context } = await open(SURFACES[0]!.markup, 'light')

@@ -4,11 +4,17 @@
  * returns an image block that the host shows as it shows any image in a tool
  * result — so this view has no image branch.
  *
- * The scroll container is a `<section>` rather than the `<pre>` itself. A
- * `<pre>` maps to the `generic` role, which ARIA prohibits `aria-label` on —
- * axe reports it for review and assistive technology may drop the name
- * altogether — and it takes its name from the caption by reference, so the
- * heading text exists once. `tabIndex` keeps the overflow reachable (SC 2.1.1).
+ * The `<figure>` is the scroll container, and it is deliberately not a
+ * landmark. A `<section>` with a name is a `region`, and tool views repeat: a
+ * conversation that renders the same page twice would ship two landmarks with
+ * one name, which the assembled scan catches as `landmark-unique`. A figure
+ * takes a name, groups its content and stays out of the landmark map.
+ *
+ * `aria-label` is not on the `<pre>`: that maps to the `generic` role, which
+ * ARIA prohibits naming — axe reports it for review and assistive technology
+ * may drop the name entirely. The name comes from the caption by reference, so
+ * the page it came from is stated once. `tabIndex` keeps the overflow
+ * reachable by keyboard (SC 2.1.1).
  */
 import { useId } from 'react'
 import { en } from '../locales/en.ts'
@@ -23,11 +29,11 @@ export interface BrowserRenderProps {
 export function BrowserRender({ url, body }: BrowserRenderProps): React.JSX.Element {
   const captionId = useId()
   return (
-    <figure className="cf-render">
-      <figcaption id={captionId}>{en.toolView.renderHeading(url)}</figcaption>
-      <section className="cf-render__body" tabIndex={0} aria-labelledby={captionId}>
-        <pre>{body}</pre>
-      </section>
+    <figure className="cf-render" tabIndex={0} aria-labelledby={captionId}>
+      <figcaption id={captionId} className="cf-render__caption">
+        {en.toolView.renderHeading(url)}
+      </figcaption>
+      <pre className="cf-render__body">{body}</pre>
     </figure>
   )
 }

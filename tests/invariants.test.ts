@@ -623,21 +623,225 @@ describe('nothing is hidden from the type checker', () => {
   })
 })
 
+/**
+ * Relative luminance of an `#rrggbb` colour, per WCAG 2.
+ *
+ * Written here rather than imported: the whole point of this gate is that no
+ * tool in the stack computes non-text contrast, so there is nothing to import.
+ */
+function luminance(hex: string): number {
+  const channels = [1, 3, 5]
+    .map((at) => Number.parseInt(hex.slice(at, at + 2), 16) / 255)
+    .map((value) => (value <= 0.039_28 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
+  return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0)
+}
+
+/** Contrast ratio between two `#rrggbb` colours, from 1 to 21. */
+function contrastRatio(first: string, second: string): number {
+  const [low, high] = [luminance(first), luminance(second)].toSorted((a, b) => a - b)
+  return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05)
+}
+
+/** One style rule, with the media conditions it sits under. */
+interface CssRule {
+  readonly selector: string
+  readonly body: string
+  readonly media: readonly string[]
+}
+
+/** Every rule in a stylesheet, flattened out of its at-rules. */
+function rulesOf(css: string, media: readonly string[] = []): CssRule[] {
+  const text = css.replace(/\/\*[\s\S]*?\*\//gu, '')
+  const rules: CssRule[] = []
+  let at = 0
+  while (at < text.length) {
+    const open = text.indexOf('{', at)
+    if (open === -1) break
+    const selector = text.slice(at, open).trim()
+    let depth = 1
+    let end = open + 1
+    while (end < text.length && depth > 0) {
+      if (text[end] === '{') depth += 1
+      else if (text[end] === '}') depth -= 1
+      end += 1
+    }
+    const body = text.slice(open + 1, end - 1)
+    if (selector.startsWith('@')) rules.push(...rulesOf(body, [...media, selector]))
+    else rules.push({ selector, body, media })
+    at = end
+  }
+  return rules
+}
+
+/** A declaration's value, or undefined when the rule does not set it. */
+const declaration = (body: string, property: string): string | undefined =>
+  new RegExp(`(?:^|;)\\s*${property}\\s*:([^;]*)`, 'u').exec(body)?.[1]?.trim()
+
+/** The `--cf-*` token a value resolves through, if it names one. */
+const tokenIn = (value: string | undefined): string | undefined =>
+  value === undefined ? undefined : /var\(\s*(--cf-[a-z-]+)/u.exec(value)?.[1]
+
+/** Token values for one colour scheme, taking the dark block's overrides. */
+function tokensOf(rules: readonly CssRule[], dark: boolean): Record<string, string> {
+  const values: Record<string, string> = {}
+  for (const rule of rules) {
+    const inDark = rule.media.some((query) => query.includes('prefers-color-scheme: dark'))
+    if (inDark && !dark) continue
+    for (const [, name, hex] of rule.body.matchAll(/(--cf-[a-z-]+)\s*:[^;]*?(#[0-9a-f]{6})/gu)) {
+      if (name !== undefined && hex !== undefined) values[name] = hex
+    }
+  }
+  return values
+}
+
+/** Properties whose colour is a boundary rather than text (SC 1.4.11). */
+const NON_TEXT_PROPERTIES = ['border', 'border-block-end', 'outline'] as const
+
+/** One pair of colours the stylesheet puts together, and the ratio it needs. */
+interface ContrastPair {
+  readonly where: string
+  readonly ratio: number
+  readonly minimum: number
+}
+
+/**
+ * Every foreground the stylesheet places on a background, per scheme.
+ *
+ * The background is the rule's own when it sets one and the surface background
+ * otherwise, which is what these components render on. Text needs 4.5:1
+ * (SC 1.4.3); a border or a focus ring needs 3:1 (SC 1.4.11), and nothing in
+ * the toolchain checks that one — axe ships no non-text-contrast rule.
+ */
+function contrastPairs(css: string): ContrastPair[] {
+  const rules = rulesOf(css)
+  const pairs: ContrastPair[] = []
+  for (const scheme of ['light', 'dark'] as const) {
+    const tokens = tokensOf(rules, scheme === 'dark')
+    const surface = tokens['--cf-bg']
+    for (const rule of rules) {
+      const background = tokens[tokenIn(declaration(rule.body, 'background')) ?? '--cf-bg'] ?? surface
+      if (background === undefined) continue
+      const add = (token: string | undefined, minimum: number, kind: string): void => {
+        const colour = token === undefined ? undefined : tokens[token]
+        if (colour === undefined) return
+        pairs.push({
+          where: `${rule.selector} [${scheme}] ${kind} ${colour} on ${background}`,
+          ratio: contrastRatio(colour, background),
+          minimum,
+        })
+      }
+      add(tokenIn(declaration(rule.body, 'color')), 4.5, 'text')
+      for (const property of NON_TEXT_PROPERTIES) {
+        add(tokenIn(declaration(rule.body, property)), 3, property)
+      }
+    }
+  }
+  return pairs
+}
+
+describe('every colour pair the stylesheet ships clears its ratio', () => {
+  // The analyzer is proven on snippets before it is trusted on the stylesheet.
+  const PROBE = [
+    ':root { --cf-bg: #ffffff; --cf-fg: #000000; --cf-border: #b9bdc4 }',
+    '@media (prefers-color-scheme: dark) { :root { --cf-bg: #000000; --cf-fg: #ffffff } }',
+    '.a { color: var(--cf-fg) }',
+    '.b { border: 1px solid var(--cf-border) }',
+  ].join('\n')
+
+  it('reads a token through its var reference and pairs it with the surface', () => {
+    expect(contrastPairs(PROBE).filter((pair) => pair.where.startsWith('.a'))).toEqual([
+      { where: '.a [light] text #000000 on #ffffff', ratio: 21, minimum: 4.5 },
+      { where: '.a [dark] text #ffffff on #000000', ratio: 21, minimum: 4.5 },
+    ])
+  })
+
+  it('holds a border to 3:1 and finds one that misses it', () => {
+    const border = contrastPairs(PROBE).filter((pair) => pair.where.startsWith('.b'))
+    expect(border.map((pair) => pair.minimum)).toEqual([3, 3])
+    expect(border.filter((pair) => pair.ratio < pair.minimum).map((pair) => pair.where)).toEqual([
+      '.b [light] border #b9bdc4 on #ffffff',
+    ])
+  })
+
+  it('takes a rule’s own background over the surface', () => {
+    const css =
+      ':root { --cf-bg: #ffffff; --cf-accent: #0b5cab }\n.c { color: var(--cf-bg); background: var(--cf-accent) }'
+    expect(contrastPairs(css).map((pair) => pair.where)).toEqual([
+      '.c [light] text #ffffff on #0b5cab',
+      '.c [dark] text #ffffff on #0b5cab',
+    ])
+  })
+
+  it('puts no colour beneath the ratio its use requires', () => {
+    const pairs = contrastPairs(read('packages/client/src/cloudflare.css'))
+    // An empty parse would satisfy the assertion below without checking a
+    // thing, so the count is asserted first.
+    expect(pairs.length).toBeGreaterThan(20)
+    expect(
+      pairs
+        .filter((pair) => pair.ratio < pair.minimum)
+        .map((pair) => `${pair.where} = ${pair.ratio.toFixed(2)}, needs ${pair.minimum}`),
+    ).toEqual([])
+  })
+})
+
 describe('accessibility cannot be filtered', () => {
   it.each([
     ['tag scope', `with${'Tags('}`],
     ['rule narrowing', `with${'Rules('}`],
     ['rule disabling', `disable${'Rules('}`],
-    ['selector exclusion', `.exc${'lude('}`],
     ['inline rule overrides', `rul${'es: {'}`],
+    // The five above were the only ones listed, and none of them is how axe is
+    // actually narrowed: one option scopes a run to a weaker conformance
+    // target, another throws away everything the assertion reads, two builder
+    // methods do by configuration what the banned calls do by name, and the
+    // reconfiguration entry point disables rules through an array, which the
+    // object needle above does not match. Each needle is assembled, since this
+    // file is itself scanned.
+    ['conformance scoping', `run${'Only'}`],
+    ['result narrowing', `result${'Types'}`],
+    ['rule reconfiguration', `axe.con${'figure'}`],
+    ['array rule overrides', `rul${'es: ['}`],
   ])('no %s is used in any test', (_label, needle) => {
     expect(containing(tests, needle)).toEqual([])
+  })
+
+  // The builder's scoping methods, matched as calls on a receiver. A bare
+  // substring cannot tell a method call on the builder from a spread of a
+  // local fixture that happens to share the name, and the difference is a
+  // false failure on a test that has nothing to do with axe.
+  it.each([
+    ['selector exclusion', `exc${'lude'}`],
+    ['selector scoping', `inc${'lude'}`],
+    ['builder options', `opt${'ions'}`],
+  ])('calls no %s method on an axe builder', (_label, method) => {
+    expect(matching(tests, new RegExp(`[\\w)\\]]\\.${method}\\(`, 'u'))).toEqual([])
   })
 
   it('scans every surface with the whole rule set', () => {
     expect(read('packages/client/tests/a11y.browser.test.tsx')).toContain(
       'new AxeBuilder({ page }).analyze()',
     )
+  })
+
+  it('gives the jsdom helper no way to take options, since that is where a filter would hide', () => {
+    // The helper's own comment says an options parameter is where a rule
+    // disable would sit. A comment is not a gate: the call is pinned to its
+    // single argument, and the wrapper to its single parameter.
+    const helper = read('packages/client/tests/axe.ts')
+    expect(helper).toContain('axe.run(container)')
+    expect(helper).toContain('async function runAxe(container: Element): Promise<AxeResults>')
+  })
+
+  it.each([
+    // Each of these was absent while the lane's own doc claimed it, or while
+    // the gate read only the outcome that happened to be empty.
+    ['scans the client as a host assembles it', 'const ASSEMBLED = renderToStaticMarkup('],
+    ['fails on what axe leaves for review, not only on what it fails', 'results.incomplete'],
+    ['walks the page by keyboard', `keyboard.press('Tab')`],
+    ['reads the focus ring the stylesheet declares', 'computed.outlineStyle'],
+  ])('%s', (_label, needle) => {
+    expect(read('packages/client/tests/a11y.browser.test.tsx')).toContain(needle)
   })
 
   it('runs the browser lane rather than leaving those tests unrun', () => {

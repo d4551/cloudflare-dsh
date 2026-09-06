@@ -4,6 +4,10 @@
  * Rendered as a real nested list so the structure is navigable by the same
  * assistive technology it describes — a flat JSON dump would show the data
  * without conveying the hierarchy.
+ *
+ * A named `<figure>`, not a `<section>`: a named section is a `region`
+ * landmark, and two tool calls against the same page would then ship two
+ * landmarks with one name.
  */
 import { en } from '../locales/en.ts'
 
@@ -46,10 +50,10 @@ function TreeNode({ node }: { readonly node: AxNode }): React.JSX.Element {
 
 export function AccessibilityTree({ url, tree }: AccessibilityTreeProps): React.JSX.Element {
   return (
-    <section className="cf-axtree" aria-label={en.toolView.treeHeading(url)}>
+    <figure className="cf-axtree" aria-label={en.toolView.treeHeading(url)}>
       <ul>
         <TreeNode node={tree} />
       </ul>
-    </section>
+    </figure>
   )
 }

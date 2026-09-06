@@ -727,10 +727,32 @@ describe('DataToolsConfig', () => {
     expect(() => dataTools.Config({ pageSize: 0 })).toThrow('$.pageSize expected number >= 1 but got 0')
   })
 
-  it('applies a configured page size to every paged listing', async () => {
+  // Every listing that reads `pageSize`, not the first one. The name said
+  // "every" while the body asserted `cloudflare_kv_namespace_list` alone, so
+  // the other two could have ignored the setting entirely and stayed green.
+  it.each([
+    ['cloudflare_kv_namespace_list', {}],
+    ['cloudflare_d1_list', {}],
+    ['cloudflare_r2_bucket_list', {}],
+  ])('applies a configured page size to %s', async (name, args) => {
     const h = makeHarness(dataTools, async () => envelope([]), {}, { pageSize: 7 })
-    await h.run('cloudflare_kv_namespace_list', {})
+    await h.run(name, args)
     expect(h.requests[0]!.url).toContain('per_page=7')
+  })
+
+  it('offers a page size on exactly those three listings, so a fourth cannot slip past them', () => {
+    // Read from the registry rather than remembered: a new paged listing makes
+    // this fail, which is what forces it into the cases above. A list nobody
+    // has to update is checkable by omission.
+    const h = makeHarness(dataTools, async () => envelope([]), {}, {})
+    const offersPageSize = h
+      .names()
+      .filter((name) => Object.keys(h.tool(name).parameters.properties ?? {}).includes('perPage'))
+    expect(offersPageSize.toSorted()).toEqual([
+      'cloudflare_d1_list',
+      'cloudflare_kv_namespace_list',
+      'cloudflare_r2_bucket_list',
+    ])
   })
 
   it('applies a configured key list limit', async () => {

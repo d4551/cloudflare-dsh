@@ -4,10 +4,13 @@
  * A real table, because a screen reader needs row and column relationships to
  * read a result set usefully: `<th scope="col">` headers, and a caption naming
  * the query the rows came from. The scroll container is focusable so a
- * keyboard user can reach a wide table's overflow (SC 2.1.1), and it is a
- * `<section>` taking its name from that caption by reference — an element
- * whose own semantics permit a name, and one statement of the query rather
- * than two.
+ * keyboard user can reach a wide table's overflow (SC 2.1.1), and it takes its
+ * name from that caption by reference, so the query is stated once.
+ *
+ * A `<figure>` rather than a `<section>`, deliberately. A named section is a
+ * `region` landmark, and tool views repeat: two runs of the same query would
+ * put two identically named landmarks on the page, which is what the assembled
+ * scan reported. A result card is not a landmark of the application.
  */
 import { useId } from 'react'
 import { en } from '../locales/en.ts'
@@ -55,7 +58,7 @@ export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element 
   return (
     // tabIndex makes the overflow reachable by keyboard; the caption names the
     // focus stop, so it is meaningful rather than an unlabelled target.
-    <section className="cf-d1" tabIndex={0} aria-labelledby={captionId}>
+    <figure className="cf-d1" tabIndex={0} aria-labelledby={captionId}>
       <table>
         <caption id={captionId}>{en.toolView.queryCaption(sql)}</caption>
         <thead>
@@ -78,6 +81,6 @@ export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element 
           ))}
         </tbody>
       </table>
-    </section>
+    </figure>
   )
 }

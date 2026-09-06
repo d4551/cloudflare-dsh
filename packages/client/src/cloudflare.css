@@ -3,9 +3,14 @@
  *
  * Colours come from CSS custom properties so the host's theme wins where it
  * defines them, with fallbacks that are self-sufficient when it does not.
- * Every fallback pair is checked for WCAG AA contrast by the Chromium
- * accessibility lane, in both light and dark — jsdom cannot compute contrast
- * (axe-core#595), so it has to be verified in a real browser.
+ *
+ * Two lanes check those fallbacks, because one cannot reach both criteria.
+ * The Chromium lane runs axe over every surface in both colour schemes, which
+ * covers text contrast (SC 1.4.3) on the copy actually rendered — jsdom cannot
+ * compute contrast at all (axe-core#595). axe has no rule for non-text
+ * contrast, so borders and focus rings (SC 1.4.11) are computed straight from
+ * this file by the invariants lane, which reads every rule here and every
+ * token below and fails on a pair beneath its ratio.
  */
 
 .cf-chip,
@@ -16,7 +21,7 @@
   --cf-fg: var(--dsh-fg, #16181d);
   --cf-bg: var(--dsh-bg, #ffffff);
   --cf-muted: var(--dsh-fg-muted, #55595f);
-  --cf-border: var(--dsh-border, #b9bdc4);
+  --cf-border: var(--dsh-border, #82878f);
   --cf-accent: var(--dsh-accent, #0b5cab);
   --cf-danger: var(--dsh-danger, #a3131c);
 
@@ -33,7 +38,7 @@
     --cf-fg: var(--dsh-fg, #f2f3f5);
     --cf-bg: var(--dsh-bg, #16181d);
     --cf-muted: var(--dsh-fg-muted, #b3b8c0);
-    --cf-border: var(--dsh-border, #565b63);
+    --cf-border: var(--dsh-border, #6f757e);
     --cf-accent: var(--dsh-accent, #7db4ff);
     --cf-danger: var(--dsh-danger, #ff9ba1);
   }
@@ -138,12 +143,16 @@
   color: var(--cf-muted);
 }
 
-/* Focus must stay visible and meet 3:1 against the adjacent background
-   (SC 2.4.11, 2.4.13); never removed without a replacement. */
+/* A visible focus indicator (SC 2.4.7), never removed without a replacement,
+   and one that meets 3:1 against the background it sits on — that ratio comes
+   from SC 1.4.11 Non-text Contrast, not from SC 2.4.11, which is about a
+   focused control not being obscured. `outline-offset` puts the ring on the
+   page background rather than on the control's own fill, which is the pair the
+   invariants lane computes. */
 .cf-chip :focus-visible,
 .cf-settings :focus-visible,
 .cf-d1:focus-visible,
-.cf-render :focus-visible {
+.cf-render:focus-visible {
   outline: 2px solid var(--cf-accent);
   outline-offset: 2px;
 }
@@ -179,23 +188,34 @@
   color: var(--cf-muted);
 }
 
-.cf-render figcaption,
+.cf-render__caption,
 .cf-axtree {
   font-size: 0.875rem;
 }
 
-.cf-render__body {
-  display: block;
+.cf-d1,
+.cf-axtree {
+  margin: 0;
+}
+
+.cf-render {
   max-block-size: 24rem;
   overflow: auto;
+  margin: 0;
   padding: 0.5rem;
   border: 1px solid var(--cf-border);
   border-radius: 4px;
 }
 
-/* The scroll container owns the box; the `pre` inside it only preserves the
-   whitespace of what was rendered. */
-.cf-render__body pre {
+/* The caption names the focus stop, so it stays put while the body scrolls
+   under it rather than leaving the reader without it. */
+.cf-render__caption {
+  position: sticky;
+  inset-block-start: 0;
+  background: var(--cf-bg);
+}
+
+.cf-render__body {
   margin: 0;
 }
 
