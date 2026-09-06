@@ -15,11 +15,12 @@
  * Every colour here comes from `light-dark()`, which is the engine floor these
  * surfaces are written against: Chrome and Edge 123, Firefox 120, Safari 17.5,
  * Baseline since May 2024. Below it the function does not parse, so each token
- * is invalid where it is substituted — measured in Chromium with the function
- * renamed, that leaves text inheriting the host's colour and every background
- * transparent, which is the right degradation for a fragment except that the
- * accent buttons lose their fill and read as plain text. Supporting an engine
- * that old means giving those a fallback; nothing here claims to.
+ * is invalid where it is substituted. The browser lane measures what that
+ * leaves rather than describing it — it renames the function, which rewrites
+ * the feature query below along with the tokens — and what it finds is text
+ * inheriting the host's colour and every background falling away, which is the
+ * right degradation for a fragment sitting in someone else's page. The accent
+ * buttons are the exception the feature query exists for.
  *
  * Two lanes check those fallbacks, because one cannot reach both criteria.
  * The Chromium lane runs axe over every surface in both colour schemes, which
@@ -109,6 +110,22 @@
   border: 1px solid transparent;
   border-radius: 4px;
   cursor: pointer;
+}
+
+/* The one consequence below the engine floor that is not benign.
+   A token that fails to parse takes its whole declaration with it, and an
+   earlier declaration does not stand in — the cascade already discarded it, and
+   the winner only becomes invalid later, at computed-value time. So a fallback
+   has to be a separate rule behind a feature query, and it has to be written in
+   literals, since a token is the thing that is missing. These are the values
+   the tokens resolve to in the light scheme, and the same feature query is what
+   the browser lane flips to measure the degradation. */
+@supports not (color: light-dark(#000000, #ffffff)) {
+  .cf-chip__toggle,
+  .cf-settings button {
+    color: #ffffff;
+    background: #0b5cab;
+  }
 }
 
 /* `:not([hidden])`, because a class setting `display` outranks the user agent's

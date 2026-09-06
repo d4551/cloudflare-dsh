@@ -802,6 +802,24 @@ const tokenIn = (value: string | undefined): string | undefined =>
   value === undefined ? undefined : /var\(\s*(--cf-[a-z-]+)/u.exec(value)?.[1]
 
 /**
+ * The colour a declaration puts on screen, whether it names a token or not.
+ *
+ * Resolving only through `var(--cf-*)` was a hole under a claim to read every
+ * rule here: a literal colour anywhere in the sheet was skipped in silence, and
+ * the fallback block for engines without `light-dark()` is written in literals
+ * because a token is exactly what it cannot use. `transparent` and the like
+ * resolve to nothing, which is right — they place no colour on anything.
+ */
+const colourOf = (
+  value: string | undefined,
+  tokens: Readonly<Record<string, string>>,
+): string | undefined => {
+  if (value === undefined) return undefined
+  const token = tokenIn(value)
+  return token === undefined ? /#[0-9a-f]{6}/u.exec(value)?.[0] : tokens[token]
+}
+
+/**
  * Token values for one colour scheme.
  *
  * A token is declared once and carries both schemes in a `light-dark()` pair,
@@ -823,6 +841,9 @@ function tokensOf(rules: readonly CssRule[], dark: boolean): Record<string, stri
   }
   return values
 }
+
+/** A rule's selector with its line breaks and indentation flattened. */
+const selectorOf = (rule: CssRule): string => rule.selector.replaceAll(/\s+/gu, ' ')
 
 /** Properties whose colour is a boundary rather than text (SC 1.4.11). */
 const NON_TEXT_PROPERTIES = ['border', 'border-block-end', 'outline'] as const
@@ -849,10 +870,10 @@ function contrastPairs(css: string): ContrastPair[] {
     const tokens = tokensOf(rules, scheme === 'dark')
     const surface = tokens['--cf-bg']
     for (const rule of rules) {
-      const background = tokens[tokenIn(declaration(rule.body, 'background')) ?? '--cf-bg'] ?? surface
+      const background = colourOf(declaration(rule.body, 'background'), tokens) ?? surface
       if (background === undefined) continue
-      const add = (token: string | undefined, minimum: number, kind: string): void => {
-        const colour = token === undefined ? undefined : tokens[token]
+      const add = (value: string | undefined, minimum: number, kind: string): void => {
+        const colour = colourOf(value, tokens)
         if (colour === undefined) return
         pairs.push({
           where: `${rule.selector} [${scheme}] ${kind} ${colour} on ${background}`,
@@ -860,9 +881,9 @@ function contrastPairs(css: string): ContrastPair[] {
           minimum,
         })
       }
-      add(tokenIn(declaration(rule.body, 'color')), 4.5, 'text')
+      add(declaration(rule.body, 'color'), 4.5, 'text')
       for (const property of NON_TEXT_PROPERTIES) {
-        add(tokenIn(declaration(rule.body, property)), 3, property)
+        add(declaration(rule.body, property), 3, property)
       }
     }
   }
@@ -883,6 +904,80 @@ describe('the stylesheet introduces no motion', () => {
       expect(css).not.toContain(property)
     },
   )
+})
+
+/**
+ * Foreground declarations the analyzer above cannot resolve to a colour.
+ *
+ * The claim is that every rule in the stylesheet is read. That claim was safe
+ * only while every colour happened to name a `--cf-*` token: a literal, an
+ * `rgb()` or a named colour resolved to nothing and was skipped in silence, so
+ * the "every" rested on a habit rather than on anything enforced. Keywords
+ * that place no colour are excused by name, which is a closed set rather than
+ * a pattern that has to guess.
+ */
+function unreadableColours(css: string): string[] {
+  const rules = rulesOf(css)
+  const tokens = tokensOf(rules, false)
+  const excused = new Set(['transparent', 'currentcolor', 'inherit', 'unset', 'initial', 'revert', 'none'])
+  const unreadable: string[] = []
+  for (const rule of rules) {
+    for (const property of ['color', ...NON_TEXT_PROPERTIES]) {
+      const value = declaration(rule.body, property)
+      if (value === undefined || colourOf(value, tokens) !== undefined) continue
+      if (
+        value
+          .toLowerCase()
+          .split(/\s+/u)
+          .some((word) => excused.has(word))
+      )
+        continue
+      unreadable.push(`${rule.selector} { ${property}: ${value} }`)
+    }
+  }
+  return unreadable
+}
+
+describe('the fallback below the engine floor says what the tokens say', () => {
+  it('repeats the light-scheme value of every token it stands in for', () => {
+    // The fallback has to be literals — a token is the thing that is missing
+    // below the floor — so it is the one place in this stylesheet where a
+    // colour is written twice. Change `--cf-accent` and the two drift, and
+    // nothing on an old engine would ever say so. This is what says so.
+    const rules = rulesOf(read('packages/client/src/cloudflare.css'))
+    const light = tokensOf(rules, false)
+    const values = (rule: CssRule): (string | undefined)[] =>
+      ['color', 'background'].map((property) => colourOf(declaration(rule.body, property), light))
+    const behindQuery = rules.filter((rule) => rule.media.some((query) => query.startsWith('@supports')))
+    expect(behindQuery.map(selectorOf)).toEqual(['.cf-chip__toggle, .cf-settings button'])
+    const shadowed = rules.filter(
+      (rule) => rule.media.length === 0 && behindQuery.some((it_) => selectorOf(it_) === selectorOf(rule)),
+    )
+    expect(shadowed).toHaveLength(1)
+    // Both sides are read the same way, so this compares resolved colours
+    // rather than the spelling of either.
+    expect(behindQuery.map(values)).toEqual(shadowed.map(values))
+    // And neither side is allowed to be two undefineds agreeing with nothing.
+    expect(behindQuery.map(values)).toEqual([['#ffffff', '#0b5cab']])
+  })
+})
+
+describe('every colour the stylesheet paints is one the analyzer can read', () => {
+  it('names a colour it cannot resolve', () => {
+    expect(unreadableColours('.a { color: rgb(1, 2, 3) }')).toEqual(['.a { color: rgb(1, 2, 3) }'])
+  })
+
+  it('excuses the keywords that place no colour', () => {
+    expect(
+      unreadableColours('.a { border: 1px solid transparent; outline: 1px solid currentColor }'),
+    ).toEqual([])
+  })
+
+  it('reads every foreground the shipped stylesheet declares', () => {
+    // Without this the ratio gate above measures whatever it happens to
+    // understand and reports a clean sheet for the rest.
+    expect(unreadableColours(read('packages/client/src/cloudflare.css'))).toEqual([])
+  })
 })
 
 describe('the stylesheet declares no colour scheme of its own', () => {

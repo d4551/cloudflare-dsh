@@ -38,14 +38,16 @@ afterAll(async () => {
   await browser?.close()
 })
 
-/** Mount the client into a page and wait for React to commit. */
-async function mount(
-  options: { readonly scheme?: 'light' | 'dark'; readonly reducedMotion?: 'reduce' | 'no-preference' } = {},
-): Promise<{ page: Page; context: BrowserContext }> {
-  const context = await browser.newContext({
-    colorScheme: options.scheme ?? 'light',
-    ...(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion }),
-  })
+/**
+ * Mount the client into a page and wait for React to commit.
+ *
+ * Takes nothing. It carried a colour scheme and a reduced-motion preference no
+ * caller ever passed, which is apparatus that reads as coverage and is not:
+ * both belong to the lanes that actually vary them, and this one operates the
+ * client.
+ */
+async function mount(): Promise<{ page: Page; context: BrowserContext }> {
+  const context = await browser.newContext({ colorScheme: 'light' })
   const page = await context.newPage()
   // The same host document every other browser lane loads, so what is operated
   // here is what is scanned there.

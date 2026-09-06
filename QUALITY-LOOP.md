@@ -9,7 +9,81 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 15**
+**I'm a fucking loser: 16**
+
+<details>
+<summary><strong>Restart 16 — a criterion the page said was measured, and no lane ever measured</strong></summary>
+
+An eighth adversarial audit of `00b35fa` reported a violation and, by design,
+not where, with one line to work from: it is not in the configuration and it is
+not in the numbers — it is in something that claims to be measured and is not.
+
+It was target size. The page says the assembled client is checked for **target
+size (SC 2.5.8) — measured on the rendered box, not read off the declaration,
+and 44px rather than 24 wherever the pointer is coarse**. The 24 was measured.
+The 44 never was. Every lane in this repository ran with a mouse: `hasTouch` is
+the only Playwright context option that makes `(pointer: coarse)` match —
+`isMobile` alone leaves the pointer fine, which is the trap, because a
+phone-sized viewport looks like a phone and is not one — and nothing set it. The
+stylesheet's entire finger-sized-target block could have been deleted with every
+gate green, under a page saying it was measured. Deleting it now fails seven
+tests.
+
+The lane runs every viewport under both pointers with the floor each one earns,
+and asserts the media feature actually flipped before it measures anything, so
+an emulation that stopped working cannot quietly retest a mouse under a name
+promising a finger.
+
+Three more of the same class came out of the sweep that followed.
+
+1. **Text spacing said seven widths and ran three.** `VIEWPORTS[0]`,
+   `VIEWPORTS[3]` and `VIEWPORTS[5]`, under a page listing all seven. It runs at
+   all seven now.
+
+2. **The stylesheet's degradation below its engine floor was described, not
+   measured.** The previous entry added a sentence beginning "measured in
+   Chromium" about what happens on an engine without `light-dark()`. It had
+   been measured — with a throwaway script outside the tree, which is a claim a
+   reader cannot check and a gate cannot hold. The lane does it now, and doing
+   it properly found the thing worth fixing: an invalid token takes its whole
+   declaration with it and an earlier declaration does not stand in, because the
+   cascade discarded that one before the winner became invalid. So the accent
+   buttons lost their fill and read as plain text. A feature query hands them
+   literals, and the lane's rename rewrites that query's own condition along
+   with the tokens — which is what makes it the degradation a real engine shows
+   rather than an approximation of one.
+
+3. **"Reads every rule here" rested on a habit.** The contrast analyzer
+   resolved colours only through `var(--cf-*)`; a literal, an `rgb()` or a named
+   colour resolved to nothing and was skipped in silence. It was true only
+   because every colour happened to name a token — and the fallback above is
+   written in literals, because a token is precisely what it cannot use. The
+   analyzer reads both now, and a second gate names every foreground
+   declaration it cannot resolve, so the "every" is enforced rather than
+   observed.
+
+The five criteria the viewport lane holds — reflow, target size, text spacing,
+whose colour scheme wins, and the engine floor — are in the commitments table
+now, each naming every test that holds it rather than one of them. That table is
+checked against what vitest actually collects, so a name that stops running
+fails the build; a row citing one test for a claim about seven widths would have
+been the same over-claim in the citation.
+
+The end-to-end lane also carried a colour scheme and a reduced-motion preference
+that no caller ever passed. Apparatus that reads as coverage and is not is the
+same defect in a smaller form, so it is gone.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings` with seven plugins, `oxfmt --check` clean across 122 files,
+247 invariant and README tests, 1,414 unit tests at 100% coverage (1,204
+statements, 666 branches, 390 functions, 1,067 lines), 86 Chromium tests across
+two colour schemes, six pairings of host and system scheme, two pointers and
+seven viewports, with no rule or selector filtering and nothing left for review,
+36 built-artifact tests, knip 0, and publint clean on all three packages. The
+mutation run is still going as this is written; the commit that finishes it adds
+its number here rather than this line predicting one.
+
+</details>
 
 <details>
 <summary><strong>Restart 15 — the numbers were true, and never reached the things that decide them</strong></summary>

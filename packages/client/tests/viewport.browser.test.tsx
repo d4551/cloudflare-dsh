@@ -108,13 +108,8 @@ describe('forced colours', () => {
   // repaint, becomes unreadable for the people who rely on it — and no other
   // lane here runs with the mode on.
   it('opts nothing out of the system palette', async () => {
-    const context = await browser.newContext({ forcedColors: 'active' })
-    const page = await context.newPage()
+    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'light', forcedColors: 'active' })
     try {
-      await page.setContent(
-        `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title>` +
-          `<style>${css}</style></head><body><main>${ASSEMBLED}</main></body></html>`,
-      )
       const optedOut = await page.evaluate(() =>
         [...document.querySelectorAll<HTMLElement>('main *')]
           .filter((node) => getComputedStyle(node).forcedColorAdjust === 'none')
@@ -127,13 +122,8 @@ describe('forced colours', () => {
   }, 30_000)
 
   it('keeps a field and a table cell bounded by a border the mode can repaint', async () => {
-    const context = await browser.newContext({ forcedColors: 'active' })
-    const page = await context.newPage()
+    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'light', forcedColors: 'active' })
     try {
-      await page.setContent(
-        `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title>` +
-          `<style>${css}</style></head><body><main>${ASSEMBLED}</main></body></html>`,
-      )
       // Written without a helper: this function is serialised into the page,
       // so anything it calls has to be inside it.
       const widths = await page.evaluate(() => {
@@ -242,6 +232,76 @@ describe('colour scheme', () => {
   }, 30_000)
 })
 
+describe('without light-dark()', () => {
+  /**
+   * The stylesheet as an engine below the floor parses it.
+   *
+   * Every colour here is a `light-dark()` pair, which needs Chrome and Edge
+   * 123, Firefox 120 or Safari 17.5. Renaming the function is what an older
+   * engine sees: the tokens still parse as custom properties, and every
+   * property substituting one becomes invalid at computed-value time.
+   *
+   * Appended rather than swapped in, because the selectors and specificity are
+   * identical, so the later sheet wins — and the page under test is still the
+   * one the other lanes load.
+   */
+  const UNSUPPORTED = css.replaceAll('light-dark(', 'lightdarkunsupported(')
+
+  it('degrades to the host’s own colours, and keeps the accent buttons legible', async () => {
+    // The stylesheet's header states this degradation. It said "measured" for
+    // one commit while nothing in the tree measured it; this is the
+    // measurement, so the sentence and the file cannot drift apart.
+    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'light' })
+    try {
+      await page.addStyleTag({ content: UNSUPPORTED })
+      // Read without a helper: this function is serialised into the page, so a
+      // helper declared outside it would not exist by the time it runs.
+      const read = await page.evaluate(() => {
+        const card = getComputedStyle(document.querySelector('.cf-settings') as Element)
+        const button = getComputedStyle(document.querySelector('.cf-settings button') as Element)
+        return {
+          pageColour: getComputedStyle(document.body).color,
+          cardColour: card.color,
+          cardBackground: card.backgroundColor,
+          fieldBackground: getComputedStyle(document.querySelector('.cf-field input') as Element)
+            .backgroundColor,
+          buttonBackground: button.backgroundColor,
+          buttonColour: button.color,
+        }
+      })
+      // Text keeps working: the declaration drops and the host's colour is
+      // inherited, which is the right answer for a fragment.
+      expect(read.cardColour).toBe(read.pageColour)
+      // Backgrounds fall away, so the host's own surface shows through.
+      expect(read.cardBackground).toBe('rgba(0, 0, 0, 0)')
+      expect(read.fieldBackground).toBe('rgba(0, 0, 0, 0)')
+      // Except the accent buttons. Losing their fill would leave a primary
+      // control reading as plain text, so a feature query hands them literals
+      // — and the rename above rewrites that query's own condition, which is
+      // what makes this the degradation a real engine would show rather than
+      // an approximation of it.
+      expect(read.buttonBackground).toBe('rgb(11, 92, 171)')
+      expect(read.buttonColour).toBe('rgb(255, 255, 255)')
+    } finally {
+      await context.close()
+    }
+  }, 30_000)
+
+  it('still resolves every colour on an engine that has it', async () => {
+    // Without this the test above passes on a stylesheet that never used
+    // `light-dark()` at all, which is the same assertion for a different tree.
+    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'light' })
+    try {
+      const button = await page.evaluate(
+        () => getComputedStyle(document.querySelector('.cf-settings button') as Element).backgroundColor,
+      )
+      expect(button).toBe('rgb(11, 92, 171)')
+    } finally {
+      await context.close()
+    }
+  }, 30_000)
+})
+
 describe('measure', () => {
   // A fragment inherits its host's width, and at a desktop width that meant a
   // metre-wide text field and prose running to hundreds of characters a line.
@@ -332,27 +392,51 @@ describe('what `hidden` does', () => {
 })
 
 describe('target size', () => {
-  for (const viewport of VIEWPORTS) {
-    it(`gives every control at least 24x24 CSS pixels at ${viewport.name}`, async () => {
-      const { page, context } = await open(browser, ASSEMBLED, {
-        scheme: 'light',
-        viewport: { width: viewport.width, height: viewport.height },
-      })
-      try {
-        const small = await page.evaluate(() =>
-          [...document.querySelectorAll<HTMLElement>('button, input, [tabindex="0"]')]
-            .map((node) => ({
-              what: `${node.tagName.toLowerCase()}${node.getAttribute('name') === null ? '' : `[${node.getAttribute('name')}]`}`,
-              width: Math.round(node.getBoundingClientRect().width),
-              height: Math.round(node.getBoundingClientRect().height),
-            }))
-            .filter((box) => box.width < 24 || box.height < 24),
-        )
-        expect(small).toEqual([])
-      } finally {
-        await context.close()
-      }
-    }, 30_000)
+  /**
+   * The two pointers, and the floor each one earns.
+   *
+   * 24 is the conformance minimum SC 2.5.8 sets for any pointer. A finger is
+   * not any pointer — Apple's HIG asks for 44pt and Material for 48dp — so the
+   * stylesheet gives a coarse pointer 44, and this is what holds it. Nothing
+   * did: every lane ran with a mouse, `hasTouch` is the only context option
+   * that makes `(pointer: coarse)` match, and the whole media block could have
+   * been deleted with every gate green under a page claiming it measured.
+   */
+  const POINTERS = [
+    { name: 'a fine pointer', touch: false, floor: 24 },
+    { name: 'a coarse pointer', touch: true, floor: 44 },
+  ] as const
+
+  for (const pointer of POINTERS) {
+    for (const viewport of VIEWPORTS) {
+      it(`gives every control at least ${pointer.floor}px with ${pointer.name} at ${viewport.name}`, async () => {
+        const { page, context } = await open(browser, ASSEMBLED, {
+          scheme: 'light',
+          viewport: { width: viewport.width, height: viewport.height },
+          touch: pointer.touch,
+        })
+        try {
+          // The emulation is asserted, not trusted: a context option that
+          // stopped flipping the media feature would silently retest a mouse
+          // under a name promising a finger.
+          expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(pointer.touch)
+          const small = await page.evaluate(
+            (floor) =>
+              [...document.querySelectorAll<HTMLElement>('button, input, [tabindex="0"]')]
+                .map((node) => ({
+                  what: `${node.tagName.toLowerCase()}${node.getAttribute('name') === null ? '' : `[${node.getAttribute('name')}]`}`,
+                  width: Math.round(node.getBoundingClientRect().width),
+                  height: Math.round(node.getBoundingClientRect().height),
+                }))
+                .filter((box) => box.width < floor || box.height < floor),
+            pointer.floor,
+          )
+          expect(small).toEqual([])
+        } finally {
+          await context.close()
+        }
+      }, 30_000)
+    }
   }
 })
 
@@ -365,7 +449,7 @@ describe('text spacing', () => {
     'p{margin-block-end:2em !important}',
   ].join('')
 
-  for (const viewport of [VIEWPORTS[0], VIEWPORTS[3], VIEWPORTS[5]]) {
+  for (const viewport of VIEWPORTS) {
     it(`loses no content under the text-spacing overrides at ${viewport.name}`, async () => {
       const { page, context } = await open(browser, ASSEMBLED, {
         scheme: 'light',

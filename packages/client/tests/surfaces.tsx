@@ -183,6 +183,16 @@ export interface PageOptions {
    * a test asks whose choice these fragments actually follow.
    */
   readonly hostScheme?: HostScheme | undefined
+  /**
+   * Emulate a touch pointer, which is what makes `(pointer: coarse)` match.
+   *
+   * Measured rather than assumed: `hasTouch` is the only context option that
+   * flips it — `isMobile` alone leaves the pointer fine, so a lane that set
+   * only a phone-sized viewport was still testing a mouse.
+   */
+  readonly touch?: boolean | undefined
+  /** Emulate Windows high contrast, which replaces every colour the page chose. */
+  readonly forcedColors?: 'active' | undefined
 }
 
 /**
@@ -199,6 +209,8 @@ export async function open(
   const context = await browser.newContext({
     colorScheme: options.scheme,
     ...(options.viewport === undefined ? {} : { viewport: options.viewport }),
+    ...(options.touch === undefined ? {} : { hasTouch: options.touch }),
+    ...(options.forcedColors === undefined ? {} : { forcedColors: options.forcedColors }),
   })
   const page = await context.newPage()
   await page.setContent(hostPage(markup, options.hostScheme ?? 'light dark'))
