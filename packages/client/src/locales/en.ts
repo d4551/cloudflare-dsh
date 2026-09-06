@@ -47,6 +47,7 @@ export const en = {
     unknownRole: 'unknown',
     node: (role: string, name: string) => `${role}: ${name}`,
     queryCaption: (sql: string) => `Results for query: ${sql}`,
+    rowsShown: (shown: number, total: number) => `Showing the first ${shown} of ${total} rows.`,
     emptyResult: 'The query returned no rows.',
   },
 }

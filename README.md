@@ -605,14 +605,14 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 is declared. Components never receive `ctx`; they take props. A list slot places
 its entry by `id`; the keyed tool-view slot dispatches on the wire tool name.
 
-| Component           | Slot                                                           | What it shows                                                               |
-| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `SettingsCard`      | `settings.plugins.tab` → `cloudflare`                          | Credential reference, account and gateway selection. Write-only for secrets |
-| `SessionCostChip`   | `conversation.session.header.actions`                          | This session's requests, cost, cache hit rate and token counts              |
-| `D1Result`          | `tool.call.toolview` → `cloudflare_d1_query`                   | A real table with column headers and a caption naming the query             |
-| `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered text, captioned with the page it came from                         |
-| `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump                            |
-| `SessionCostChip`   | `tool.call.toolview` → `cloudflare_aigateway_session_cost`     | The same chip, showing one call's figures rather than the session's         |
+| Component           | Slot                                                           | What it shows                                                                                |
+| ------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `SettingsCard`      | `settings.plugins.tab` → `cloudflare`                          | Credential reference, account and gateway selection. Write-only for secrets                  |
+| `SessionCostChip`   | `conversation.session.header.actions`                          | This session's requests, cost, cache hit rate and token counts                               |
+| `D1Result`          | `tool.call.toolview` → `cloudflare_d1_query`                   | A real table with column headers, capped at 100 rows, captioned with the query and the count |
+| `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered text, captioned with the page it came from                                          |
+| `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump                                             |
+| `SessionCostChip`   | `tool.call.toolview` → `cloudflare_aigateway_session_cost`     | The same chip, showing one call's figures rather than the session's                          |
 
 Each tool view is a figure, named from the caption already on screen, and
 deliberately not a landmark: a tool view is rendered once per tool call, so a
@@ -652,8 +652,8 @@ sentence above sat here unchecked.
 Upstream DSH ships no accessibility guidance for plugin authors. This project
 sets its own bar: **WCAG 2.2 AA, zero axe violations, enforced in CI**.
 
-Accessibility runs in three lanes, because no one of them reaches all three
-criteria:
+Accessibility runs in four lanes, because no one of them reaches every
+criterion:
 
 ```mermaid
 graph LR
@@ -670,9 +670,14 @@ graph LR
     subgraph computed["Lane 3 — computed from the stylesheet"]
         H["Non-text contrast: borders, focus rings"]
     end
+    subgraph viewport["Lane 4 — laid out, 320px to 1920px"]
+        I["Reflow, target size, text spacing"]
+        J["What hidden computes to"]
+    end
     jsdom --> G["0 violations, 0 left for review"]
     chromium --> G
     computed --> G
+    viewport --> G
 ```
 
 Each split exists for a measured reason.
@@ -699,6 +704,23 @@ a focus ring. The browser lane walks the assembled page by keyboard and pins the
 focus ring the stylesheet declares, because Chromium draws a ring of its own
 when a page supplies none, and a test that only asks whether _something_ is
 drawn passes with the focus block deleted.
+
+Three more criteria are only observable once the page has a width, and axe has
+a rule for none of them. The assembled client is laid out at 320, 390, 430,
+768, 1024, 1280 and 1920 CSS pixels and checked for **reflow** (SC 1.4.10 — at
+320, which is a 1280px window at 400% zoom, nothing may scroll in two
+directions at once), **target size** (SC 2.5.8 — measured on the rendered box,
+not read off the declaration, and 44px rather than 24 wherever the pointer is
+coarse) and **text spacing** (SC 1.4.12 — line height 1.5, letter spacing
+0.12em, word spacing 0.16em, paragraph spacing 2em, with nothing clipped).
+
+That lane found a box-model bug on its first run: with no `box-sizing`, a field
+at `inline-size: 100%` added its padding and border on top of the width it was
+given, and the page scrolled sideways at every width including 1920. The same
+lane asks what `hidden` computes to, because jsdom applies no CSS — a class
+setting `display: grid` outranks the user agent's `[hidden] { display: none }`,
+and the chip's collapsed detail was on screen with a passing test asserting the
+attribute was set.
 
 **No lane filters axe.** No tag scope, no disabled rules, no excluded
 selectors — and the run is read for what it left for a human to review as well
@@ -821,7 +843,7 @@ the workflow cannot drift apart.
 | `test:invariants`  | The gate configuration itself is asserted, so a threshold cannot be quietly lowered, and every count and diagram on this page is checked against the tree |
 | `test:coverage`    | 100% lines, branches, functions, statements                                                                                                               |
 | `test:dist`        | The built artifacts load the way a consumer resolves them                                                                                                 |
-| `test:a11y`        | Real Chromium, both colour schemes, zero axe violations, no rule filtering                                                                                |
+| `test:a11y`        | Real Chromium, both colour schemes, seven viewports; zero axe violations and nothing left for review, no rule filtering                                   |
 | `stryker`          | 100% mutation score, no file exclusions                                                                                                                   |
 | `knip` / `publint` | No unused code or dependencies; packages are publishable                                                                                                  |
 
@@ -860,7 +882,7 @@ bun install
 | `bun run test`            | Vitest on Node                                                                                                                                                                                   |
 | `bun run test:coverage`   | The same, with 100% thresholds                                                                                                                                                                   |
 | `bun run test:invariants` | Asserts every rule in [Quality gates](#quality), each check of the mutation guard, and this page's tool counts, tool names, configuration fields, accessibility commitments and Mermaid diagrams |
-| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered                                                                                                                                               |
+| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered, and the layout at seven viewports from 320px up                                                                                              |
 | `bun run build`           | `tsdown`, per package                                                                                                                                                                            |
 | `bun run test:dist`       | Loads the **built** artifacts as a consumer resolves them                                                                                                                                        |
 | `bun run stryker`         | Mutation testing, then the escape guard                                                                                                                                                          |

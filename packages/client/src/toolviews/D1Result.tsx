@@ -20,6 +20,16 @@ export interface D1ResultSet {
   readonly results?: readonly Record<string, unknown>[]
 }
 
+/**
+ * Rows one card renders before it stops.
+ *
+ * A query can return thousands, and every one of them would become a table row
+ * in a conversation card. The tool bounds what the model reads; this bounds
+ * what the DOM carries, and the caption says how many of how many — so a
+ * partial table is never presented as the whole result.
+ */
+const MAX_ROWS = 100
+
 /** Props for the result view. */
 export interface D1ResultProps {
   readonly sql: string
@@ -46,8 +56,10 @@ export function cellText(value: unknown): string {
 
 export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element {
   const captionId = useId()
-  const rows = resultSets.flatMap((set) => set.results ?? [])
+  const allRows = resultSets.flatMap((set) => set.results ?? [])
+  const rows = allRows.slice(0, MAX_ROWS)
   const columns = columnsOf(rows)
+  const note = allRows.length > rows.length ? ` ${en.toolView.rowsShown(rows.length, allRows.length)}` : ''
 
   // No columns means nothing to render: `columnsOf` is empty both for no rows
   // and for rows that carry no fields, so this one check covers both.
@@ -60,7 +72,10 @@ export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element 
     // focus stop, so it is meaningful rather than an unlabelled target.
     <figure className="cf-d1" tabIndex={0} aria-labelledby={captionId}>
       <table>
-        <caption id={captionId}>{en.toolView.queryCaption(sql)}</caption>
+        <caption id={captionId}>
+          {en.toolView.queryCaption(sql)}
+          {note}
+        </caption>
         <thead>
           <tr>
             {columns.map((column) => (

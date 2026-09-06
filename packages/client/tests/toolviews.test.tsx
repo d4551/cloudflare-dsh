@@ -38,6 +38,9 @@ describe('cellText', () => {
   })
 })
 
+/** `n` rows, so the render cap can be approached from either side. */
+const manyRows = (n: number) => [{ results: Array.from({ length: n }, (_, i) => ({ id: i })) }]
+
 describe('D1Result', () => {
   const resultSets = [
     {
@@ -101,6 +104,40 @@ describe('D1Result', () => {
     // the two can never disagree.
     const labelledBy = card.getAttribute('aria-labelledby')
     expect(container.ownerDocument.getElementById(labelledBy ?? '')).toBe(container.querySelector('caption'))
+  })
+
+  it('renders every row when the result is under the cap', () => {
+    render(<D1Result sql="s" resultSets={manyRows(100)} />)
+    // 100 body rows plus the header row.
+    expect(screen.getAllByRole('row')).toHaveLength(101)
+  })
+
+  it('says nothing about a total when it is showing all of it', () => {
+    const { container } = render(<D1Result sql="SELECT 1" resultSets={manyRows(100)} />)
+    expect(container.querySelector('caption')?.textContent).toBe('Results for query: SELECT 1')
+  })
+
+  it('stops at the cap rather than building a row per result', () => {
+    // A query can return thousands; every one would otherwise become a table
+    // row inside a conversation card.
+    render(<D1Result sql="s" resultSets={manyRows(4312)} />)
+    expect(screen.getAllByRole('row')).toHaveLength(101)
+  })
+
+  it('says how many of how many, so a partial table is not read as the whole', () => {
+    const { container } = render(<D1Result sql="SELECT 1" resultSets={manyRows(4312)} />)
+    expect(container.querySelector('caption')?.textContent).toBe(
+      'Results for query: SELECT 1 Showing the first 100 of 4312 rows.',
+    )
+  })
+
+  it('carries the count into the accessible name, since the caption is what names the card', () => {
+    render(<D1Result sql="SELECT 1" resultSets={manyRows(4312)} />)
+    expect(
+      screen.getByRole('figure', {
+        name: 'Results for query: SELECT 1 Showing the first 100 of 4312 rows.',
+      }).className,
+    ).toBe('cf-d1')
   })
 
   it('keeps the result card out of the landmark map, since tool views repeat', () => {
