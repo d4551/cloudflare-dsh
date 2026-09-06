@@ -9,7 +9,117 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 9**
+**I'm a fucking loser: 10**
+
+<details>
+<summary><strong>Restart 10 — a page no gate read, and a client that could not have loaded</strong></summary>
+
+A fresh adversarial audit of the tree at `a21acd3` reported a violation and, by
+design, not where. The self-audit started from the two defects a reader had
+already hit — a diagram that would not render, and a pipeline showing no verdict
+— and from the record itself.
+
+What it found, and what changed:
+
+1. **"How a model call flows" rendered as a parse error rather than a diagram.**
+   Mermaid reads a semicolon as the end of a statement wherever one appears, and
+   the `Note over EP` text held one, so the note ended mid-sentence and the
+   clause after it was read as an actor with no arrow after it. The sentence is
+   written without one now. Checked with Mermaid itself, before and after:
+   `mmdc` over the page in a real Chromium, which is what GitHub renders with.
+   That check runs outside the tree, for the reason in the last paragraph.
+2. **Three counts on the page had rotted.** The architecture diagram said
+   fifteen AI tools and two web tools; the "explain like I'm 5" section said
+   thirty-two actions. The tree defines eighteen, three and thirty-six. The
+   headline table and the catalogue headings had been kept current, which is
+   what made the stale ones easy to walk past.
+3. **The catalogue named eleven tools only by suffix** — `` `cloudflare_kv_put`
+/ `_delete` `` — so those names appeared nowhere on the page and nothing
+   could tell a documented tool from an undocumented one. One was worse than
+   terse: `` `cloudflare_vectorize_index_list` / `_query` `` expands to
+   `cloudflare_vectorize_index_query`, which is not a tool. Every row spells its
+   names in full.
+4. **The configuration tables had fallen behind their schemas.** The
+   `cloudflare-llm` row accepts `customCostPerTokenIn`, `customCostPerTokenOut`
+   and `gatewayRequestTimeoutMs`; the page listed none of the three, under a
+   sentence promising that no tunable is hidden as a constant. All three are
+   documented, and every configured row's table is now held to the fields its
+   `Schema.object` accepts.
+5. **The client's registrations could not have loaded.** `tool.call.toolview` is
+   a keyed slot and the registry throws on a keyed registration with no `key`;
+   all three tool views passed `id`. `settings.plugin.cloudflare` is not a
+   declared slot at all — a plugin's settings page is a tab in the Plugins
+   section's `settings.plugins.tab` — and registering into an undeclared slot
+   throws as well. The `slots.inject` callbacks returned nothing, where the
+   contract is that a callback returns the disposers a collapsed declaration
+   takes with it. And each registration sat inside the plugin's own
+   `ctx.effect`, though the registry already installs that disposer on the
+   calling fiber, which left one disposal under two owners. All four are fixed
+   against the published declarations of `SlotRegistry` and `SlotCore`, and the
+   suite now pins the registration shapes rather than the code that produces
+   them. The README's Web Client table named the slot that does not exist as
+   well, and is held to the slots the package actually contributes into.
+6. **Restart 9 knew about the `id`/`key` defect and left it**, in the words "the
+   wiring is this restart's remaining work and is recorded below as it lands".
+   Nothing landed. That entry says so now. What remains after this restart — a
+   registered tool view is handed the harness's owner props, and these
+   components take their own shapes — is in the README's Project status with the
+   reason it is not closed here: the published client contracts cannot be
+   imported to typecheck against, because their declarations reference type-only
+   packages they do not depend on and one does not typecheck against its own
+   `SlotMap`, and `skipLibCheck` stays off.
+7. **CI cancelled its own runs on the default branch.** `cancel-in-progress` was
+   unconditional, so each push to `main` cancelled the run for the commit before
+   it: the merge commit that carried this bundle onto `main` has no verdict at
+   all, and a cancelled run reads as a failed pipeline. Only pull-request runs
+   are superseded now, and an invariant asserts it.
+
+8. **The mutation run found the same hole Restart 9 said it had closed.**
+   `wholeListOutcome` had read `total === null || returned >= total`, whose null
+   guard decides nothing because `returned >= null` is `returned >= 0`. Restart 9
+   rewrote it as `total !== null && returned < total` and recorded that the
+   result "has no such hole". It is the same hole mirrored: `returned < null` is
+   `returned < 0`, false for every count, so the guard is unobservable there too
+   — and a mutant replacing it with `true` survived, which is how it was found
+   rather than argued. The comparison no longer has a guard to be wrong about:
+   an unreported total is compared against what came back, so nothing is short
+   of anything. A claim that a rewrite closes a hole is a claim like any other,
+   and this one had not been measured.
+
+The gates that would have caught the first four did not exist. `readme.test.ts`
+reads what the tree actually is out of its syntax trees — `defineTool` is what
+makes a tool and a `Schema.object` shape is what a row accepts, so a `name` in
+an output schema cannot be counted as either — and holds the page to it: every
+catalogue heading's count, every label in the architecture diagram, the headline
+total and the one in the "explain like I'm 5" section, the catalogue naming
+exactly the tools that exist, no name anywhere on the page the bundle does not
+define, each configuration table naming exactly the fields its row accepts, and
+the Web Client table naming exactly the slots the client contributes into. It
+holds every Mermaid block in every tracked Markdown file to the rule that broke
+one, and refuses an empty block. Each check was watched to fail on the defect it
+describes.
+
+It stops at that rule rather than parsing, and says so where it lives. Parsing
+means the `mermaid` package, whose published declarations import `type-fest`
+without depending on it (mermaid-js/mermaid#6629): with `skipLibCheck` off the
+compiler stops, and adding `type-fest` to satisfy it leaves knip reporting a
+dependency no source file imports, whose only documented remedy is the
+`ignoreDependencies` list the invariants forbid. Softening one gate to install
+another is not a trade this repository makes, so the check that does run Mermaid
+is the out-of-tree one in point 1.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings`, `oxfmt --check` clean across 113 files, 126 invariant and
+README tests, 1330 unit tests at 100% coverage (1145 statements, 621 branches,
+364 functions, 1016 lines), 35 built-artifact tests, 13 Chromium axe tests with
+no rule or selector filtering, knip 0, publint clean on all three packages, and
+a mutation score of **100.00%** — 3635 mutants over 38 instrumented files, 3623
+killed and 12 detected by timeout, none surviving and none without coverage,
+with the escape guard confirming every file that emits JavaScript was mutated.
+The seven Mermaid diagrams were rendered by `mmdc` in a real Chromium, all
+seven succeeding.
+
+</details>
 
 <details>
 <summary><strong>Restart 9 — what the plan still scheduled was still in the tree</strong></summary>
@@ -36,13 +146,17 @@ What it found, and what changed:
    refuses a non-image answer or a composition without a store by name. PDF
    capture is not offered, and the README says why: a PDF is not a raster image,
    so the store cannot hold it. The client's screenshot branch, its locale
-   string and its CSS are removed; the tool count is 33.
+   string and its CSS are removed. The tool count reached 33 at that point, and
+   36 once Vectorize gained the writes described below.
 3. **The client's views take props no host supplies** — the README's "Project
    status" said as much — and its slot registrations named `id` where the
    published registry keys a tool view by `key`. The published packages
    (`@deepseek-ai/dsh-client-ui-slots`, `-ui-tool`, `-ui-conversation`,
-   `-ui-settings`, `-client-runtime`) now ground the contract; the wiring is
-   this restart's remaining work and is recorded below as it lands.
+   `-ui-settings`, `-client-runtime`) were named as grounding the contract, and
+   then nothing was done with them: no registration changed in this restart and
+   nothing landed below. Restart 10 is where that defect is actually fixed, and
+   what still remains after it is stated there and in the README rather than
+   promised.
 4. **Six list tools presented one page as the whole listing**, with no page
    number in and no total or completeness out; the queue listing sent a
    `per_page` its endpoint does not take. Each now pages the way its own
@@ -86,8 +200,9 @@ tests had not:
   `cursor: undefined` the builder never means to send, so `toStrictEqual` now
   states the spec's exact shape. And `wholeListOutcome`'s `total === null ||`
   guarded nothing at all, because `returned >= null` is `returned >= 0`, which
-  is always true — the function now says what would make a listing incomplete,
-  which has no such hole.
+  is always true — the function was rewritten to say what would make a listing
+  incomplete, and that was recorded here as having no such hole. It had the same
+  hole mirrored, and Restart 10 is where a surviving mutant proved it.
 
 </details>
 

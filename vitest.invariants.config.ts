@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitest/config'
 
 /**
- * The repository's own gates: the invariants, and the mutation guard's checks.
+ * The repository's own gates: the invariants, the mutation guard's checks, and
+ * the README's claims and diagrams.
  *
- * Their own lane because the invariants inspect the repository rather than the
+ * Their own lane because these suites inspect the repository rather than the
  * source — they read gate configuration and scan the files git would commit,
  * so they must run against the real working tree and not a copy a tool has
  * rewritten — and because the guard polices the mutation run rather than being
@@ -12,7 +13,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['tests/invariants.test.ts', 'tests/mutation-guard.test.ts'],
+    include: ['tests/invariants.test.ts', 'tests/mutation-guard.test.ts', 'tests/readme.test.ts'],
     exclude: ['**/node_modules/**'],
   },
 })

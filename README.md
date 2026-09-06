@@ -32,7 +32,7 @@ account exists.
 **This project is the set of hands.** Install it, and three things happen:
 
 1. **The assistant gets tools.** It can now say "put this in the database",
-   "read that web page", "run this AI model" — 32 specific, typed actions
+   "read that web page", "run this AI model" — 36 specific, typed actions
    instead of a vague "call an API somewhere".
 2. **The assistant can think using Cloudflare's own AI.** Not just _call_
    Cloudflare models as a tool — actually _be powered by_ them, routed through
@@ -171,9 +171,9 @@ graph TD
     end
 
     subgraph bundle["cloudflare-dsh"]
-        tai["tools/ai — 15 tools"]
+        tai["tools/ai — 18 tools"]
         tdata["tools/data — 13 tools"]
-        tweb["tools/web — 2 tools"]
+        tweb["tools/web — 3 tools"]
         tmeta["tools/meta — 2 tools"]
         adapter["ai — CloudflareAiAdapter"]
     end
@@ -314,7 +314,7 @@ sequenceDiagram
     L->>AD: prepareCall(provider, model)
     AD->>EP: resolveEndpoint + resolveModel, once per generation
     EP->>GW: GET ai-gateway gateways URL endpoint (first call only)
-    Note over EP: Base URL comes from the API and is<br/>remembered per plugin instance; the token never is.
+    Note over EP: Base URL comes from the API and is remembered<br/>per plugin instance. The token never is.
     EP-->>AD: { url, token } + model facts (context window, modalities)
     L->>AD: prepared.stream(GenerateOptions)
     AD->>AD: buildWireRequest — images projected to text, reasoning left out, unsupported options rejected
@@ -404,34 +404,34 @@ profile takes only the groups it wants.
 
 ### AI — `cloudflare-dsh/tools/ai` (18)
 
-| Tool                                             | Purpose                                         |
-| ------------------------------------------------ | ----------------------------------------------- |
-| `cloudflare_ai_run`                              | Run any Workers AI model, one complete response |
-| `cloudflare_ai_models_search`                    | Search the model catalogue                      |
-| `cloudflare_ai_model_schema`                     | Fetch a model's live JSON schema                |
-| `cloudflare_aigateway_list` / `_get`             | Enumerate and inspect gateways                  |
-| `cloudflare_aigateway_logs`                      | Page gateway request logs                       |
-| `cloudflare_aigateway_log_body`                  | Fetch a logged request or response body         |
-| `cloudflare_aigateway_routes`                    | Dynamic routing configuration                   |
-| `cloudflare_aigateway_cost`                      | Credit balance, usage history, invoice preview  |
-| `cloudflare_aigateway_session_cost`              | Usage and cost for one harness session          |
-| `cloudflare_aisearch_search` / `_chat` / `_sync` | AI Search query, chat completion, index sync    |
-| `cloudflare_vectorize_index_list` / `_query`     | Vector index listing and similarity query       |
-| `cloudflare_vectorize_upsert`                    | Write vectors as NDJSON, upsert or insert       |
-| `cloudflare_vectorize_delete` / `_get`           | Delete and read vectors back by id              |
+| Tool                                                                                   | Purpose                                         |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `cloudflare_ai_run`                                                                    | Run any Workers AI model, one complete response |
+| `cloudflare_ai_models_search`                                                          | Search the model catalogue                      |
+| `cloudflare_ai_model_schema`                                                           | Fetch a model's live JSON schema                |
+| `cloudflare_aigateway_list` / `cloudflare_aigateway_get`                               | Enumerate and inspect gateways                  |
+| `cloudflare_aigateway_logs`                                                            | Page gateway request logs                       |
+| `cloudflare_aigateway_log_body`                                                        | Fetch a logged request or response body         |
+| `cloudflare_aigateway_routes`                                                          | Dynamic routing configuration                   |
+| `cloudflare_aigateway_cost`                                                            | Credit balance, usage history, invoice preview  |
+| `cloudflare_aigateway_session_cost`                                                    | Usage and cost for one harness session          |
+| `cloudflare_aisearch_search` / `cloudflare_aisearch_chat` / `cloudflare_aisearch_sync` | AI Search query, chat completion, index sync    |
+| `cloudflare_vectorize_index_list` / `cloudflare_vectorize_query`                       | Vector index listing and similarity query       |
+| `cloudflare_vectorize_upsert`                                                          | Write vectors as NDJSON, upsert or insert       |
+| `cloudflare_vectorize_delete` / `cloudflare_vectorize_get`                             | Delete and read vectors back by id              |
 
 ### Data — `cloudflare-dsh/tools/data` (13)
 
-| Tool                                                 | Purpose                                                   |
-| ---------------------------------------------------- | --------------------------------------------------------- |
-| `cloudflare_kv_namespace_list`                       | List KV namespaces                                        |
-| `cloudflare_kv_list_keys`                            | Page keys — returns a cursor for PTC loops                |
-| `cloudflare_kv_get`                                  | Read one key's value                                      |
-| `cloudflare_kv_put` / `_delete`                      | Bulk write and delete, reporting what Cloudflare accepted |
-| `cloudflare_d1_list`                                 | List D1 databases                                         |
-| `cloudflare_d1_query`                                | Parameterised SQL, multi-statement                        |
-| `cloudflare_queue_list` / `_send` / `_pull` / `_ack` | Queue operations, lease-based                             |
-| `cloudflare_r2_bucket_list` / `_create`              | R2 bucket management                                      |
+| Tool                                                                                                 | Purpose                                                   |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `cloudflare_kv_namespace_list`                                                                       | List KV namespaces                                        |
+| `cloudflare_kv_list_keys`                                                                            | Page keys — returns a cursor for PTC loops                |
+| `cloudflare_kv_get`                                                                                  | Read one key's value                                      |
+| `cloudflare_kv_put` / `cloudflare_kv_delete`                                                         | Bulk write and delete, reporting what Cloudflare accepted |
+| `cloudflare_d1_list`                                                                                 | List D1 databases                                         |
+| `cloudflare_d1_query`                                                                                | Parameterised SQL, multi-statement                        |
+| `cloudflare_queue_list` / `cloudflare_queue_send` / `cloudflare_queue_pull` / `cloudflare_queue_ack` | Queue operations, lease-based                             |
+| `cloudflare_r2_bucket_list` / `cloudflare_r2_bucket_create`                                          | R2 bucket management                                      |
 
 ### Web — `cloudflare-dsh/tools/web` (3)
 
@@ -523,18 +523,21 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 
 ### `cloudflare-llm` — the model provider (`cloudflare-dsh/ai`)
 
-| Field                 | Default                   | Meaning                                                          |
-| --------------------- | ------------------------- | ---------------------------------------------------------------- |
-| `gatewayId`           | `''`                      | Gateway to route through; required for the gateway route         |
-| `gatewayProvider`     | `workers-ai`              | Provider slug the gateway forwards to                            |
-| `chatCompletionsPath` | `/chat/completions`       | Path appended to the resolved base URL                           |
-| `workersAiPath`       | `/ai/v1/chat/completions` | OpenAI-compatible Workers AI path, relative to the account scope |
-| `cacheTtlSeconds`     | `0`                       | `cf-aig-cache-ttl`                                               |
-| `skipCache`           | `false`                   | `cf-aig-skip-cache`                                              |
-| `collectLog`          | `true`                    | `cf-aig-collect-log` — required for session cost attribution     |
-| `tags`                | `{}`                      | Static tags merged into `cf-aig-metadata`                        |
-| `streamIdleTimeoutMs` | `300000`                  | How long a stream may go quiet before failing as a timeout       |
-| `models`              | `[]`                      | Advertised models; empty means query the catalogue               |
+| Field                     | Default                   | Meaning                                                                |
+| ------------------------- | ------------------------- | ---------------------------------------------------------------------- |
+| `gatewayId`               | `''`                      | Gateway to route through; required for the gateway route               |
+| `gatewayProvider`         | `workers-ai`              | Provider slug the gateway forwards to                                  |
+| `chatCompletionsPath`     | `/chat/completions`       | Path appended to the resolved base URL                                 |
+| `workersAiPath`           | `/ai/v1/chat/completions` | OpenAI-compatible Workers AI path, relative to the account scope       |
+| `cacheTtlSeconds`         | `0`                       | `cf-aig-cache-ttl`                                                     |
+| `skipCache`               | `false`                   | `cf-aig-skip-cache`                                                    |
+| `collectLog`              | `true`                    | `cf-aig-collect-log` — required for session cost attribution           |
+| `tags`                    | `{}`                      | Static tags merged into `cf-aig-metadata`                              |
+| `customCostPerTokenIn`    | `0`                       | Per-token input cost override recorded by the gateway; zero sends none |
+| `customCostPerTokenOut`   | `0`                       | Per-token output cost override, paired with the input one              |
+| `gatewayRequestTimeoutMs` | `0`                       | Gateway-side request timeout; zero leaves the gateway's own default    |
+| `streamIdleTimeoutMs`     | `300000`                  | How long a stream may go quiet before failing as a timeout             |
+| `models`                  | `[]`                      | Advertised models; empty means query the catalogue                     |
 
 ### `cloudflare-tools-ai` (`cloudflare-dsh/tools/ai`)
 
@@ -598,12 +601,13 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 
 ## Web Client surfaces
 
-`@d4551/dsh-cloudflare-client` contributes to three slots. Components never
-receive `ctx`; they take props.
+`@d4551/dsh-cloudflare-client` contributes to three slots, each after the slot
+is declared. Components never receive `ctx`; they take props. A list slot places
+its entry by `id`; the keyed tool-view slot dispatches on the wire tool name.
 
 | Component           | Slot                                                           | What it shows                                                               |
 | ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `SettingsCard`      | `settings.plugin.cloudflare`                                   | Credential reference, account and gateway selection. Write-only for secrets |
+| `SettingsCard`      | `settings.plugins.tab` → `cloudflare`                          | Credential reference, account and gateway selection. Write-only for secrets |
 | `SessionCostChip`   | `conversation.session.header.actions`                          | This session's requests, cost, cache hit rate and token counts              |
 | `D1Result`          | `tool.call.toolview` → `cloudflare_d1_query`                   | A real table with column headers and a caption naming the query             |
 | `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered text, captioned with the page it came from                         |
@@ -727,17 +731,17 @@ wrap stay reachable. It is a bounded capability, not a bypass:
 
 CI runs on Node 22 and 24 and must be green to merge:
 
-| Gate               | Bar                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------- |
-| `typecheck`        | `tsc` strict, zero errors                                                                           |
-| `lint`             | `oxlint --deny-warnings`                                                                            |
-| `format:check`     | `oxfmt --check` — one canonical style, no per-file overrides, nothing outside `.gitignore` excluded |
-| `test:invariants`  | The gate configuration itself is asserted, so a threshold cannot be quietly lowered                 |
-| `test:coverage`    | 100% lines, branches, functions, statements                                                         |
-| `test:dist`        | The built artifacts load the way a consumer resolves them                                           |
-| `test:a11y`        | Real Chromium, both colour schemes, zero axe violations, no rule filtering                          |
-| `stryker`          | 100% mutation score, no file exclusions                                                             |
-| `knip` / `publint` | No unused code or dependencies; packages are publishable                                            |
+| Gate               | Bar                                                                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typecheck`        | `tsc` strict, zero errors                                                                                                                                 |
+| `lint`             | `oxlint --deny-warnings`                                                                                                                                  |
+| `format:check`     | `oxfmt --check` — one canonical style, no per-file overrides, nothing outside `.gitignore` excluded                                                       |
+| `test:invariants`  | The gate configuration itself is asserted, so a threshold cannot be quietly lowered, and every count and diagram on this page is checked against the tree |
+| `test:coverage`    | 100% lines, branches, functions, statements                                                                                                               |
+| `test:dist`        | The built artifacts load the way a consumer resolves them                                                                                                 |
+| `test:a11y`        | Real Chromium, both colour schemes, zero axe violations, no rule filtering                                                                                |
+| `stryker`          | 100% mutation score, no file exclusions                                                                                                                   |
+| `knip` / `publint` | No unused code or dependencies; packages are publishable                                                                                                  |
 
 Two toolchain notes for contributors:
 
@@ -755,20 +759,20 @@ Two toolchain notes for contributors:
 bun install
 ```
 
-| Script                    | What it does                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| `bun run typecheck`       | `tsc -b`, strict, `skipLibCheck: false`                                                      |
-| `bun run lint`            | `oxlint --deny-warnings .`                                                                   |
-| `bun run format:check`    | `oxfmt --check`; fails on any file outside the canonical style. `bun run format` conforms it |
-| `bun run test`            | Vitest on Node                                                                               |
-| `bun run test:coverage`   | The same, with 100% thresholds                                                               |
-| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality), and each check of the mutation guard        |
-| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered                                           |
-| `bun run build`           | `tsdown`, per package                                                                        |
-| `bun run test:dist`       | Loads the **built** artifacts as a consumer resolves them                                    |
-| `bun run stryker`         | Mutation testing, then the escape guard                                                      |
-| `bun run knip`            | Unused files, exports and dependencies                                                       |
-| `bun run publint`         | Package publishing sanity, all three packages                                                |
+| Script                    | What it does                                                                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run typecheck`       | `tsc -b`, strict, `skipLibCheck: false`                                                                                                         |
+| `bun run lint`            | `oxlint --deny-warnings .`                                                                                                                      |
+| `bun run format:check`    | `oxfmt --check`; fails on any file outside the canonical style. `bun run format` conforms it                                                    |
+| `bun run test`            | Vitest on Node                                                                                                                                  |
+| `bun run test:coverage`   | The same, with 100% thresholds                                                                                                                  |
+| `bun run test:invariants` | Asserts every rule in [Quality gates](#quality), each check of the mutation guard, and this page's tool counts, tool names and Mermaid diagrams |
+| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered                                                                                              |
+| `bun run build`           | `tsdown`, per package                                                                                                                           |
+| `bun run test:dist`       | Loads the **built** artifacts as a consumer resolves them                                                                                       |
+| `bun run stryker`         | Mutation testing, then the escape guard                                                                                                         |
+| `bun run knip`            | Unused files, exports and dependencies                                                                                                          |
+| `bun run publint`         | Package publishing sanity, all three packages                                                                                                   |
 
 Development history is in [QUALITY-LOOP.md](QUALITY-LOOP.md).
 
@@ -793,6 +797,7 @@ scripts/    mutation-guard.ts        — the escape guard's checks, as pure func
 tests/      dist.test.ts           — the built-output suite
             invariants.test.ts     — the quality rules, as assertions
             mutation-guard.test.ts — each guard check, shown to fail
+            readme.test.ts         — this page's counts, tool names and diagrams
 ```
 
 `test:dist` deliberately has no source aliases. The unit and accessibility
@@ -816,9 +821,17 @@ Not yet done, and worth knowing before you depend on this:
 - **R2 object access and D1 database creation are missing.** Buckets can be
   listed and created, and Vectorize indexes read and written; R2 object-level
   work needs the S3 API and is not wrapped yet.
-- **The Web Client components take props no host currently supplies.** They
-  render, and they are covered by tests, but the wiring from tool results to
-  component props is not written.
+- **The Web Client components take props no host currently supplies.** The
+  registrations are correct — the right slots, the right kind fields, disposers
+  returned to the declarations that own them — and the components render and are
+  covered by tests, but a registered tool view is handed the harness's own owner
+  props (`callId`, `toolName`, the running-or-settled `block`) and these take
+  their own shapes instead. Closing that means projecting each tool's result
+  through `output.presentationMeta` and `presentResult`, which is not written.
+  The published client contracts cannot be imported to typecheck it either:
+  their declarations reference type-only packages they do not depend on, and one
+  does not typecheck against its own `SlotMap`, so the shapes here are modelled
+  from those declarations and pinned by the contract suite instead.
 
 ## License
 

@@ -409,6 +409,18 @@ describe('accessibility cannot be filtered', () => {
   })
 })
 
+describe('CI reports on every commit it runs for', () => {
+  // `cancel-in-progress: true` cancels the previous run in the group. On a pull
+  // request the superseded run is noise; on the default branch it is a commit
+  // whose gates never finished, which reads as a failed pipeline and proves
+  // nothing about the tree that was merged.
+  it('cancels a superseded run only on a pull request', () => {
+    expect(read('.github/workflows/ci.yml')).toContain(
+      "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+    )
+  })
+})
+
 describe('every gate runs in CI', () => {
   it.each([
     'bun run typecheck',
