@@ -152,7 +152,8 @@ export function buildUrl(
 /** Header assembly inputs. */
 export interface HeaderInput {
   readonly token: string
-  readonly hasBody: boolean
+  /** The media type of the body being sent, or undefined when there is none. */
+  readonly contentType: string | undefined
   /** The media type the caller can read. */
   readonly accept: string
 }
@@ -166,7 +167,7 @@ export interface HeaderInput {
 export function buildHeaders(input: HeaderInput): Headers {
   const headers = new Headers()
   headers.set('accept', input.accept)
-  if (input.hasBody) headers.set('content-type', 'application/json')
+  if (input.contentType !== undefined) headers.set('content-type', input.contentType)
   headers.set('authorization', `Bearer ${input.token}`)
   return headers
 }
@@ -179,21 +180,34 @@ export interface BuildRequestInput {
 }
 
 /**
- * Build the `Request` for one Cloudflare call.
+ * The body to send, already encoded, with the media type it is encoded in.
  *
- * A body on a bodyless method is dropped rather than rejected, matching what
- * `fetch` itself would do, but the content-type header is dropped with it.
+ * A caller-encoded body wins over `body`, which the client would otherwise
+ * serialize as JSON. A body on a bodyless method is dropped rather than
+ * rejected, matching what `fetch` itself would do, and its content type goes
+ * with it.
+ */
+function requestBody(spec: RequestSpec): { contentType: string; text: string } | undefined {
+  if (isBodyless(spec.method)) return undefined
+  const encoded = spec.encodedBody
+  if (encoded !== undefined) return { contentType: encoded.contentType, text: encoded.text }
+  if (spec.body === undefined) return undefined
+  return { contentType: 'application/json', text: JSON.stringify(spec.body) }
+}
+
+/**
+ * Build the `Request` for one Cloudflare call.
  */
 export function buildRequest(input: BuildRequestInput): Request {
   const { spec } = input
   const url = buildUrl(input.baseUrl, spec)
-  const sendsBody = !isBodyless(spec.method) && spec.body !== undefined
+  const body = requestBody(spec)
   const headers = buildHeaders({
     token: input.token,
-    hasBody: sendsBody,
+    contentType: body?.contentType,
     accept: spec.accept === undefined ? 'application/json' : spec.accept,
   })
   const init: RequestInit = { method: spec.method, headers }
-  if (sendsBody) init.body = JSON.stringify(spec.body)
+  if (body !== undefined) init.body = body.text
   return new Request(url, init)
 }

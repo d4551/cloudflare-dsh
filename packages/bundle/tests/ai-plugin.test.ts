@@ -313,6 +313,10 @@ describe('listModels', () => {
     expect(requests.map((request) => new URL(request.url).searchParams.get('page'))).toEqual(['1', '2'])
   })
 
+  it('names the truncation refusal so a caller can tell it from a provider failure', () => {
+    expect(new aiPlugin.CatalogueTruncatedError(1)).toMatchObject({ name: 'CatalogueTruncatedError' })
+  })
+
   it('refuses to present a catalogue the page ceiling cut short as the whole', async () => {
     const full = Array.from({ length: 100 }, (_item, index) => ({ name: `@cf/m${index}` }))
     const { registered } = harness({}, async () => envelope(full), { maxPages: 1 })

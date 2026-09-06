@@ -57,6 +57,24 @@ const CASES: [string, (fetchImpl: Fetch) => Harness, Record<string, unknown>, ()
     { indexName: 'i', vector: [1] },
     () => envelope({}),
   ],
+  [
+    'cloudflare_vectorize_upsert',
+    (f) => makeHarness(aiTools, f),
+    { indexName: 'i', vectors: [{ id: 'a', values: [1] }] },
+    () => envelope({}),
+  ],
+  [
+    'cloudflare_vectorize_delete',
+    (f) => makeHarness(aiTools, f),
+    { indexName: 'i', ids: ['a'] },
+    () => envelope({}),
+  ],
+  [
+    'cloudflare_vectorize_get',
+    (f) => makeHarness(aiTools, f),
+    { indexName: 'i', ids: ['a'] },
+    () => envelope({}),
+  ],
   ['cloudflare_kv_namespace_list', (f) => makeHarness(dataTools, f), {}, () => envelope([])],
   ['cloudflare_kv_list_keys', (f) => makeHarness(dataTools, f), { namespaceId: 'n' }, () => envelope([])],
   [
@@ -133,8 +151,8 @@ const CASES: [string, (fetchImpl: Fetch) => Harness, Record<string, unknown>, ()
 ]
 
 describe('every tool forwards the caller signal to Cloudflare', () => {
-  it('covers all 33 tools', () => {
-    expect(CASES).toHaveLength(33)
+  it('covers all 36 tools', () => {
+    expect(CASES).toHaveLength(36)
   })
 
   // `timeoutMs` is declarative: the registry does not interrupt a body, so a

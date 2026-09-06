@@ -110,24 +110,28 @@ describe('buildUrl', () => {
 
 describe('buildHeaders', () => {
   it('sets the accept type it is given', () => {
-    expect(buildHeaders({ token: 't', hasBody: false, accept: 'application/json' }).get('accept')).toBe(
-      'application/json',
+    expect(
+      buildHeaders({ token: 't', contentType: undefined, accept: 'application/json' }).get('accept'),
+    ).toBe('application/json')
+    expect(buildHeaders({ token: 't', contentType: undefined, accept: 'image/png' }).get('accept')).toBe(
+      'image/png',
     )
-    expect(buildHeaders({ token: 't', hasBody: false, accept: 'image/png' }).get('accept')).toBe('image/png')
   })
 
   it('sets the bearer token', () => {
     expect(
-      buildHeaders({ token: 'tok', hasBody: false, accept: 'application/json' }).get('authorization'),
+      buildHeaders({ token: 'tok', contentType: undefined, accept: 'application/json' }).get('authorization'),
     ).toBe('Bearer tok')
   })
 
-  it('sets content-type only when a body is sent', () => {
-    expect(buildHeaders({ token: 't', hasBody: true, accept: 'application/json' }).get('content-type')).toBe(
-      'application/json',
-    )
+  it('sets content-type to the media type of the body, and omits it when there is none', () => {
     expect(
-      buildHeaders({ token: 't', hasBody: false, accept: 'application/json' }).get('content-type'),
+      buildHeaders({ token: 't', contentType: 'application/json', accept: 'application/json' }).get(
+        'content-type',
+      ),
+    ).toBe('application/json')
+    expect(
+      buildHeaders({ token: 't', contentType: undefined, accept: 'application/json' }).get('content-type'),
     ).toBeNull()
   })
 })
@@ -165,6 +169,45 @@ describe('buildRequest', () => {
     })
     await expect(req.text()).resolves.toBe('{"a":1}')
     expect(req.headers.get('content-type')).toBe('application/json')
+  })
+
+  it('sends a caller-encoded body verbatim, under its own media type', async () => {
+    const req = buildRequest({
+      baseUrl: base,
+      spec: {
+        method: 'POST',
+        path: '/x',
+        encodedBody: { contentType: 'application/x-ndjson', text: '{"a":1}\n{"a":2}' },
+      },
+      token: 't',
+    })
+    await expect(req.text()).resolves.toBe('{"a":1}\n{"a":2}')
+    expect(req.headers.get('content-type')).toBe('application/x-ndjson')
+  })
+
+  it('prefers a caller-encoded body over one it would serialize itself', async () => {
+    const req = buildRequest({
+      baseUrl: base,
+      spec: {
+        method: 'POST',
+        path: '/x',
+        body: { serialized: true },
+        encodedBody: { contentType: 'text/plain', text: 'raw' },
+      },
+      token: 't',
+    })
+    await expect(req.text()).resolves.toBe('raw')
+    expect(req.headers.get('content-type')).toBe('text/plain')
+  })
+
+  it('drops a caller-encoded body on a bodyless method, with its content type', async () => {
+    const req = buildRequest({
+      baseUrl: base,
+      spec: { method: 'GET', path: '/x', encodedBody: { contentType: 'text/plain', text: 'raw' } },
+      token: 't',
+    })
+    expect(req.body).toBeNull()
+    expect(req.headers.get('content-type')).toBeNull()
   })
 
   it('drops a body supplied on a bodyless method', async () => {

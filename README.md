@@ -88,7 +88,7 @@ that value. The correlation is exact, not inferred from timestamps.
 
 |                              |                                                                                                                                                     |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **33 tools**                 | Workers AI, AI Gateway, AI Search, Vectorize, KV, D1, Queues, R2, Browser Rendering, plus one bounded generic REST tool                             |
+| **36 tools**                 | Workers AI, AI Gateway, AI Search, Vectorize, KV, D1, Queues, R2, Browser Rendering, plus one bounded generic REST tool                             |
 | **A model provider**         | Two routes — `cloudflare-workers-ai` and `cloudflare-ai-gateway` — registered as a real `LlmAdapter`, streaming SSE into the harness chunk contract |
 | **Session cost attribution** | `cf-aig-metadata` carries the harness session id and call purpose, so gateway logs and billing join to sessions exactly                             |
 | **Web Client surfaces**      | A settings card, a per-session usage chip, and three tool views, all WCAG 2.2 AA                                                                    |
@@ -387,7 +387,7 @@ real agent turns.
 Tools are grouped into four modules, mounted as separate patch rows, so a
 profile takes only the groups it wants.
 
-### AI — `cloudflare-dsh/tools/ai` (15)
+### AI — `cloudflare-dsh/tools/ai` (18)
 
 | Tool                                             | Purpose                                         |
 | ------------------------------------------------ | ----------------------------------------------- |
@@ -402,6 +402,8 @@ profile takes only the groups it wants.
 | `cloudflare_aigateway_session_cost`              | Usage and cost for one harness session          |
 | `cloudflare_aisearch_search` / `_chat` / `_sync` | AI Search query, chat completion, index sync    |
 | `cloudflare_vectorize_index_list` / `_query`     | Vector index listing and similarity query       |
+| `cloudflare_vectorize_upsert`                    | Write vectors as NDJSON, upsert or insert       |
+| `cloudflare_vectorize_delete` / `_get`           | Delete and read vectors back by id              |
 
 ### Data — `cloudflare-dsh/tools/data` (13)
 

@@ -58,6 +58,13 @@ export interface RequestSpec {
   readonly orderedQuery?: readonly QueryPair[]
   readonly body?: unknown
   /**
+   * A body already encoded by the caller, sent verbatim under its own media
+   * type. Vectorize's upsert takes NDJSON, which is not one JSON document, so
+   * the client cannot produce it by serializing `body`. When this is set,
+   * `body` is not sent.
+   */
+  readonly encodedBody?: { readonly contentType: string; readonly text: string } | undefined
+  /**
    * Media type the caller can read, sent as the `accept` header;
    * `application/json` when absent. Only a request read as bytes names another.
    */

@@ -245,22 +245,84 @@ export function vectorizeIndexListSpec(): RequestSpec {
   return { method: 'GET', path: '/vectorize/v2/indexes' }
 }
 
+/**
+ * How much stored metadata a query returns. Cloudflare's three values are not
+ * a boolean: `indexed` returns only the fields the index was told to index,
+ * which is the difference between a cheap query and a complete one.
+ */
+type VectorizeMetadataMode = 'none' | 'indexed' | 'all'
+
+/** Every {@link VectorizeMetadataMode}, in the order the API documents them. */
+export const VECTORIZE_METADATA_MODES: readonly VectorizeMetadataMode[] = ['none', 'indexed', 'all']
+
+/** What the upsert endpoint does with a line it cannot parse. */
+type UnparsableBehavior = 'error' | 'discard'
+
+/** Every {@link UnparsableBehavior}, in the order the API documents them. */
+export const UNPARSABLE_BEHAVIORS: readonly UnparsableBehavior[] = ['error', 'discard']
+
+/** One vector as the insert and upsert endpoints read it. */
+interface VectorizeVector {
+  readonly id: string
+  readonly values: readonly number[]
+  readonly metadata?: unknown
+}
+
 /** Query an index by vector. */
 export function vectorizeQuerySpec(
   indexName: string,
   vector: readonly number[],
   topK: number,
   returnValues: boolean,
-  returnMetadata: boolean,
+  returnMetadata: VectorizeMetadataMode,
 ): RequestSpec {
   return {
     method: 'POST',
     path: `/vectorize/v2/indexes/${seg(indexName)}/query`,
-    body: {
-      vector,
-      topK,
-      returnValues,
-      returnMetadata: returnMetadata ? 'all' : 'none',
+    body: { vector, topK, returnValues, returnMetadata },
+  }
+}
+
+/**
+ * Write vectors to an index.
+ *
+ * The body is NDJSON — one vector per line, not one JSON document — so it is
+ * encoded here rather than serialized by the client. `upsert` replaces a
+ * vector that already carries the id; `insert` leaves it alone.
+ */
+export function vectorizeWriteSpec(
+  indexName: string,
+  operation: 'insert' | 'upsert',
+  vectors: readonly VectorizeVector[],
+  unparsable: UnparsableBehavior,
+): RequestSpec {
+  return {
+    method: 'POST',
+    path: `/vectorize/v2/indexes/${seg(indexName)}/${operation}`,
+    query: { 'unparsable-behavior': unparsable },
+    encodedBody: {
+      contentType: 'application/x-ndjson',
+      text: vectors
+        .map((vector) => JSON.stringify({ id: vector.id, values: vector.values, metadata: vector.metadata }))
+        .join('\n'),
     },
+  }
+}
+
+/** Delete vectors by id. */
+export function vectorizeDeleteByIdsSpec(indexName: string, ids: readonly string[]): RequestSpec {
+  return {
+    method: 'POST',
+    path: `/vectorize/v2/indexes/${seg(indexName)}/delete_by_ids`,
+    body: { ids },
+  }
+}
+
+/** Read vectors back by id. */
+export function vectorizeGetByIdsSpec(indexName: string, ids: readonly string[]): RequestSpec {
+  return {
+    method: 'POST',
+    path: `/vectorize/v2/indexes/${seg(indexName)}/get_by_ids`,
+    body: { ids },
   }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { json } from '../src/tools/_shared/render.ts'
+import { EmptyBatchError } from '../src/tools/_shared/batch.ts'
 import * as dataTools from '../src/tools/data.ts'
 import { envelope, failure, makeHarness } from './harness.ts'
 
@@ -206,7 +207,7 @@ describe('cloudflare_kv_get, when the edge answers instead of the API', () => {
 
 describe('EmptyBatchError', () => {
   it('names itself and the field, so the refusal is identifiable in a log', () => {
-    expect(new dataTools.EmptyBatchError('keys')).toMatchObject({
+    expect(new EmptyBatchError('keys')).toMatchObject({
       name: 'EmptyBatchError',
       message: 'keys must name at least one item; an empty request would do nothing',
     })

@@ -24,6 +24,7 @@ import {
   r2BucketCreateSpec,
   r2BucketListSpec,
 } from '../specs/data.ts'
+import { EmptyBatchError } from './_shared/batch.ts'
 import { isInteger, isObject, isStringArray, type JsonValue } from './_shared/json.ts'
 import {
   PAGE_OUTCOME_PROPERTIES,
@@ -114,14 +115,6 @@ function countLine(verb: 'Wrote' | 'Deleted', requested: number, noun: string, c
 function failedNote(keys: readonly string[] | null): string {
   if (keys === null || keys.length === 0) return ''
   return ` ${plural(keys.length, 'key')} failed and should be retried: ${keys.join(', ')}.`
-}
-
-/** Raised when a bulk operation names nothing: the request would do nothing and report success. */
-export class EmptyBatchError extends RangeError {
-  override readonly name = 'EmptyBatchError'
-  constructor(field: string) {
-    super(`${field} must name at least one item; an empty request would do nothing`)
-  }
 }
 
 export const Config: Schema<Partial<DataToolsConfig>, DataToolsConfig> = Schema.object({

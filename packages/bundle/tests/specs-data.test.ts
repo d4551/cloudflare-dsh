@@ -148,7 +148,9 @@ describe('Queue specs', () => {
 
 describe('R2 specs', () => {
   it('lists the first page of buckets without a cursor', () => {
-    expect(r2BucketListSpec(100, undefined)).toEqual({
+    // Strictly: a `cursor: undefined` the builder never means to send is a
+    // difference `toEqual` cannot see.
+    expect(r2BucketListSpec(100, undefined)).toStrictEqual({
       method: 'GET',
       path: '/r2/buckets',
       query: { per_page: 100 },

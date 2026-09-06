@@ -121,7 +121,11 @@ export function pageOutcome(
  */
 export function wholeListOutcome(info: WireResultInfo | undefined, returned: number): WholeListOutcome {
   const total = reportedTotal(info)
-  return { total, complete: total === null || returned >= total }
+  // Phrased as what would make it incomplete. The obvious spelling —
+  // `total === null || returned >= total` — has a null guard nothing depends
+  // on, because `returned >= null` is `returned >= 0`, which is always true.
+  const missing = total !== null && returned < total
+  return { total, complete: !missing }
 }
 
 /** Project a cursor-paged `result_info`: the API ends a listing by omitting the cursor or sending an empty one. */

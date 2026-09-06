@@ -17,8 +17,11 @@ import {
   gatewayRouteListSpec,
   gatewayUrlSpec,
   sessionLogFilters,
+  vectorizeDeleteByIdsSpec,
+  vectorizeGetByIdsSpec,
   vectorizeIndexListSpec,
   vectorizeQuerySpec,
+  vectorizeWriteSpec,
 } from '../src/specs/ai.ts'
 
 describe('Workers AI specs', () => {
@@ -234,7 +237,7 @@ describe('Vectorize specs', () => {
   })
 
   it('queries an index', () => {
-    expect(vectorizeQuerySpec('idx', [0.1, 0.2], 5, false, true)).toStrictEqual({
+    expect(vectorizeQuerySpec('idx', [0.1, 0.2], 5, false, 'all')).toStrictEqual({
       method: 'POST',
       path: '/vectorize/v2/indexes/idx/query',
       body: {
@@ -246,16 +249,78 @@ describe('Vectorize specs', () => {
     })
   })
 
-  it('maps returnMetadata false to none', () => {
-    expect(vectorizeQuerySpec('idx', [0], 1, true, false).body).toStrictEqual({
+  it.each(['none', 'indexed', 'all'] as const)('carries the %s metadata mode through unchanged', (mode) => {
+    expect(vectorizeQuerySpec('idx', [0], 1, true, mode).body).toStrictEqual({
       vector: [0],
       topK: 1,
       returnValues: true,
-      returnMetadata: 'none',
+      returnMetadata: mode,
     })
   })
 
   it('encodes the index name', () => {
-    expect(vectorizeQuerySpec('a/b', [0], 1, false, false).path).toBe('/vectorize/v2/indexes/a%2Fb/query')
+    expect(vectorizeQuerySpec('a/b', [0], 1, false, 'none').path).toBe('/vectorize/v2/indexes/a%2Fb/query')
+  })
+
+  it.each(['upsert', 'insert'] as const)('writes vectors as NDJSON through the %s endpoint', (operation) => {
+    expect(vectorizeWriteSpec('idx', operation, [{ id: 'a', values: [0.1, 0.2] }], 'error')).toStrictEqual({
+      method: 'POST',
+      path: `/vectorize/v2/indexes/idx/${operation}`,
+      query: { 'unparsable-behavior': 'error' },
+      encodedBody: {
+        contentType: 'application/x-ndjson',
+        text: '{"id":"a","values":[0.1,0.2]}',
+      },
+    })
+  })
+
+  it('gives each vector its own line, which is what makes the body NDJSON', () => {
+    const spec = vectorizeWriteSpec(
+      'idx',
+      'upsert',
+      [
+        { id: 'a', values: [1] },
+        { id: 'b', values: [2] },
+      ],
+      'error',
+    )
+    expect(spec.encodedBody?.text).toBe('{"id":"a","values":[1]}\n{"id":"b","values":[2]}')
+  })
+
+  it('carries metadata when a vector has it, and omits the key when it does not', () => {
+    expect(
+      vectorizeWriteSpec('idx', 'upsert', [{ id: 'a', values: [1], metadata: { lang: 'en' } }], 'error')
+        .encodedBody?.text,
+    ).toBe('{"id":"a","values":[1],"metadata":{"lang":"en"}}')
+  })
+
+  it('carries the unparsable behaviour the caller chose', () => {
+    expect(vectorizeWriteSpec('idx', 'upsert', [{ id: 'a', values: [1] }], 'discard').query).toStrictEqual({
+      'unparsable-behavior': 'discard',
+    })
+  })
+
+  it('deletes vectors by id', () => {
+    expect(vectorizeDeleteByIdsSpec('idx', ['a', 'b'])).toStrictEqual({
+      method: 'POST',
+      path: '/vectorize/v2/indexes/idx/delete_by_ids',
+      body: { ids: ['a', 'b'] },
+    })
+  })
+
+  it('reads vectors back by id', () => {
+    expect(vectorizeGetByIdsSpec('idx', ['a'])).toStrictEqual({
+      method: 'POST',
+      path: '/vectorize/v2/indexes/idx/get_by_ids',
+      body: { ids: ['a'] },
+    })
+  })
+
+  it.each([
+    ['vectorizeWriteSpec', vectorizeWriteSpec('a/b', 'upsert', [{ id: 'x', values: [1] }], 'error').path],
+    ['vectorizeDeleteByIdsSpec', vectorizeDeleteByIdsSpec('a/b', ['x']).path],
+    ['vectorizeGetByIdsSpec', vectorizeGetByIdsSpec('a/b', ['x']).path],
+  ])('%s encodes the index name', (_label, path) => {
+    expect(path).toContain('/vectorize/v2/indexes/a%2Fb/')
   })
 })
