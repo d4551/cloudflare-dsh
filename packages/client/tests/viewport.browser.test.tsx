@@ -461,18 +461,23 @@ describe('target size', () => {
           // stopped flipping the media feature would silently retest a mouse
           // under a name promising a finger.
           expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(pointer.touch)
-          const small = await page.evaluate(
+          const measured = await page.evaluate(
             (floor) =>
-              [...document.querySelectorAll<HTMLElement>('button, input, [tabindex="0"]')]
-                .map((node) => ({
-                  what: `${node.tagName.toLowerCase()}${node.getAttribute('name') === null ? '' : `[${node.getAttribute('name')}]`}`,
-                  width: Math.round(node.getBoundingClientRect().width),
-                  height: Math.round(node.getBoundingClientRect().height),
-                }))
-                .filter((box) => box.width < floor || box.height < floor),
+              [...document.querySelectorAll<HTMLElement>('button, input, [tabindex="0"]')].map((node) => ({
+                what: `${node.tagName.toLowerCase()}${node.getAttribute('name') === null ? '' : `[${node.getAttribute('name')}]`}`,
+                width: Math.round(node.getBoundingClientRect().width),
+                height: Math.round(node.getBoundingClientRect().height),
+                small:
+                  node.getBoundingClientRect().width < floor || node.getBoundingClientRect().height < floor,
+              })),
             pointer.floor,
           )
-          expect(small).toEqual([])
+          // How many controls were measured, not just that none was too small:
+          // this assertion holds for an empty page, and every control in the
+          // assembled client is a focus stop, which is the same twelve the
+          // keyboard walk counts.
+          expect(measured).toHaveLength(12)
+          expect(measured.filter((box) => box.small)).toEqual([])
         } finally {
           await context.close()
         }

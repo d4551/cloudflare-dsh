@@ -94,6 +94,61 @@ const sources = code.filter((file) => /^packages\/[^/]+\/src\//.test(file))
  */
 const modules = code.filter((file) => /\.tsx?$/.test(file))
 
+describe('the lists every scan in this suite starts from', () => {
+  /**
+   * Each list, and files it must contain.
+   *
+   * Emptying one of these turns every scan below it into an assertion that an
+   * empty list contains nothing. Measured before this existed: replacing `code`
+   * with an empty list left 244 of the 247 tests in this suite passing, and the
+   * three that failed were the only ones carrying a guard of their own.
+   *
+   * A floor would drift with the tree. Naming files each list must contain
+   * proves it is populated and that its filter still matches the shape the list
+   * is named for — a `sources` that stopped matching `src` would be empty, and
+   * a `tests` that stopped seeing helpers would be missing `axe.ts`.
+   */
+  const ROOTS: ReadonlyArray<{ name: string; list: readonly string[]; required: readonly string[] }> = [
+    {
+      name: 'tracked',
+      list: tracked,
+      required: ['package.json', '.gitignore', 'README.md', 'packages/client/src/cloudflare.css'],
+    },
+    {
+      name: 'code',
+      list: code,
+      required: ['package.json', 'vitest.config.ts', '.github/workflows/ci.yml', 'knip.json'],
+    },
+    {
+      name: 'tests',
+      list: tests,
+      required: [
+        'tests/invariants.test.ts',
+        'packages/client/tests/axe.ts',
+        'packages/bundle/tests/patch.test.ts',
+      ],
+    },
+    {
+      name: 'sources',
+      list: sources,
+      required: ['packages/core/src/index.ts', 'packages/bundle/src/seam.ts', 'packages/client/src/index.ts'],
+    },
+    {
+      name: 'modules',
+      list: modules,
+      required: [
+        'vitest.a11y.config.ts',
+        'scripts/verify-mutation-files.ts',
+        'packages/client/src/toolviews/fromToolCall.tsx',
+      ],
+    },
+  ]
+
+  it.each(ROOTS)('$name carries the files it is named for', ({ list, required }) => {
+    expect(required.filter((file) => !list.includes(file))).toEqual([])
+  })
+})
+
 /** Files containing a needle, so a failure names them. */
 const containing = (files: readonly string[], needle: string): string[] =>
   files.filter((file) => read(file).includes(needle))

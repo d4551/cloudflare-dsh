@@ -40,6 +40,9 @@ describe('published manifests', () => {
   it.each(['core', 'bundle', 'client'])('%s declares no workspace protocol in dependencies', (pkg) => {
     const m = manifest(pkg)
     const ranges = Object.values({ ...m.dependencies, ...m.peerDependencies })
+    // Every package declares at least one range, so an empty list here means
+    // the manifest was not read rather than that it is clean.
+    expect(ranges.length).toBeGreaterThan(0)
     // `workspace:*` cannot be resolved by anyone installing from the registry.
     expect(ranges.filter((r) => r.startsWith('workspace:'))).toEqual([])
   })

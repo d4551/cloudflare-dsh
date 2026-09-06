@@ -522,6 +522,48 @@ describe('the Web Client surfaces', () => {
   })
 })
 
+describe('the lists this suite derives from the tree', () => {
+  /**
+   * Each derived list, and what it must contain.
+   *
+   * Every check below filters one of these and asserts the filter came back
+   * empty, or generates a case per entry — and an empty list satisfies both
+   * shapes without reading a thing. `allDefined` and the diagram list already
+   * carry a guard of their own; these did not.
+   *
+   * Membership rather than a floor: a count drifts with the tree, while a
+   * `configured` that stopped matching an exported `name`, or a commitments
+   * table that stopped parsing, loses a specific row that can be named.
+   */
+  it('finds every configured row the tree exports', () => {
+    expect(configured.map((row) => row.row).toSorted()).toEqual([
+      'cloudflare',
+      'cloudflare-llm',
+      'cloudflare-tools-ai',
+      'cloudflare-tools-data',
+      'cloudflare-tools-meta',
+      'cloudflare-tools-web',
+    ])
+    // Seven rows export a `name`; the client's takes no configuration, so it
+    // has no schema and belongs to no table. Pinning six rather than seven says
+    // that on purpose instead of leaving the difference to be rediscovered.
+    expect(configured.map((row) => row.row)).not.toContain('cloudflare-client')
+  })
+
+  it('parses the commitments table rather than finding nothing in it', () => {
+    // The count check below compares two readings of the same table, so both
+    // going to zero passes it; this is the reading that cannot.
+    expect(commitments().map((row) => row.commitment)).toContain(
+      'All user-facing copy routes through the dictionary, accessible names included',
+    )
+  })
+
+  it('reads the markdown pages the diagram scan walks', () => {
+    expect(markdown).toContain('README.md')
+    expect(markdown).toContain('QUALITY-LOOP.md')
+  })
+})
+
 describe('the accessibility commitments', () => {
   it('states the number of hosted MCP servers the module actually exports', () => {
     // The page said "eight" while the module carried eight, and the two were

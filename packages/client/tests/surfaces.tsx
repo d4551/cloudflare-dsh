@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { type Browser, type BrowserContext, type Page, chromium } from 'playwright'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { expect } from 'vitest'
 import { SessionCostChip } from '../src/SessionCostChip.tsx'
 import { SettingsCard } from '../src/SettingsCard.tsx'
 import { AccessibilityTree } from '../src/toolviews/AccessibilityTree.tsx'
@@ -230,6 +231,18 @@ export interface PageOptions {
  *
  * The page comes from an explicit context because `@axe-core/playwright`
  * requires one, and because the viewport is a context property.
+ *
+ * The page is proved to have rendered before it is handed back. Nearly every
+ * check in these lanes filters the document and asserts the filter came back
+ * empty — no control below its floor, no clipped text, nothing opted out of the
+ * forced palette, no axe violation — and an empty page satisfies every one of
+ * them. Measured: fourteen target-size tests and seven text-spacing tests all
+ * passed against a selector matching nothing.
+ *
+ * The expectation is derived from the markup rather than pinned, so it cannot
+ * go stale: React's static markup emits one opening tag per element, and that
+ * is exactly what the document should end up containing. Comments are not
+ * matched, and `main *` does not count them.
  */
 export async function open(
   browser: Browser,
@@ -244,5 +257,9 @@ export async function open(
   })
   const page = await context.newPage()
   await page.setContent(hostPage(markup, options.hostScheme ?? 'light dark'))
+  const rendered = await page.evaluate(() => document.querySelectorAll('main *').length)
+  expect(rendered, 'the page did not render the markup it was given').toBe(
+    (markup.match(/<[a-zA-Z][^>]*>/gu) ?? []).length,
+  )
   return { page, context }
 }

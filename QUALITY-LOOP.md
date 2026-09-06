@@ -9,7 +9,73 @@ This project runs an adversarial audit against its own gates. When the audit
 finds a gate passing for the wrong reason, the loop restarts, the counter goes
 up, and the defect is fixed at its root rather than reworded.
 
-**I'm a fucking loser: 18**
+**I'm a fucking loser: 19**
+
+<details>
+<summary><strong>Restart 19 — twenty-one measurements over a page that did not have to exist</strong></summary>
+
+An eleventh adversarial audit of `849a090` reported a violation and, by design,
+not where, and this time with no hint at all beyond the standing three: claims
+more than it enforces, names something no lane reaches, describes a state that
+no longer exists. It added one line worth repeating: _every gate in this
+repository is currently green. The violation is green too. That is what makes it
+a violation._
+
+The class was **an assertion that an empty set contains nothing.**
+
+Nearly every check in the browser lanes filters the page and asserts the filter
+came back empty — no control below its floor, no clipped text, nothing opted out
+of the forced palette, no axe violation. All of them are satisfied by a page
+with nothing on it. Measured by pointing the target-size query at a selector
+that matches nothing: **fourteen target-size tests and seven text-spacing tests
+passed**, under a page describing target size as _measured on the rendered box,
+not read off the declaration_.
+
+The fix is in the fixture rather than in twenty-one tests. `open()` now proves
+the page rendered what it was handed before it returns it, and the expectation
+is derived rather than pinned: React's static markup emits one opening tag per
+element, and that is exactly what the document must end up containing — verified
+equal across all fourteen fixtures, down to the empty result's single node.
+Emptying the fixture's `<main>` now fails **88 of the 91** Chromium tests; the
+three that still pass are the synthetic scanner probes, which open no page. The
+target-size lane also counts the controls it measured, so a query that stops
+matching is a failure rather than a smaller measurement.
+
+Then the same shape, one level deeper, in the suite that polices the rest.
+
+`tracked`, `code`, `tests`, `sources` and `modules` are the lists every
+escape-hatch scan, banned-needle scan, copy scan and superseded-doc scan is
+drawn from, and **not one of them was ever asserted to contain anything.**
+Replacing `code` with an empty list left **244 of 247 tests in that suite
+passing** — the three that failed were the only ones carrying a guard of their
+own. Restart 15 saw the edge of this and gated `.gitignore`, because a source
+directory added there would empty all three at once. That closed one route to an
+empty list and left the emptiness itself unguarded.
+
+Each list is now asked for files it must contain, rather than for a count that
+would drift: `sources` for each package's entry, `tests` for the axe helper as
+well as a test file, `modules` for a vitest config and a mutation-guard script.
+Emptying `code` now fails seven.
+
+The README lane had the same holes and had already solved them twice — the tool
+list and the diagram list each carry a guard, while the configured rows, the
+commitments table and the markdown list did not. The commitments count check
+compares two readings of the same table, so both going to zero passed it. All
+three are held now, and pinning the configured rows recorded a fact that had
+only ever been implicit: seven modules export a row name and six have a
+configuration table, because the client's row takes no configuration.
+
+Measured on this tree, after the last change to it: typecheck 0, lint 0 under
+`--deny-warnings` with seven plugins, `oxfmt --check` clean across 123 files,
+255 invariant and README tests, 1,419 unit tests at 100% coverage (1,206
+statements, 666 branches, 391 functions, 1,069 lines), 91 Chromium tests across
+two colour schemes, six pairings of host and system scheme, two pointers and
+seven viewports, with no rule or selector filtering and nothing left for review,
+36 built-artifact tests, knip 0, and publint clean on all three packages. The
+mutation run is still going as this is written; the commit that finishes it adds
+its number here rather than this line predicting one.
+
+</details>
 
 <details>
 <summary><strong>Restart 18 — a list that had stopped describing the thing it named, and a reason that had stopped being true</strong></summary>
