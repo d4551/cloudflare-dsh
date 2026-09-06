@@ -1,9 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import * as client from '../src/index.ts'
-import { AccessibilityTree } from '../src/toolviews/AccessibilityTree.tsx'
-import { BrowserRender } from '../src/toolviews/BrowserRender.tsx'
-import { D1Result } from '../src/toolviews/D1Result.tsx'
 
 /** One recorded contribution, flattened so a test can read either kind's fields. */
 interface Entry {
@@ -99,10 +96,13 @@ describe('registration', () => {
     })
   })
 
+  // The adapter, not the presentational component: the slot hands over the
+  // call's owner currency, and only the adapter turns that into props.
   it.each([
-    ['cloudflare_d1_query', D1Result],
-    ['cloudflare_browser_render', BrowserRender],
-    ['cloudflare_browser_accessibility_tree', AccessibilityTree],
+    ['cloudflare_d1_query', client.D1ResultToolView],
+    ['cloudflare_browser_render', client.BrowserRenderToolView],
+    ['cloudflare_browser_accessibility_tree', client.AccessibilityTreeToolView],
+    ['cloudflare_aigateway_session_cost', client.SessionCostToolView],
   ])('keys the tool view for %s to its component', (tool, component) => {
     const { registered, apply } = harness()
     apply()
@@ -124,16 +124,20 @@ describe('registration', () => {
   })
 
   it('registers exactly the surfaces it declares', () => {
+    // Counted, not derived from the list under test: `TOOL_VIEWS.length + 2`
+    // holds however long that list is, so a view added and never registered
+    // would keep it green.
     const { registered, apply } = harness()
     apply()
-    expect(registered).toHaveLength(client.TOOL_VIEWS.length + 2)
+    expect(registered).toHaveLength(6)
   })
 
-  it('maps each tool view entry to its component', () => {
+  it('maps each tool view entry to the adapter that gives it props', () => {
     expect(client.TOOL_VIEWS.map((v) => v.component)).toEqual([
-      client.D1Result,
-      client.BrowserRender,
-      client.AccessibilityTree,
+      client.D1ResultToolView,
+      client.BrowserRenderToolView,
+      client.AccessibilityTreeToolView,
+      client.SessionCostToolView,
     ])
   })
 })

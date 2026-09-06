@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
+import type { FetchLike } from '../src/client.ts'
 import { CloudflareConfig } from '../src/config.ts'
 import type { CredentialResolver } from '../src/credentials.ts'
 import {
@@ -113,7 +114,7 @@ describe('CloudflareService, under a caller signal', () => {
 
 describe('CloudflareService.accountId', () => {
   it('prefers the configured account without calling the API', async () => {
-    const fetchImpl = vi.fn(async () => json(ok([])))
+    const fetchImpl = vi.fn<FetchLike>(async () => json(ok([])))
     const { service } = build({ accountId: 'configured' }, fetchImpl)
     await expect(service.accountId()).resolves.toBe('configured')
     expect(fetchImpl).not.toHaveBeenCalled()
@@ -189,7 +190,7 @@ describe('CloudflareService.accountId', () => {
   })
 
   it('remembers a discovered account instead of rediscovering it', async () => {
-    const fetchImpl = vi.fn(async () => json(ok([{ id: 'found', name: 'F' }])))
+    const fetchImpl = vi.fn<FetchLike>(async () => json(ok([{ id: 'found', name: 'F' }])))
     const { service } = build({}, fetchImpl)
     await service.accountId()
     await service.accountId()

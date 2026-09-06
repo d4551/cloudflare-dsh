@@ -29,6 +29,17 @@ function properties<T extends ParameterSchemaSpec>(spec: T): T {
   return spec
 }
 
+/**
+ * The `page` parameter every page-numbered listing offers.
+ *
+ * Shared because it drifted: four tools described it one way and a fifth
+ * another, and the fifth had also skipped `requestedPage`, so `page: 0` went
+ * on the wire from one tool and was refused by the other four.
+ */
+export const PAGE_PARAMETER = properties({
+  page: { type: 'integer', description: 'Page number, from 1; the first page when omitted.' },
+})
+
 /** Output properties every page-numbered listing carries beside its items. */
 export const PAGE_OUTCOME_PROPERTIES = properties({
   page: { type: 'integer', required: true, description: 'The page this is.' },
@@ -45,6 +56,49 @@ export const PAGE_OUTCOME_PROPERTIES = properties({
       'Whether this page is the last: certain when the total is known, inferred from a short page otherwise.',
   },
 })
+
+/**
+ * Page outcome for an endpoint that reports no total at all.
+ *
+ * The AI Gateway log endpoint is one: completeness can only be inferred from a
+ * short page, so a `total` property would be null on every call and imply the
+ * endpoint might sometimes say.
+ */
+export const NO_TOTAL_PAGE_OUTCOME_PROPERTIES = properties({
+  page: { type: 'integer', required: true, description: 'The page this is.' },
+  perPage: { type: 'integer', required: true, description: 'Items requested per page.' },
+  complete: {
+    type: 'boolean',
+    required: true,
+    description: 'Whether this page was short, so no page follows.',
+  },
+})
+
+/**
+ * Output properties a cursor-paged listing carries beside its items.
+ *
+ * Takes the noun rather than fixing one: the model reads these descriptions,
+ * and "whether every key has been returned" says more than "every item". The
+ * runtime half of this pair was already shared; only the schema half was
+ * written out twice.
+ */
+export function cursorOutcomeProperties(noun: string): {
+  readonly cursor: { readonly type: 'string'; readonly required: true; readonly description: string }
+  readonly complete: { readonly type: 'boolean'; readonly required: true; readonly description: string }
+} {
+  return {
+    cursor: {
+      type: 'string',
+      required: true,
+      description: 'Cursor for the next page; empty when complete.',
+    },
+    complete: {
+      type: 'boolean',
+      required: true,
+      description: `Whether every ${noun} has been returned.`,
+    },
+  }
+}
 
 /** What one page of a page-numbered listing reports about the whole. */
 interface PageOutcome {
@@ -112,6 +166,18 @@ export function pageOutcome(
   const total = reportedTotal(info)
   if (total === null) return { page, perPage, total, complete: returned < perPage }
   return { page, perPage, total, complete: page * perPage >= total }
+}
+
+/**
+ * Page outcome for an endpoint that reports no total: a short page is the only
+ * signal that the walk is over.
+ */
+export function shortPageOutcome(
+  page: number,
+  perPage: number,
+  returned: number,
+): { readonly page: number; readonly perPage: number; readonly complete: boolean } {
+  return { page, perPage, complete: returned < perPage }
 }
 
 /**

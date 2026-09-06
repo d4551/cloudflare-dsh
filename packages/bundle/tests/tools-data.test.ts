@@ -496,6 +496,30 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
     expect(blocks).toEqual(json({ results: [] }))
   })
 
+  it('publishes the query and its rows for the client table', () => {
+    // The render text cannot carry the rows losslessly, so the view reads this
+    // projection instead — persisted with the session log, so a replay renders
+    // the same table.
+    const h = makeHarness(dataTools, async () => envelope([]))
+    const meta = h
+      .tool('cloudflare_d1_query')
+      .output.presentationMeta?.(
+        { databaseId: 'd', sql: 'SELECT 1' },
+        { results: [{ results: [{ id: 1 }] }] },
+      )
+    expect(meta).toEqual({ sql: 'SELECT 1', resultSets: [{ results: [{ id: 1 }] }] })
+  })
+
+  it('bounds a wide result set by the configured render limit', () => {
+    // The budget was declared for this and applied to one tool; a wide result
+    // set reached the model whole.
+    const h = makeHarness(dataTools, async () => envelope([]), {}, { renderLimit: 20 })
+    const results = [{ value: 'x'.repeat(200) }]
+    const blocks = h.render('cloudflare_d1_query', { databaseId: 'd', sql: 's' }, { results })
+    expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('truncated') }])
+    expect(blocks[0]).toMatchObject({ text: expect.stringMatching(/^.{20}\n… truncated \d+ characters$/su) })
+  })
+
   it('surfaces a SQL error from Cloudflare', async () => {
     const h = makeHarness(dataTools, async () => failure(7500, 'no such table: nope'))
     await expect(
@@ -727,10 +751,32 @@ describe('DataToolsConfig', () => {
     expect(() => dataTools.Config({ pageSize: 0 })).toThrow('$.pageSize expected number >= 1 but got 0')
   })
 
-  it('applies a configured page size to every paged listing', async () => {
+  // Every listing that reads `pageSize`, not the first one. The name said
+  // "every" while the body asserted `cloudflare_kv_namespace_list` alone, so
+  // the other two could have ignored the setting entirely and stayed green.
+  it.each([
+    ['cloudflare_kv_namespace_list', {}],
+    ['cloudflare_d1_list', {}],
+    ['cloudflare_r2_bucket_list', {}],
+  ])('applies a configured page size to %s', async (name, args) => {
     const h = makeHarness(dataTools, async () => envelope([]), {}, { pageSize: 7 })
-    await h.run('cloudflare_kv_namespace_list', {})
+    await h.run(name, args)
     expect(h.requests[0]!.url).toContain('per_page=7')
+  })
+
+  it('offers a page size on exactly those three listings, so a fourth cannot slip past them', () => {
+    // Read from the registry rather than remembered: a new paged listing makes
+    // this fail, which is what forces it into the cases above. A list nobody
+    // has to update is checkable by omission.
+    const h = makeHarness(dataTools, async () => envelope([]), {}, {})
+    const offersPageSize = h
+      .names()
+      .filter((name) => Object.keys(h.tool(name).parameters.properties ?? {}).includes('perPage'))
+    expect(offersPageSize.toSorted()).toEqual([
+      'cloudflare_d1_list',
+      'cloudflare_kv_namespace_list',
+      'cloudflare_r2_bucket_list',
+    ])
   })
 
   it('applies a configured key list limit', async () => {

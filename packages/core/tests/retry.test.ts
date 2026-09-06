@@ -3,6 +3,13 @@ import { CloudflareError, CloudflareRateLimitError } from '../src/errors.ts'
 import { type RetryPolicy, backoffDelayMs, nextDelayMs, runWithRetry, shouldRetry } from '../src/retry.ts'
 
 const policy: RetryPolicy = { maxRetries: 3, baseDelayMs: 100, maxDelayMs: 5000 }
+
+/**
+ * The shapes `runWithRetry` calls, named so each mock is typed by the contract
+ * it stands in for rather than by whatever its own body happens to return.
+ */
+type Sleep = (ms: number) => Promise<void>
+type Attempt<T> = () => Promise<T>
 const statusOf = (e: unknown) => (e instanceof CloudflareError ? e.status : 0)
 
 describe('shouldRetry', () => {
@@ -83,8 +90,8 @@ describe('runWithRetry', () => {
   const deps = { sleep: async () => {}, random: () => 1 }
 
   it('returns the first successful result without sleeping', async () => {
-    const sleep = vi.fn(async () => {})
-    const attempt = vi.fn(async () => 'ok')
+    const sleep = vi.fn<Sleep>(async () => {})
+    const attempt = vi.fn<Attempt<string>>(async () => 'ok')
     await expect(runWithRetry(attempt, statusOf, policy, { ...deps, sleep })).resolves.toBe('ok')
     expect(attempt).toHaveBeenCalledTimes(1)
     expect(sleep).not.toHaveBeenCalled()
@@ -92,7 +99,7 @@ describe('runWithRetry', () => {
 
   it('retries a retryable failure then succeeds', async () => {
     let calls = 0
-    const attempt = vi.fn(async () => {
+    const attempt = vi.fn<Attempt<string>>(async () => {
       calls += 1
       if (calls === 1) throw new CloudflareError('boom', 503)
       return 'recovered'
@@ -113,7 +120,7 @@ describe('runWithRetry', () => {
   })
 
   it('rethrows a non-retryable failure immediately', async () => {
-    const attempt = vi.fn(async () => {
+    const attempt = vi.fn<Attempt<never>>(async () => {
       throw new CloudflareError('bad', 400)
     })
     await expect(runWithRetry(attempt, statusOf, policy, deps)).rejects.toThrow('bad')
@@ -121,7 +128,7 @@ describe('runWithRetry', () => {
   })
 
   it('gives up after exhausting the budget', async () => {
-    const attempt = vi.fn(async () => {
+    const attempt = vi.fn<Attempt<never>>(async () => {
       throw new CloudflareError('always', 500)
     })
     await expect(runWithRetry(attempt, statusOf, policy, deps)).rejects.toThrow('always')
@@ -129,7 +136,7 @@ describe('runWithRetry', () => {
   })
 
   it('waits between attempts using the computed delay', async () => {
-    const sleep = vi.fn(async () => {})
+    const sleep = vi.fn<Sleep>(async () => {})
     let calls = 0
     const attempt = async () => {
       calls += 1

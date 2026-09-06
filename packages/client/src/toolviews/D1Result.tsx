@@ -4,14 +4,31 @@
  * A real table, because a screen reader needs row and column relationships to
  * read a result set usefully: `<th scope="col">` headers, and a caption naming
  * the query the rows came from. The scroll container is focusable so a
- * keyboard user can reach a wide table's overflow (SC 2.1.1).
+ * keyboard user can reach a wide table's overflow (SC 2.1.1), and it takes its
+ * name from that caption by reference, so the query is stated once.
+ *
+ * A `<figure>` rather than a `<section>`, deliberately. A named section is a
+ * `region` landmark, and tool views repeat: two runs of the same query would
+ * put two identically named landmarks on the page, which is what the assembled
+ * scan reported. A result card is not a landmark of the application.
  */
+import { useId } from 'react'
 import { en } from '../locales/en.ts'
 
 /** One D1 result set, as the query endpoint returns it. */
 export interface D1ResultSet {
   readonly results?: readonly Record<string, unknown>[]
 }
+
+/**
+ * Rows one card renders before it stops.
+ *
+ * A query can return thousands, and every one of them would become a table row
+ * in a conversation card. The tool bounds what the model reads; this bounds
+ * what the DOM carries, and the caption says how many of how many — so a
+ * partial table is never presented as the whole result.
+ */
+const MAX_ROWS = 100
 
 /** Props for the result view. */
 export interface D1ResultProps {
@@ -38,8 +55,11 @@ export function cellText(value: unknown): string {
 }
 
 export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element {
-  const rows = resultSets.flatMap((set) => set.results ?? [])
+  const captionId = useId()
+  const allRows = resultSets.flatMap((set) => set.results ?? [])
+  const rows = allRows.slice(0, MAX_ROWS)
   const columns = columnsOf(rows)
+  const note = allRows.length > rows.length ? ` ${en.toolView.rowsShown(rows.length, allRows.length)}` : ''
 
   // No columns means nothing to render: `columnsOf` is empty both for no rows
   // and for rows that carry no fields, so this one check covers both.
@@ -48,11 +68,14 @@ export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element 
   }
 
   return (
-    // tabIndex makes the overflow reachable by keyboard; role="group" with a
-    // name keeps that focus stop meaningful rather than an unlabelled target.
-    <div className="cf-d1" tabIndex={0} role="group" aria-label={en.toolView.queryCaption(sql)}>
+    // tabIndex makes the overflow reachable by keyboard; the caption names the
+    // focus stop, so it is meaningful rather than an unlabelled target.
+    <figure className="cf-d1" tabIndex={0} aria-labelledby={captionId}>
       <table>
-        <caption>{en.toolView.queryCaption(sql)}</caption>
+        <caption id={captionId}>
+          {en.toolView.queryCaption(sql)}
+          {note}
+        </caption>
         <thead>
           <tr>
             {columns.map((column) => (
@@ -73,6 +96,6 @@ export function D1Result({ sql, resultSets }: D1ResultProps): React.JSX.Element 
           ))}
         </tbody>
       </table>
-    </div>
+    </figure>
   )
 }

@@ -38,6 +38,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { CLOUDFLARE_MCP_SERVERS } from '../packages/bundle/src/mcp/index.ts'
 
 const root = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 const read = (file: string): string => readFileSync(root(`../${file}`), 'utf8')
@@ -521,7 +522,57 @@ describe('the Web Client surfaces', () => {
   })
 })
 
+describe('the lists this suite derives from the tree', () => {
+  /**
+   * Each derived list, and what it must contain.
+   *
+   * Every check below filters one of these and asserts the filter came back
+   * empty, or generates a case per entry — and an empty list satisfies both
+   * shapes without reading a thing. `allDefined` and the diagram list already
+   * carry a guard of their own; these did not.
+   *
+   * Membership rather than a floor: a count drifts with the tree, while a
+   * `configured` that stopped matching an exported `name`, or a commitments
+   * table that stopped parsing, loses a specific row that can be named.
+   */
+  it('finds every configured row the tree exports', () => {
+    expect(configured.map((row) => row.row).toSorted()).toEqual([
+      'cloudflare',
+      'cloudflare-llm',
+      'cloudflare-tools-ai',
+      'cloudflare-tools-data',
+      'cloudflare-tools-meta',
+      'cloudflare-tools-web',
+    ])
+    // Seven rows export a `name`; the client's takes no configuration, so it
+    // has no schema and belongs to no table. Pinning six rather than seven says
+    // that on purpose instead of leaving the difference to be rediscovered.
+    expect(configured.map((row) => row.row)).not.toContain('cloudflare-client')
+  })
+
+  it('parses the commitments table rather than finding nothing in it', () => {
+    // The count check below compares two readings of the same table, so both
+    // going to zero passes it; this is the reading that cannot.
+    expect(commitments().map((row) => row.commitment)).toContain(
+      'All user-facing copy routes through the dictionary, accessible names included',
+    )
+  })
+
+  it('reads the markdown pages the diagram scan walks', () => {
+    expect(markdown).toContain('README.md')
+    expect(markdown).toContain('QUALITY-LOOP.md')
+  })
+})
+
 describe('the accessibility commitments', () => {
+  it('states the number of hosted MCP servers the module actually exports', () => {
+    // The page said "eight" while the module carried eight, and the two were
+    // kept in step by nobody: `mcp.test.ts` pinned the count independently, so
+    // editing one literal left the other orphaned.
+    const stated = [...readme.matchAll(/\*\*(\d+) hosted MCP servers\*\*/gu)].map((m) => Number(m[1]))
+    expect(stated).toEqual([CLOUDFLARE_MCP_SERVERS.length])
+  })
+
   it('names a test for every commitment it makes', () => {
     // A row whose second column carries no test name is a commitment nothing
     // holds, which is what the prose list allowed.
@@ -534,8 +585,14 @@ describe('the accessibility commitments', () => {
   })
 
   it('names only tests that exist and run', { timeout: COLLECTION_TIMEOUT_MS }, () => {
-    // Both lanes: a commitment may be held in the unit suite or in Chromium.
-    const running = new Set([...collected('vitest.config.ts'), ...collected('vitest.a11y.config.ts')])
+    // All three lanes: a commitment may be held in the unit suite, in Chromium,
+    // or — for the criteria axe has no rule for — by a gate that computes the
+    // answer from the shipped stylesheet.
+    const running = new Set([
+      ...collected('vitest.config.ts'),
+      ...collected('vitest.a11y.config.ts'),
+      ...collected('vitest.invariants.config.ts'),
+    ])
     expect(
       commitments()
         .flatMap((row) => row.tests)

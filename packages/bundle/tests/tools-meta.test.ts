@@ -117,6 +117,22 @@ describe('cloudflare_api', () => {
     })
   })
 
+  it.each([
+    ['GET', true],
+    ['HEAD', true],
+  ])('treats %s as concurrency safe, since it changes nothing', (method, safe) => {
+    expect(harness({}).tool('cloudflare_api').isConcurrencySafe?.({ method, path: '/x' })).toBe(safe)
+  })
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
+    'treats %s as unsafe to run alongside others, since it writes',
+    (method) => {
+      expect(
+        harness({ allowMutations: true }).tool('cloudflare_api').isConcurrencySafe?.({ method, path: '/x' }),
+      ).toBe(false)
+    },
+  )
+
   it('offers every method once mutations are permitted', () => {
     expect(harness({ allowMutations: true }).tool('cloudflare_api').parameters).toMatchObject({
       properties: { method: { enum: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] } },
@@ -218,9 +234,5 @@ describe('cloudflare_api', () => {
     expect(h.render('cloudflare_api', { method: 'GET', path: '/x' }, { result: { a: 1 } })).toEqual(
       json({ a: 1 }),
     )
-  })
-
-  it('is not marked concurrency safe, since it can be configured to write', () => {
-    expect(harness({}).tool('cloudflare_api').isConcurrencySafe).toBeUndefined()
   })
 })

@@ -3,40 +3,73 @@
  *
  * Colours come from CSS custom properties so the host's theme wins where it
  * defines them, with fallbacks that are self-sufficient when it does not.
- * Every fallback pair is checked for WCAG AA contrast by the Chromium
- * accessibility lane, in both light and dark — jsdom cannot compute contrast
- * (axe-core#595), so it has to be verified in a real browser.
+ *
+ * These surfaces animate nothing: no transition, no animation, no keyframes.
+ * That is a rule the invariants lane enforces rather than a coincidence, and it
+ * is why there is no `prefers-reduced-motion` block here — there was one, and
+ * it set `transition: none` on elements the stylesheet never gave a transition,
+ * neither property being inherited, so a host could not have given them one
+ * either. It guarded nothing. Introduce motion and the gate fails, which is the
+ * point at which a reduced-motion story has to be written.
+ *
+ * Every colour here comes from `light-dark()`, which is the engine floor these
+ * surfaces are written against: Chrome and Edge 123, Firefox 120, Safari 17.5,
+ * Baseline since May 2024. Below it the function does not parse, so each token
+ * is invalid where it is substituted. The browser lane measures what that
+ * leaves rather than describing it — it renames the function, which rewrites
+ * the feature query below along with the tokens — and what it finds is text
+ * inheriting the host's colour and every background falling away, which is the
+ * right degradation for a fragment sitting in someone else's page. The accent
+ * buttons are the exception the feature query exists for.
+ *
+ * Two lanes check those fallbacks, because one cannot reach both criteria.
+ * The Chromium lane runs axe over every surface in both colour schemes, which
+ * covers text contrast (SC 1.4.3) on the copy actually rendered — under jsdom
+ * that rule runs and comes back undecided. axe has no rule for non-text
+ * contrast, so borders and focus rings (SC 1.4.11) are computed straight from
+ * this file by the invariants lane, which reads every rule here and every
+ * token below and fails on a pair beneath its ratio.
  */
 
+/* One declaration per token carrying both schemes, rather than the whole block
+   repeated inside a `prefers-color-scheme` query.
+
+   No `color-scheme` is declared here, and that is the load-bearing part.
+   `light-dark()` resolves against the *used* colour scheme, and `color-scheme`
+   inherits, so declaring nothing is what makes these fragments answer to the
+   page they are dropped into. Declaring `light dark` on these roots — which
+   this file did — is an override: it discards the host's choice and answers to
+   the operating system alone. Measured in Chromium, that rendered dark text on
+   a light host page, and light text on a dark one, whenever the host's declared
+   scheme and the operating system disagreed; the host could not correct it from
+   outside, and axe never saw it because no fixture disagreed. A host that wants
+   more than a scheme sets the `--dsh-*` tokens below, which win over both. */
 .cf-chip,
 .cf-settings,
 .cf-d1,
 .cf-render,
-.cf-axtree {
-  --cf-fg: var(--dsh-fg, #16181d);
-  --cf-bg: var(--dsh-bg, #ffffff);
-  --cf-muted: var(--dsh-fg-muted, #55595f);
-  --cf-border: var(--dsh-border, #b9bdc4);
-  --cf-accent: var(--dsh-accent, #0b5cab);
-  --cf-danger: var(--dsh-danger, #a3131c);
+.cf-axtree,
+.cf-toolview {
+  --cf-fg: var(--dsh-fg, light-dark(#16181d, #f2f3f5));
+  --cf-bg: var(--dsh-bg, light-dark(#ffffff, #16181d));
+  --cf-muted: var(--dsh-fg-muted, light-dark(#55595f, #b3b8c0));
+  --cf-border: var(--dsh-border, light-dark(#82878f, #6f757e));
+  --cf-accent: var(--dsh-accent, light-dark(#0b5cab, #7db4ff));
+  --cf-danger: var(--dsh-danger, light-dark(#a3131c, #ff9ba1));
 
   color: var(--cf-fg);
   background: var(--cf-bg);
 }
 
-@media (prefers-color-scheme: dark) {
-  .cf-chip,
-  .cf-settings,
-  .cf-d1,
-  .cf-render,
-  .cf-axtree {
-    --cf-fg: var(--dsh-fg, #f2f3f5);
-    --cf-bg: var(--dsh-bg, #16181d);
-    --cf-muted: var(--dsh-fg-muted, #b3b8c0);
-    --cf-border: var(--dsh-border, #565b63);
-    --cf-accent: var(--dsh-accent, #7db4ff);
-    --cf-danger: var(--dsh-danger, #ff9ba1);
-  }
+/* Every box this package draws sizes by its border box.
+   Scoped to our own subtrees rather than declared on `*`: these are fragments
+   inside a host page, and a global rule here would reach the host's markup.
+   Without it a field at `inline-size: 100%` adds its padding and border on top
+   of the width it was given — 18px past its card, and 2px past the viewport,
+   at every width. */
+:is(.cf-chip, .cf-settings, .cf-d1, .cf-render, .cf-axtree, .cf-toolview),
+:is(.cf-chip, .cf-settings, .cf-d1, .cf-render, .cf-axtree, .cf-toolview) * {
+  box-sizing: border-box;
 }
 
 .cf-chip {
@@ -45,6 +78,15 @@
   gap: 0.5rem;
   align-items: center;
   padding: 0.25rem 0.5rem;
+}
+
+/* The live region carries the same row layout the chip used to, so moving the
+   control out of it changes what is announced and nothing that is seen. */
+.cf-chip__live {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .cf-chip__figure,
@@ -56,7 +98,9 @@
   color: var(--cf-muted);
 }
 
-/* Minimum 24x24 target, per WCAG 2.2 SC 2.5.8. */
+/* 24x24 is the floor SC 2.5.8 sets for any pointer. A finger is not any
+   pointer: Apple's HIG asks for 44pt and Material for 48dp, so a coarse
+   pointer gets 44 (below). */
 .cf-chip__toggle,
 .cf-settings button {
   min-block-size: 24px;
@@ -69,7 +113,27 @@
   cursor: pointer;
 }
 
-.cf-chip__detail {
+/* The one consequence below the engine floor that is not benign.
+   A token that fails to parse takes its whole declaration with it, and an
+   earlier declaration does not stand in — the cascade already discarded it, and
+   the winner only becomes invalid later, at computed-value time. So a fallback
+   has to be a separate rule behind a feature query, and it has to be written in
+   literals, since a token is the thing that is missing. These are the values
+   the tokens resolve to in the light scheme, and the same feature query is what
+   the browser lane flips to measure the degradation. */
+@supports not (color: light-dark(#000000, #ffffff)) {
+  .cf-chip__toggle,
+  .cf-settings button {
+    color: #ffffff;
+    background: #0b5cab;
+  }
+}
+
+/* `:not([hidden])`, because a class setting `display` outranks the user agent's
+   `[hidden] { display: none }` — the collapsed detail was on screen the whole
+   time, with `hidden` set and a jsdom test asserting the attribute rather than
+   what it does. */
+.cf-chip__detail:not([hidden]) {
   display: grid;
   grid-template-columns: auto auto;
   gap: 0.125rem 0.5rem;
@@ -81,8 +145,17 @@
   color: var(--cf-muted);
 }
 
+/* A measure, not a width. Below this the card is fluid and fills whatever the
+   host gives it; above it, prose stops running to 1200 characters a line and a
+   text field stops being a metre wide. `ch` because the limit is about how far
+   the eye travels, not about a device. */
 .cf-settings {
   padding: 1rem;
+  max-inline-size: 78ch;
+}
+
+.cf-settings p {
+  max-inline-size: 66ch;
 }
 
 .cf-field {
@@ -95,7 +168,13 @@
   font-weight: 600;
 }
 
+/* `font: inherit`, because a form control otherwise uses the user agent's own
+   13px face: it reads smaller than the copy around it, `ch` units resolve
+   against the wrong font, and iOS Safari zooms the page whenever a field below
+   16px takes focus. The card's measure already bounds the field, so it needs no
+   cap of its own. */
 .cf-field input {
+  font: inherit;
   inline-size: 100%;
   min-block-size: 24px;
   padding: 0.25rem 0.5rem;
@@ -123,23 +202,32 @@
 }
 
 .cf-saved {
+  display: block;
   margin: 0.5rem 0 0;
   font-size: 0.8125rem;
   color: var(--cf-muted);
 }
 
-/* Focus must stay visible and meet 3:1 against the adjacent background
-   (SC 2.4.11, 2.4.13); never removed without a replacement. */
+/* A visible focus indicator (SC 2.4.7), never removed without a replacement,
+   and one that meets 3:1 against the background it sits on — that ratio comes
+   from SC 1.4.11 Non-text Contrast, not from SC 2.4.11, which is about a
+   focused control not being obscured. `outline-offset` puts the ring on the
+   page background rather than on the control's own fill, which is the pair the
+   invariants lane computes. */
 .cf-chip :focus-visible,
 .cf-settings :focus-visible,
 .cf-d1:focus-visible,
-.cf-render :focus-visible {
+.cf-render:focus-visible,
+.cf-toolview:focus-visible {
   outline: 2px solid var(--cf-accent);
   outline-offset: 2px;
 }
 
 .cf-d1 {
   overflow-x: auto;
+  /* Reserved, so the row that first overflows does not shift everything
+     beside it when the scrollbar appears. */
+  scrollbar-gutter: stable;
 }
 
 .cf-d1 table {
@@ -169,26 +257,56 @@
   color: var(--cf-muted);
 }
 
-.cf-render figcaption,
+.cf-render__caption,
+.cf-toolview__caption,
 .cf-axtree {
   font-size: 0.875rem;
 }
 
-.cf-render__body {
+.cf-d1,
+.cf-axtree {
+  margin: 0;
+}
+
+/* The two cards that scroll their own overflow: a rendered page, and a settled
+   result whose projection no view could read. One rule, because they are the
+   same box — the second was a second copy of it, and drifted into a bare `<pre>`
+   with no focus stop, which no fixture rendered and so no lane ever laid out. */
+.cf-render,
+.cf-toolview {
   max-block-size: 24rem;
   overflow: auto;
+  margin: 0;
   padding: 0.5rem;
   border: 1px solid var(--cf-border);
   border-radius: 4px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .cf-chip,
-  .cf-settings,
-  .cf-d1,
-  .cf-render,
-  .cf-axtree {
-    transition: none;
-    animation: none;
+/* The caption names the focus stop, so it stays put while the body scrolls
+   under it rather than leaving the reader without it. */
+.cf-render__caption,
+.cf-toolview__caption {
+  position: sticky;
+  inset-block-start: 0;
+  background: var(--cf-bg);
+}
+
+.cf-render__body,
+.cf-toolview__raw {
+  margin: 0;
+}
+
+/* A touch pointer has no hover and no pixel precision, so every control it can
+   reach is given a finger-sized target rather than the conformance minimum. */
+@media (pointer: coarse) {
+  .cf-chip__toggle,
+  .cf-settings button,
+  .cf-field input {
+    min-block-size: 44px;
+  }
+
+  .cf-chip__toggle,
+  .cf-settings button {
+    min-inline-size: 44px;
   }
 }

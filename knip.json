@@ -13,7 +13,8 @@
       "project": ["src/**/*.ts", "tests/**/*.ts"]
     },
     "packages/client": {
-      "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"]
+      "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+      "entry": ["tests/e2e-entry.tsx"]
     }
   }
 }

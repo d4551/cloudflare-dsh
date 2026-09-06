@@ -11,7 +11,11 @@ export const en = {
     label: 'Cloudflare AI Gateway usage for this session',
     requests: (n: number) => `${n} ${n === 1 ? 'request' : 'requests'}`,
     cost: (amount: string) => `cost ${amount}`,
+    showDetail: 'Show detail',
+    hideDetail: 'Hide detail',
+    cachedTerm: 'Cached',
     cached: (n: number) => `${n} served from cache`,
+    tokensTerm: 'Tokens',
     cacheRate: (percent: string) => `${percent} cache hit rate`,
     tokens: (input: number, output: number) => `${input} in, ${output} out`,
     empty: 'No Cloudflare AI Gateway requests recorded for this session yet.',
@@ -40,8 +44,12 @@ export const en = {
   toolView: {
     renderHeading: (url: string) => `Rendered ${url}`,
     treeHeading: (url: string) => `Accessibility tree for ${url}`,
+    unknownRole: 'unknown',
+    node: (role: string, name: string) => `${role}: ${name}`,
     queryCaption: (sql: string) => `Results for query: ${sql}`,
+    rowsShown: (shown: number, total: number) => `Showing the first ${shown} of ${total} rows.`,
     emptyResult: 'The query returned no rows.',
+    rawHeading: (toolName: string) => `Result from ${toolName}`,
   },
 }
 

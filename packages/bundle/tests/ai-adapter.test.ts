@@ -1,5 +1,6 @@
 import { attributionHeaders } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { FetchLike as MockFetch } from '@d4551/dsh-cloudflare-core'
 import { describe, expect, it, vi } from 'vitest'
 import { CloudflareAiAdapter, readErrorDetail } from '../src/ai/adapter.ts'
 import { CONTENT_FILTER_CODE, PROVIDER_ERROR_CODE, RATE_LIMIT_CODE, TIMEOUT_CODE } from '../src/ai/errors.ts'
@@ -491,7 +492,7 @@ describe('stream', () => {
   // One adapter call is one provider attempt: retry policy belongs to the
   // harness, and retrying here would double-charge and double-log.
   it('never retries internally', async () => {
-    const fetchImpl = vi.fn(async () => new Response('{}', { status: 500 }))
+    const fetchImpl = vi.fn<MockFetch>(async () => new Response('{}', { status: 500 }))
     const { adapter } = makeAdapter(fetchImpl)
     await expect(collect(adapter.stream(options()))).rejects.toMatchObject({
       code: PROVIDER_ERROR_CODE,
@@ -501,7 +502,7 @@ describe('stream', () => {
   })
 
   it('rejects an unsupported option before issuing any request', async () => {
-    const fetchImpl = vi.fn(async () => sse(TEXT, STOP))
+    const fetchImpl = vi.fn<MockFetch>(async () => sse(TEXT, STOP))
     const { adapter } = makeAdapter(fetchImpl)
     await expect(collect(adapter.stream(options({ reasoningEffort: 'high' })))).rejects.toMatchObject({
       code: 'UNSUPPORTED_OPTION',

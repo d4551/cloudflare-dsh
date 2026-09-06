@@ -13,7 +13,6 @@
  * and a base64 PDF in the session log would be a blob nothing can consume;
  * PDF capture is therefore not offered rather than offered broken.
  */
-import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentId, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -31,13 +30,8 @@ import {
   browserScreenshotSpec,
 } from '../specs/web.ts'
 import type { JsonValue } from './_shared/json.ts'
-import { json, text, truncate } from './_shared/render.ts'
-
-interface CloudflareContext extends Context {
-  cloudflare: CloudflareService
-}
-
-/** Longest rendered body handed to the model; the canonical value keeps it all. */
+import { boundedJson, json, text, truncate } from './_shared/render.ts'
+import { seam } from '../seam.ts'
 
 /** Formats the render tool accepts, in the order they appear to the model. */
 const FORMATS: readonly RenderFormat[] = ['markdown', 'content', 'links', 'scrape', 'json']
@@ -99,6 +93,34 @@ export class ScreenshotShapeError extends TypeError {
 export const name = 'cloudflare-tools-web'
 export const inject = ['tools', 'cloudflare']
 
+/**
+ * The rendering options every Browser Rendering tool accepts.
+ *
+ * All three tools declared this block verbatim; only the verb differed, since
+ * one inspects a page rather than capturing it. `renderOptionsFrom` below
+ * already factored the reading half — this is the declaring half that was left
+ * behind, and half of a symmetric pair is where a drift starts.
+ */
+function renderOptionParameters(verb: string): {
+  readonly gotoTimeoutMs: { readonly type: 'integer'; readonly description: string }
+  readonly waitForSelector: { readonly type: 'string'; readonly description: string }
+  readonly rejectResourceTypes: {
+    readonly type: 'array'
+    readonly description: string
+    readonly items: { readonly type: 'string'; readonly enum: typeof RESOURCE_TYPES }
+  }
+} {
+  return {
+    gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
+    waitForSelector: { type: 'string', description: `Wait for this CSS selector before ${verb}.` },
+    rejectResourceTypes: {
+      type: 'array',
+      description: 'Resource types to block while the page loads, for example image or script.',
+      items: { type: 'string', enum: RESOURCE_TYPES },
+    },
+  }
+}
+
 /** Read the shared rendering options out of validated tool arguments. */
 export function renderOptionsFrom(args: {
   url: string
@@ -133,7 +155,7 @@ export const Config: Schema<Partial<WebToolsConfig>, WebToolsConfig> = Schema.ob
 })
 
 export function apply(ctx: Context, config: WebToolsConfig): void {
-  const cf = (ctx as CloudflareContext).cloudflare
+  const cf = seam(ctx)
 
   ctx.tools.register(
     defineTool({
@@ -148,13 +170,7 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
           enum: FORMATS,
           description: 'What to return for the page.',
         },
-        gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
-        waitForSelector: { type: 'string', description: 'Wait for this CSS selector before capturing.' },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: { type: 'string', enum: RESOURCE_TYPES },
-        },
+        ...renderOptionParameters('capturing'),
       },
       output: {
         schema: {
@@ -180,6 +196,13 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
           if (typeof value.body === 'string') return text(truncate(value.body, config.renderLimit))
           return json(value.body)
         },
+        // The view shows text captioned with the page it came from. A format
+        // that answers with structured data is shown as its JSON, since that is
+        // what a reader has to look at.
+        presentationMeta: (_args, value) => ({
+          url: value.url,
+          body: typeof value.body === 'string' ? value.body : JSON.stringify(value.body, null, 2),
+        }),
       },
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,
@@ -211,13 +234,7 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
           description:
             'Capture the whole scrollable page rather than the viewport; the configured default when omitted.',
         },
-        gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
-        waitForSelector: { type: 'string', description: 'Wait for this CSS selector before capturing.' },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: { type: 'string', enum: RESOURCE_TYPES },
-        },
+        ...renderOptionParameters('capturing'),
       },
       output: {
         schema: {
@@ -298,13 +315,7 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
         'Fetch the accessibility tree for a web page using Cloudflare Browser Rendering. Returns the roles, names and structure a screen reader would expose, which is what WCAG review needs.',
       parameters: {
         url: { type: 'string', required: true, description: 'Absolute URL to inspect.' },
-        gotoTimeoutMs: { type: 'integer', description: 'Navigation timeout in milliseconds.' },
-        waitForSelector: { type: 'string', description: 'Wait for this CSS selector before inspecting.' },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: { type: 'string', enum: RESOURCE_TYPES },
-        },
+        ...renderOptionParameters('inspecting'),
       },
       output: {
         schema: {
@@ -320,11 +331,11 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
             },
           },
         },
-        render: (args, value) => {
-          return text(
-            `Accessibility tree for ${args.url}\n${truncate(JSON.stringify(value.tree, null, 2), config.renderLimit)}`,
-          )
-        },
+        render: (args, value) =>
+          text(`Accessibility tree for ${args.url}\n${boundedJson(value.tree, config.renderLimit)}`),
+        // The view renders the hierarchy as nested lists, which the bounded
+        // JSON in the render text cannot be rebuilt from.
+        presentationMeta: (_args, value) => ({ url: value.url, tree: value.tree }),
       },
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,

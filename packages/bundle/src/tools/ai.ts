@@ -5,11 +5,10 @@
  * once requests carry a session id in `cf-aig-metadata`, these read back the
  * cost, cache behaviour and latency for that exact session.
  */
-import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
+import { nextPageQuery } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import { nextPageQuery } from '@d4551/dsh-cloudflare-core'
 import { SESSION_METADATA_KEY } from '../ai/headers.ts'
 import { parseJson } from '../ai/sse.ts'
 import {
@@ -39,14 +38,19 @@ import {
   vectorizeQuerySpec,
   vectorizeWriteSpec,
 } from '../specs/ai.ts'
-import { isFiniteNumber, isObject, type JsonValue } from './_shared/json.ts'
 import { EmptyBatchError } from './_shared/batch.ts'
-import { PAGE_OUTCOME_PROPERTIES, pageNote, pageOutcome, requestedPage } from './_shared/paging.ts'
-import { json, listing, plural, text } from './_shared/render.ts'
-
-interface CloudflareContext extends Context {
-  cloudflare: CloudflareService
-}
+import { isFiniteNumber, isObject, type JsonValue } from './_shared/json.ts'
+import {
+  NO_TOTAL_PAGE_OUTCOME_PROPERTIES,
+  PAGE_OUTCOME_PROPERTIES,
+  PAGE_PARAMETER,
+  pageNote,
+  pageOutcome,
+  requestedPage,
+  shortPageOutcome,
+} from './_shared/paging.ts'
+import { apiRecords, json, listing, plural, text } from './_shared/render.ts'
+import { seam } from '../seam.ts'
 
 /** Billing views the cost tool exposes. */
 const BILLING_VIEWS: readonly BillingView[] = ['credit-balance', 'usage-history', 'invoice-preview']
@@ -83,7 +87,7 @@ export const Config: Schema<Partial<AiToolsConfig>, AiToolsConfig> = Schema.obje
 })
 
 export function apply(ctx: Context, config: AiToolsConfig): void {
-  const cf = (ctx as CloudflareContext).cloudflare
+  const cf = seam(ctx)
 
   ctx.tools.register(
     defineTool({
@@ -137,7 +141,7 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       parameters: {
         search: { type: 'string', description: 'Substring to match against model names.' },
         task: { type: 'string', description: 'Task filter, e.g. "Text Generation".' },
-        page: { type: 'integer', description: 'Page number, from 1; the first page when omitted.' },
+        ...PAGE_PARAMETER,
         perPage: { type: 'integer', description: `Models per page (default ${config.pageSize}).` },
       },
       output: {
@@ -212,7 +216,7 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
       description:
         'List the AI Gateways in the Cloudflare account, one page at a time. The endpoint reports no total, so a full page means more may follow.',
       parameters: {
-        page: { type: 'integer', description: 'Page number, from 1; the first page when omitted.' },
+        ...PAGE_PARAMETER,
         perPage: { type: 'integer', description: `Gateways per page (default ${config.pageSize}).` },
       },
       output: {
@@ -221,12 +225,7 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
           additionalProperties: false,
           description: 'One page of gateways, and where it sits in the whole.',
           properties: {
-            gateways: {
-              type: 'array',
-              required: true,
-              description: 'Gateway records as the API returns them.',
-              items: { type: 'object', additionalProperties: true },
-            },
+            gateways: apiRecords('Gateway'),
             ...PAGE_OUTCOME_PROPERTIES,
           },
         },
@@ -287,7 +286,7 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
         'Query AI Gateway request logs. Filter by metadata to isolate one harness session: requests made through the Cloudflare model provider carry the session id in cf-aig-metadata.',
       parameters: {
         gatewayId: { type: 'string', required: true, description: 'Gateway id.' },
-        page: { type: 'integer', description: '1-based page number (default 1).' },
+        ...PAGE_PARAMETER,
         perPage: {
           type: 'integer',
           description: `Log entries per page, ${GATEWAY_LOG_MIN_PAGE_SIZE}-${GATEWAY_LOG_MAX_PAGE_SIZE} (default ${GATEWAY_LOG_MAX_PAGE_SIZE}).`,
@@ -313,32 +312,24 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
           additionalProperties: false,
           description: 'Matching log entries and the page they came from.',
           properties: {
-            logs: {
-              type: 'array',
-              required: true,
-              description: 'Log entries as the API returns them.',
-              items: { type: 'object', additionalProperties: true },
-            },
-            page: { type: 'integer', required: true, description: '1-based page number that was read.' },
-            perPage: { type: 'integer', required: true, description: 'Entries requested per page.' },
-            complete: {
-              type: 'boolean',
-              required: true,
-              description: 'Whether this page was short, so no page follows.',
-            },
+            logs: apiRecords('Log entry'),
+            ...NO_TOTAL_PAGE_OUTCOME_PROPERTIES,
           },
         },
         render: (_args, value) => listing(value.logs.length, 'log entry', value),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const page = args.page ?? 1
+        // `requestedPage`, like every other page-numbered tool: this one read
+        // `args.page ?? 1` and put `page=0` on the wire while its four siblings
+        // refused it.
+        const page = requestedPage(args.page)
         const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
         const logs = await cf.accountRequest<Record<string, JsonValue>[]>({
           ...gatewayLogsSpec(args.gatewayId, page, perPage, args.filters ?? []),
           signal: exec.signal,
         })
-        return { logs, page, perPage, complete: logs.length < perPage }
+        return { logs, ...shortPageOutcome(page, perPage, logs.length) }
       },
     }),
   )
@@ -394,12 +385,7 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
           additionalProperties: false,
           description: 'Dynamic routes.',
           properties: {
-            routes: {
-              type: 'array',
-              required: true,
-              description: 'Route records as the API returns them.',
-              items: { type: 'object', additionalProperties: true },
-            },
+            routes: apiRecords('Route'),
           },
         },
         render: (_args, value) => listing(value.routes.length, 'route', value),
@@ -570,12 +556,7 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
           additionalProperties: false,
           description: 'Vector indexes in the account.',
           properties: {
-            indexes: {
-              type: 'array',
-              required: true,
-              description: 'Index records as the API returns them.',
-              items: { type: 'object', additionalProperties: true },
-            },
+            indexes: apiRecords('Index'),
           },
         },
         render: (_args, value) => listing(value.indexes.length, 'index', value),
@@ -858,6 +839,15 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
             `Session ${args.sessionId}: ${value.requests} requests, ${value.cached} served from cache, cost ${value.cost}${partial}.`,
           )
         },
+        // The client's usage chip renders exactly these five figures, and the
+        // one-line summary the model reads carries only three of them.
+        presentationMeta: (_args, value) => ({
+          requests: value.requests,
+          cost: value.cost,
+          tokensIn: value.tokensIn,
+          tokensOut: value.tokensOut,
+          cached: value.cached,
+        }),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {

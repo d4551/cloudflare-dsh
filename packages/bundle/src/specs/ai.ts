@@ -5,10 +5,7 @@
  * (hyphenated), not `/ai/gateways`.
  */
 import type { RequestSpec } from '@d4551/dsh-cloudflare-core'
-
-function seg(value: string): string {
-  return encodeURIComponent(value)
-}
+import { seg } from './_segment.ts'
 
 // --- Workers AI -----------------------------------------------------------
 

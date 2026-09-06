@@ -21,7 +21,7 @@ interface Manifest {
   exports: Record<string, unknown>
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
-  dsh?: { bundle?: { patch?: string } }
+  dsh?: { bundle?: { patch?: string }; client?: boolean }
 }
 
 function manifest(pkg: string): Manifest {
@@ -40,12 +40,23 @@ describe('published manifests', () => {
   it.each(['core', 'bundle', 'client'])('%s declares no workspace protocol in dependencies', (pkg) => {
     const m = manifest(pkg)
     const ranges = Object.values({ ...m.dependencies, ...m.peerDependencies })
+    // Every package declares at least one range, so an empty list here means
+    // the manifest was not read rather than that it is clean.
+    expect(ranges.length).toBeGreaterThan(0)
     // `workspace:*` cannot be resolved by anyone installing from the registry.
     expect(ranges.filter((r) => r.startsWith('workspace:'))).toEqual([])
   })
 
   it('the bundle declares its dsh patch, without which it installs inert', () => {
     expect(manifest('bundle').dsh?.bundle?.patch).toBe('./cordis.patch.yml')
+  })
+
+  it('the client declares itself a client plugin, without which the host never loads it', () => {
+    // The bundle's flag had this test and the client's identical one did not.
+    // Drop `dsh.client` and every surface this package contributes is inert —
+    // while the component tests, the Chromium scans and the viewport lane all
+    // keep passing, because none of them loads the package the way a host does.
+    expect(manifest('client').dsh?.client).toBe(true)
   })
 })
 

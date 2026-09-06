@@ -27,14 +27,14 @@
   "devDependencies": {
     "@stryker-mutator/core": "10.0.0",
     "@stryker-mutator/vitest-runner": "10.0.0",
-    "@types/node": "^22.15.0",
+    "@types/node": "^22.19.0",
     "@vitest/coverage-v8": "4.1.11",
-    "knip": "^5.66.0",
+    "knip": "^6.0.0",
     "oxfmt": "0.66.0",
     "oxlint": "^1.81.0",
     "publint": "^0.3.14",
     "tsdown": "^0.23.0",
-    "typescript": "^5.9.0",
+    "typescript": "^6.0.0",
     "vitest": "4.1.11"
   }
 }

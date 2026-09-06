@@ -282,7 +282,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
         },
         page: {
           type: 'integer',
-          description: '1-based page number (default 1).',
+          description: 'Page number, from 1; the first page when omitted.',
         },
         perPage: {
           type: 'integer',
@@ -342,15 +342,15 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
             type: 'object',
             additionalProperties: true,
           },
-          description: 'Log entries as the API returns them.',
+          description: 'Log entry records as the API returns them.',
         },
         page: {
           type: 'integer',
-          description: '1-based page number that was read.',
+          description: 'The page this is.',
         },
         perPage: {
           type: 'integer',
-          description: 'Entries requested per page.',
+          description: 'Items requested per page.',
         },
         complete: {
           type: 'boolean',

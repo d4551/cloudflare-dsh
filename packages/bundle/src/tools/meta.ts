@@ -5,17 +5,14 @@
  * wrap. It is deliberately contained: read-only unless explicitly configured
  * otherwise, subject to a path denylist, and unable to leave the REST root.
  */
-import type { CloudflareService, HttpMethod, QueryValue } from '@d4551/dsh-cloudflare-core'
+import type { HttpMethod, QueryValue } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { buildGenericSpec } from '../specs/meta.ts'
 import type { JsonValue } from './_shared/json.ts'
 import { json, listing } from './_shared/render.ts'
-
-interface CloudflareContext extends Context {
-  cloudflare: CloudflareService
-}
+import { seam } from '../seam.ts'
 
 /** Raised when a query value has no unambiguous text form. */
 export class ApiQueryError extends TypeError {
@@ -70,7 +67,7 @@ export const name = 'cloudflare-tools-meta'
 export const inject = ['tools', 'cloudflare']
 
 export function apply(ctx: Context, config: MetaConfig): void {
-  const cf = (ctx as CloudflareContext).cloudflare
+  const cf = seam(ctx)
 
   ctx.tools.register(
     defineTool({
@@ -158,6 +155,11 @@ export function apply(ctx: Context, config: MetaConfig): void {
         },
         render: (_args, value) => json(value.result),
       },
+      // The read/write split the schema already enforces, answered per call: a
+      // GET or a HEAD changes nothing, so the harness may run it alongside
+      // others. Every other tool answers this with a constant; this is the one
+      // whose safety depends on what it was asked to do.
+      isConcurrencySafe: (args) => READ_METHODS.includes(args.method),
       async execute(args, exec) {
         const spec = buildGenericSpec(args.method, args.path, toQuery(args.query), args.body, {
           denyPathPrefixes: config.denyPathPrefixes,

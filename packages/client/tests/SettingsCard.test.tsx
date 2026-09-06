@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { type CloudflareSettings, SettingsCard } from '../src/SettingsCard.tsx'
+import { type CloudflareSettings, SettingsCard, type SettingsCardProps } from '../src/SettingsCard.tsx'
 import { expectNoViolations } from './axe.ts'
 
 afterEach(cleanup)
@@ -13,22 +13,30 @@ const settings: CloudflareSettings = {
 }
 
 function setup(over: Partial<Parameters<typeof SettingsCard>[0]> = {}) {
-  const onSave = vi.fn()
+  const onSave = vi.fn<SettingsCardProps['onSave']>()
   const result = render(<SettingsCard settings={settings} tokenStored={false} onSave={onSave} {...over} />)
   return { ...result, onSave }
 }
 
 describe('SettingsCard', () => {
   it('names its region by its heading', () => {
-    setup()
-    expect(screen.getByRole('region', { name: 'Cloudflare' })).toBeInstanceOf(HTMLElement)
+    const { container } = setup()
+    const region = screen.getByRole('region', { name: 'Cloudflare' })
+    const labelledBy = region.getAttribute('aria-labelledby')
+    // Named *by the heading*, not by a label that happens to read the same:
+    // the reference is resolved to the element it points at.
+    expect(container.ownerDocument.getElementById(labelledBy ?? '')).toBe(
+      screen.getByRole('heading', { level: 2 }),
+    )
   })
 
   it.each(['API token reference', 'API token', 'Account ID', 'AI Gateway ID'])(
     'gives %s a programmatic label',
     (label) => {
       setup()
-      expect(screen.getByLabelText(label)).toBeInstanceOf(HTMLElement)
+      // A label may point at anything with an id; only a form control makes it
+      // a programmatic label for a field.
+      expect(screen.getByLabelText(label).tagName).toBe('INPUT')
     },
   )
 
@@ -45,13 +53,17 @@ describe('SettingsCard', () => {
   })
 
   it('reports whether a token is stored, without revealing it', () => {
-    setup({ tokenStored: true })
-    expect(screen.getByText('A token is stored for this reference.')).toBeInstanceOf(HTMLElement)
+    const { container } = setup({ tokenStored: true })
+    expect(container.querySelector('.cf-field:nth-of-type(2)')?.textContent).toContain(
+      'A token is stored for this reference.',
+    )
   })
 
   it('reports when no token is stored', () => {
-    setup()
-    expect(screen.getByText('No token is stored for this reference.')).toBeInstanceOf(HTMLElement)
+    const { container } = setup()
+    expect(container.querySelector('.cf-field:nth-of-type(2)')?.textContent).toContain(
+      'No token is stored for this reference.',
+    )
   })
 
   it('associates the Account ID field with its hint', () => {
@@ -188,6 +200,31 @@ describe('SettingsCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Cloudflare settings' }))
     expect(screen.getByRole('alert').textContent).toBe('')
     expect(onSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('withdraws a stale save confirmation as soon as a field is edited', () => {
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Save Cloudflare settings' }))
+    expect(screen.getByRole('status').textContent).toBe('Cloudflare settings saved.')
+    fireEvent.change(screen.getByLabelText('Account ID'), { target: { value: 'acct-9' } })
+    // The confirmation described the stored values. Editing makes it a claim
+    // about state that is no longer stored.
+    expect(screen.getByRole('status').textContent).toBe('')
+  })
+
+  it.each(['API token reference', 'API token', 'AI Gateway ID'])(
+    'withdraws it when the %s field is the one edited',
+    (label) => {
+      setup()
+      fireEvent.click(screen.getByRole('button', { name: 'Save Cloudflare settings' }))
+      fireEvent.change(screen.getByLabelText(label), { target: { value: 'X' } })
+      expect(screen.getByRole('status').textContent).toBe('')
+    },
+  )
+
+  it('renders the confirmation as an output element, whose implicit role is status', () => {
+    const { container } = setup()
+    expect(container.querySelector('.cf-saved')?.tagName).toBe('OUTPUT')
   })
 
   it('hides a stale save confirmation when validation then fails', () => {

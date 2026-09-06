@@ -12,12 +12,13 @@
  * Cloudflare is the authority on its own endpoint shape, and a hardcoded URL
  * would also be a tunable that config could not change.
  */
-import { type CloudflareService, nextPageByLength } from '@d4551/dsh-cloudflare-core'
+import { nextPageByLength } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import Schema from '@deepseek-ai/schemastery'
 import { aiModelsSearchSpec, gatewayUrlSpec } from '../specs/ai.ts'
 import { CloudflareAiAdapter, type ResolvedEndpoint } from './adapter.ts'
+import { seam } from '../seam.ts'
 
 export { CloudflareAiAdapter, readErrorDetail } from './adapter.ts'
 export type { CloudflareAiAdapterDeps, ResolvedEndpoint } from './adapter.ts'
@@ -41,10 +42,6 @@ const CATALOGUE_LOOKUP_PAGE_SIZE = 100
 /** Route names this plugin registers. */
 export const WORKERS_AI_PROVIDER = 'cloudflare-workers-ai'
 export const AI_GATEWAY_PROVIDER = 'cloudflare-ai-gateway'
-
-interface CloudflareContext extends Context {
-  cloudflare: CloudflareService
-}
 
 export interface AiConfig {
   /** Gateway to route through. Required for the ai-gateway route. */
@@ -181,7 +178,7 @@ export function toModelInfo(
 }
 
 export function apply(ctx: Context, config: AiConfig): void {
-  const cf = (ctx as CloudflareContext).cloudflare
+  const cf = seam(ctx)
   const llm = ctx.llm
 
   // The endpoint URL is a fact of this configuration — the gateway's advertised

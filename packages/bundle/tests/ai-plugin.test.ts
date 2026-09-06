@@ -1,6 +1,7 @@
 import { CloudflareConfig, CloudflareService } from '@d4551/dsh-cloudflare-core'
 import { Context } from '@deepseek-ai/cordis'
 import { LlmRuntime } from '@deepseek-ai/dsh-llm'
+import type { FetchLike as MockFetch } from '@d4551/dsh-cloudflare-core'
 import { describe, expect, it, vi } from 'vitest'
 import { CloudflareAiAdapter } from '../src/ai/adapter.ts'
 import * as aiPlugin from '../src/ai/index.ts'
@@ -326,7 +327,7 @@ describe('listModels', () => {
   })
 
   it('uses the configured list without querying the catalogue', async () => {
-    const fetchImpl = vi.fn(async () => envelope([]))
+    const fetchImpl = vi.fn<MockFetch>(async () => envelope([]))
     const { registered } = harness({ models: ['@cf/pinned'] }, fetchImpl)
     await expect(registered[0]!.adapter.listModels('cloudflare-workers-ai')).resolves.toEqual([
       {
@@ -355,7 +356,7 @@ describe('endpoint resolution', () => {
     apiResponses: (r: Request) => Promise<Response>,
   ) {
     const outbound: Request[] = []
-    const globalFetch = vi.fn(async (request: Request) => {
+    const globalFetch = vi.fn<MockFetch>(async (request: Request) => {
       outbound.push(request)
       return new Response(stop, { status: 200 })
     })
@@ -403,7 +404,7 @@ describe('endpoint resolution', () => {
   // a REST round trip per call for a fact that does not change.
   it('reads the gateway url once per plugin instance', async () => {
     const apiRequests: Request[] = []
-    const globalFetch = vi.fn(async () => new Response(stop, { status: 200 }))
+    const globalFetch = vi.fn<MockFetch>(async () => new Response(stop, { status: 200 }))
     vi.stubGlobal('fetch', globalFetch)
     try {
       const { registered } = harness({ gatewayId: 'gw1' }, async (r) => {
@@ -447,7 +448,7 @@ describe('endpoint resolution', () => {
     )
     expect(service.name).toBe('cloudflare')
     aiPlugin.apply(ctx, aiPlugin.Config({}))
-    const globalFetch = vi.fn(async () => new Response(stop, { status: 200 }))
+    const globalFetch = vi.fn<MockFetch>(async () => new Response(stop, { status: 200 }))
     vi.stubGlobal('fetch', globalFetch)
     try {
       const call = () =>
@@ -522,10 +523,9 @@ describe('endpoint resolution', () => {
     expect(outbound[0]!.headers.get('cf-aig-custom-cost')).toBe('{"per_token_in":0,"per_token_out":0.002}')
   })
 
-  it('sends no cost override when none is configured, rather than declaring everything free', () => {
-    return stream({}, 'cloudflare-workers-ai', async () => envelope(null)).then(({ outbound }) => {
-      expect(outbound[0]!.headers.get('cf-aig-custom-cost')).toBeNull()
-    })
+  it('sends no cost override when none is configured, rather than declaring everything free', async () => {
+    const { outbound } = await stream({}, 'cloudflare-workers-ai', async () => envelope(null))
+    expect(outbound[0]!.headers.get('cf-aig-custom-cost')).toBeNull()
   })
 
   it('applies a configured gateway-side request timeout', async () => {
@@ -538,7 +538,7 @@ describe('endpoint resolution', () => {
   it('applies the configured stream idle timeout', async () => {
     const { registered } = harness({ streamIdleTimeoutMs: 25 })
     const never = new ReadableStream<Uint8Array>({ start: () => undefined })
-    const globalFetch = vi.fn(async () => new Response(never, { status: 200 }))
+    const globalFetch = vi.fn<MockFetch>(async () => new Response(never, { status: 200 }))
     vi.stubGlobal('fetch', globalFetch)
     try {
       const iterate = async () => {
@@ -582,7 +582,7 @@ describe('endpoint resolution', () => {
 
   it('asks the API for the configured gateway provider', async () => {
     const apiRequests: Request[] = []
-    const globalFetch = vi.fn(async () => new Response(stop, { status: 200 }))
+    const globalFetch = vi.fn<MockFetch>(async () => new Response(stop, { status: 200 }))
     vi.stubGlobal('fetch', globalFetch)
     try {
       const { registered } = harness({ gatewayId: 'gw1', gatewayProvider: 'openai' }, async (r) => {

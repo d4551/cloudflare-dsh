@@ -392,6 +392,40 @@ describe('lifecycle', () => {
   })
 })
 
+/** A harness for reading a tool's declarations; it never calls Cloudflare. */
+const viewHarness = () => makeHarness(webTools, async () => envelope(''))
+
+describe('what the tool views are given', () => {
+  it('publishes the rendered text beside the page it came from', () => {
+    const meta = viewHarness()
+      .tool('cloudflare_browser_render')
+      .output.presentationMeta?.(
+        { url: 'https://x.test', format: 'markdown' },
+        { url: 'https://x.test', format: 'markdown', body: '# Title' },
+      )
+    expect(meta).toEqual({ url: 'https://x.test', body: '# Title' })
+  })
+
+  it('publishes a structured body as the JSON a reader would look at', () => {
+    // `links` and `json` answer with structured data, and the view shows text.
+    const meta = viewHarness()
+      .tool('cloudflare_browser_render')
+      .output.presentationMeta?.(
+        { url: 'https://x.test', format: 'links' },
+        { url: 'https://x.test', format: 'links', body: ['a', 'b'] },
+      )
+    expect(meta).toEqual({ url: 'https://x.test', body: '[\n  "a",\n  "b"\n]' })
+  })
+
+  it('publishes the accessibility tree, which the bounded render text cannot be rebuilt from', () => {
+    const tree = { role: 'document', children: [{ role: 'heading' }] }
+    const meta = viewHarness()
+      .tool('cloudflare_browser_accessibility_tree')
+      .output.presentationMeta?.({ url: 'https://x.test' }, { url: 'https://x.test', tree })
+    expect(meta).toEqual({ url: 'https://x.test', tree })
+  })
+})
+
 describe('WebToolsConfig', () => {
   it('defaults every tunable the tools used to hard-code', () => {
     expect(webTools.Config({})).toStrictEqual({

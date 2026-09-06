@@ -550,13 +550,13 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 
 ### `cloudflare-tools-data` (`cloudflare-dsh/tools/data`)
 
-| Field                      | Default | Meaning                                                              |
-| -------------------------- | ------- | -------------------------------------------------------------------- |
-| `pageSize`                 | `50`    | Default page size for namespace, database, queue and bucket listings |
-| `keyListLimit`             | `1000`  | Default number of keys `cloudflare_kv_list_keys` returns per page    |
-| `renderLimit`              | `4000`  | Characters of a KV value shown to the model before truncation        |
-| `queueBatchSize`           | `10`    | Default number of messages `cloudflare_queue_pull` takes             |
-| `queueVisibilityTimeoutMs` | `30000` | Default time pulled messages stay invisible to other consumers       |
+| Field                      | Default | Meaning                                                           |
+| -------------------------- | ------- | ----------------------------------------------------------------- |
+| `pageSize`                 | `50`    | Default page size for namespace, database and bucket listings     |
+| `keyListLimit`             | `1000`  | Default number of keys `cloudflare_kv_list_keys` returns per page |
+| `renderLimit`              | `4000`  | Characters of a KV value shown to the model before truncation     |
+| `queueBatchSize`           | `10`    | Default number of messages `cloudflare_queue_pull` takes          |
+| `queueVisibilityTimeoutMs` | `30000` | Default time pulled messages stay invisible to other consumers    |
 
 ### `cloudflare-tools-web` (`cloudflare-dsh/tools/web`)
 
@@ -605,19 +605,53 @@ Every deployment-varying value is a validated Schemastery field, changeable from
 is declared. Components never receive `ctx`; they take props. A list slot places
 its entry by `id`; the keyed tool-view slot dispatches on the wire tool name.
 
-| Component           | Slot                                                           | What it shows                                                               |
-| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `SettingsCard`      | `settings.plugins.tab` → `cloudflare`                          | Credential reference, account and gateway selection. Write-only for secrets |
-| `SessionCostChip`   | `conversation.session.header.actions`                          | This session's requests, cost, cache hit rate and token counts              |
-| `D1Result`          | `tool.call.toolview` → `cloudflare_d1_query`                   | A real table with column headers and a caption naming the query             |
-| `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered text, captioned with the page it came from                         |
-| `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump                            |
+| Component           | Slot                                                           | What it shows                                                                                |
+| ------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `SettingsCard`      | `settings.plugins.tab` → `cloudflare`                          | Credential reference, account and gateway selection. Write-only for secrets                  |
+| `SessionCostChip`   | `conversation.session.header.actions`                          | This session's requests, cost, cache hit rate and token counts                               |
+| `D1Result`          | `tool.call.toolview` → `cloudflare_d1_query`                   | A real table with column headers, capped at 100 rows, captioned with the query and the count |
+| `BrowserRender`     | `tool.call.toolview` → `cloudflare_browser_render`             | Rendered text, captioned with the page it came from                                          |
+| `AccessibilityTree` | `tool.call.toolview` → `cloudflare_browser_accessibility_tree` | The tree as nested lists rather than a flat dump                                             |
+| `SessionCostChip`   | `tool.call.toolview` → `cloudflare_aigateway_session_cost`     | The same chip, showing one call's figures rather than the session's                          |
+
+Each tool view is a figure, named from the caption already on screen, and
+deliberately not a landmark: a tool view is rendered once per tool call, so a
+conversation that runs one query twice would otherwise put two identically
+named landmarks on the page.
+
+A tool view is registered as an **adapter**, not as the component itself. The
+slot hands over the call's owner currency — `callId`, `toolName`, and the
+running-or-settled block — not the tool's result, so a component whose props are
+a query and its rows receives none of what it declares. The structured value
+reaches the client through `output.presentationMeta`: each tool projects the
+fields its view needs, the harness persists that projection with the session
+log, and it arrives as the settled block's `meta` on live and replay paths
+alike. The adapter validates that projection and renders the component, or falls
+back to the result text when a replayed log carries a shape it does not
+recognise — as a captioned card that scrolls its own overflow and is reachable
+by keyboard, since that fallback is a tool view like any other.
+
+The chip appears twice on purpose. `SessionUsage` is documented as the shape
+`cloudflare_aigateway_session_cost` returns, so the component that renders the
+session header renders that tool's result too — and its loading and failed
+states are a running call and a failed one.
 
 The package ships `cloudflare.css`. Colours are CSS custom properties, so a
-host's theme wins wherever it defines them.
+host's theme wins wherever it defines them, and the stylesheet declares no
+`color-scheme` of its own — `light-dark()` reads the scheme it inherits, so
+these fragments take whichever one the page is already in. They did declare
+one, which made them answer the operating system while the page answered
+itself: a dark card on a white document, in a host that had done nothing
+unusual. The browser lane now resolves the colour in all six combinations of
+what a host declares and what a system prefers, and an invariant holds the
+declaration out.
 
 All user-facing copy routes through a typed dictionary in `locales/en.ts`,
 including accessible names — those are part of the interface, not decoration.
+That is a gate, not a habit: the invariants lane reads each component's syntax
+tree and fails on any literal a user would read. It had to be, because a
+toggle's entire accessible name was a literal in the component while the
+sentence above sat here unchecked.
 
 ---
 
@@ -626,7 +660,8 @@ including accessible names — those are part of the interface, not decoration.
 Upstream DSH ships no accessibility guidance for plugin authors. This project
 sets its own bar: **WCAG 2.2 AA, zero axe violations, enforced in CI**.
 
-Accessibility runs in two lanes because one is not enough:
+Accessibility runs in five lanes, because no one of them reaches every
+criterion:
 
 ```mermaid
 graph LR
@@ -636,40 +671,151 @@ graph LR
         C["ARIA wiring: describedby, invalid, live regions"]
     end
     subgraph chromium["Lane 2 — real Chromium via Playwright"]
-        D["Computed styles"]
-        E["Colour contrast, light and dark"]
-        F["Every surface, assembled"]
+        D["Text contrast, light and dark"]
+        E["Focus ring, walked by keyboard"]
+        F["Every state, and the client assembled"]
     end
-    jsdom --> G["0 violations"]
+    subgraph computed["Lane 3 — computed from the stylesheet"]
+        H["Non-text contrast: borders, focus rings"]
+    end
+    subgraph viewport["Lane 4 — laid out, 320px to 1920px"]
+        I["Reflow, target size, text spacing"]
+        J["hidden, forced colours, whose scheme wins, the engine floor"]
+    end
+    subgraph e2e["Lane 5 — mounted and operated"]
+        K["Keyboard and pointer, form and live regions"]
+    end
+    jsdom --> G["0 violations, 0 left for review"]
     chromium --> G
+    computed --> G
+    viewport --> G
+    e2e --> G
 ```
 
-The split exists for a measured reason: axe-core's colour-contrast rule cannot
-run under jsdom ([axe-core#595](https://github.com/dequelabs/axe-core/issues/595))
-because it needs computed styles. Components that pass in isolation can still
-conflict once composed, so the assembled client gets its own scan in both colour
-schemes.
+Each split exists for a measured reason.
 
-**Neither lane filters axe.** No tag scope, no disabled rules, no excluded
-selectors. The Chromium fixture supplies the landmarks, page heading and chrome
-colours a host would provide, so page-scoped rules fail on a real defect rather
-than on an unrealistic harness.
+axe-core's colour-contrast rule runs under jsdom and cannot decide there: it
+comes back `incomplete` on every component this package renders, measured
+rather than taken from an issue tracker. So text contrast is checked in a real
+browser, where the rule reaches a verdict, in both
+colour schemes, across every state a surface can be rendered into from its
+props — an empty chip, a failed one, an empty result set each render copy no
+other state does.
+
+Components that pass alone can conflict once composed, so the client is also
+scanned as a host assembles it: the session chip and the settings card once
+each, and every tool view twice, because a tool view is rendered once per tool
+call. That scan earns its place — the first time it ran it found the tool views
+registering as `region` landmarks, so a conversation running the same query
+twice shipped two identically named landmarks. They are figures now.
+
+axe has no rule at all for non-text contrast (SC 1.4.11) and none for focus
+appearance, so neither is assumed. The invariants lane reads the shipped
+stylesheet, resolves every `--cf-*` token in both schemes, and fails on any
+colour beneath the ratio its use requires — 4.5:1 for text, 3:1 for a border or
+a focus ring. The browser lane walks the assembled page by keyboard and pins the
+focus ring the stylesheet declares, because Chromium draws a ring of its own
+when a page supplies none, and a test that only asks whether _something_ is
+drawn passes with the focus block deleted.
+
+Three more criteria are only observable once the page has a width, and axe has
+a rule for none of them. The assembled client is laid out at 320, 390, 430,
+768, 1024, 1280 and 1920 CSS pixels and checked at every one of them for
+**reflow** (SC 1.4.10 — at 320, which is a 1280px window at 400% zoom, nothing
+may scroll in two directions at once), **target size** (SC 2.5.8 — measured on
+the rendered box, not read off the declaration, and 44px rather than 24
+wherever the pointer is coarse) and **text spacing** (SC 1.4.12 — line height
+1.5, letter spacing 0.12em, word spacing 0.16em, paragraph spacing 2em, with
+nothing clipped).
+
+The coarse pointer is emulated, not inferred from a narrow viewport. `hasTouch`
+is the only context option that makes `(pointer: coarse)` match, each run
+asserts the feature actually flipped, and until it did the stylesheet's whole
+finger-sized-target block could have been deleted with every gate green — under
+this page saying it was measured.
+
+That lane found a box-model bug on its first run: with no `box-sizing`, a field
+at `inline-size: 100%` added its padding and border on top of the width it was
+given, and the page scrolled sideways at every width including 1920. The same
+lane asks what `hidden` computes to, because jsdom applies no CSS — a class
+setting `display: grid` outranks the user agent's `[hidden] { display: none }`,
+and the chip's collapsed detail was on screen with a passing test asserting the
+attribute was set.
+
+The same lane asks whose colour scheme these fragments follow, in all six
+combinations of what a page declares and what a reader's system prefers. That
+is a contrast question (SC 1.4.3) rather than a styling one: while the
+stylesheet declared a `color-scheme` of its own, a page that had chosen light
+under a dark system got dark fragments, and one that had chosen dark under a
+light system got light ones — text on its own background, and not correctable
+by the host. Every fixture agreed with the system, so no lane disagreed with
+it, and the screenshots showed it before any assertion did.
+
+Every one of those lanes renders these components to **static markup**, which
+has no React attached: a toggle that never toggles, a form that never submits
+and a live region that never updates all produce markup identical to ones that
+work. The fifth lane bundles the real components with the real React, mounts
+them, and operates them — activating the toggle with `Enter` and with `Space`,
+because a real button answers both and a `div` with a click handler answers
+neither; typing an invalid reference and reading what the assertive region
+says; saving and watching the secret field clear; and submitting with `Enter`
+from a field. The bundle is built during the run rather than committed, so the
+lane cannot drift from the source it claims to exercise.
+
+Two more things only a browser can answer. In **forced-colours** mode — Windows
+high contrast — nothing may opt out of the system palette, and a field and a
+table cell must still be bounded by a border the mode can repaint, because a
+background alone disappears there. And these surfaces **animate nothing**: no
+transition, no animation, no keyframes, enforced by the invariants lane. There
+was a `prefers-reduced-motion` block here, and it set `transition: none` on
+elements the stylesheet never gave a transition — neither property being
+inherited, so a host could not have given them one either. It guarded nothing.
+Introducing motion now fails a gate, which is the point at which a
+reduced-motion story has to be written rather than assumed.
+
+The bar is evaluated against the engines this stylesheet is written for —
+Chrome and Edge 123, Firefox 120, Safari 17.5 and later, the floor
+`light-dark()` sets. What happens below it is measured rather than described:
+the lane renames the function, which rewrites the stylesheet's own feature
+query along with its tokens, and asserts what an older engine would render —
+text inheriting the host's colour, backgrounds falling away, and the accent
+buttons still filled, because a token is the one thing a fallback cannot use
+and the feature query hands them literals.
+
+**No lane filters axe.** No tag scope, no disabled rules, no excluded
+selectors — and the run is read for what it left for a human to review as well
+as for what it failed, since `incomplete` is where a prohibited `aria-label` sat
+while the gate read `violations` alone. The Chromium fixture supplies the
+landmarks, page heading and chrome colours a host would provide, so page-scoped
+rules fail on a real defect rather than on an unrealistic harness.
 
 Specific commitments, each named with the test that holds it. "Covered by
 tests" is worth nothing unless the test exists and runs, so `readme.test.ts`
 collects both lanes and fails when a name below is not among them:
 
-| Commitment                                                                        | Test                                                                                                                                                                                                                                      |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Every input has a programmatic label                                              | `SettingsCard > gives API token reference a programmatic label`, `SettingsCard > gives API token a programmatic label`, `SettingsCard > gives Account ID a programmatic label`, `SettingsCard > gives AI Gateway ID a programmatic label` |
-| A secret field is `type=password` and holds no value to read back                 | `SettingsCard > keeps the token field write-only`                                                                                                                                                                                         |
-| A secret field keeps password managers out with `autocomplete=off`                | `SettingsCard > keeps password managers out of a harness credential`                                                                                                                                                                      |
-| An invalid field points at its hint and its error together (SC 3.3.1)             | `SettingsCard > points the invalid field at both its hint and its error`                                                                                                                                                                  |
-| The error region stays mounted and empty until it has something to say (SC 4.1.3) | `SettingsCard > keeps the error region mounted but empty until validation fails`, `SettingsCard > announces the validation error and marks the field invalid`                                                                             |
-| A status message lands in a polite `role="status"` region                         | `SettingsCard > confirms a save in a polite status region`                                                                                                                                                                                |
-| A result is a real table with header cells                                        | `D1Result > renders a real table with column headers`                                                                                                                                                                                     |
-| The table's caption names the query that produced it                              | `D1Result > captions the table with the query that produced it`                                                                                                                                                                           |
-| A scroll container is keyboard-reachable and named                                | `D1Result > makes the scroll container reachable by keyboard and gives it a name`                                                                                                                                                         |
+| Commitment                                                                                               | Test                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every input has a programmatic label                                                                     | `SettingsCard > gives API token reference a programmatic label`, `SettingsCard > gives API token a programmatic label`, `SettingsCard > gives Account ID a programmatic label`, `SettingsCard > gives AI Gateway ID a programmatic label`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| A secret field is `type=password` and holds no value to read back                                        | `SettingsCard > keeps the token field write-only`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| A secret field keeps password managers out with `autocomplete=off`                                       | `SettingsCard > keeps password managers out of a harness credential`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| An invalid field points at its hint and its error together (SC 3.3.1)                                    | `SettingsCard > points the invalid field at both its hint and its error`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| The error region stays mounted and empty until it has something to say (SC 4.1.3)                        | `SettingsCard > keeps the error region mounted but empty until validation fails`, `SettingsCard > announces the validation error and marks the field invalid`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| A status message lands in a polite `role="status"` region                                                | `SettingsCard > confirms a save in a polite status region`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| A result is a real table with header cells                                                               | `D1Result > renders a real table with column headers`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| The table's caption names the query that produced it                                                     | `D1Result > captions the table with the query that produced it`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| A scroll container is keyboard-reachable and named                                                       | `D1Result > makes the scroll container reachable by keyboard and gives it a name`, `BrowserRender > renders text output in a keyboard-reachable region`, `D1ResultToolView > renders the fallback in a keyboard-reachable region named for the tool`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| A tool view is not a landmark, because tool views repeat                                                 | `D1Result > keeps the result card out of the landmark map, since tool views repeat`, `BrowserRender > keeps the render card out of the landmark map, since tool views repeat`, `AccessibilityTree > keeps the tree card out of the landmark map, since tool views repeat`, `D1ResultToolView > keeps the fallback out of the landmark map, since tool views repeat`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| A keyboard focus ring is drawn, and measured rather than assumed (SC 2.4.7)                              | `accessibility in Chromium > draws the declared focus ring on every focus stop in light`, `accessibility in Chromium > draws the declared focus ring on every focus stop in dark`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| The client is scanned as a host assembles it, not one surface at a time                                  | `accessibility in Chromium > the assembled client has no violations in light`, `accessibility in Chromium > the assembled client has no violations in dark`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| A run leaves nothing for a human to review, not merely nothing failing                                   | `accessibility in Chromium > leaves nothing for a human to review, not merely nothing failing`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Every colour pair clears its ratio, including non-text contrast axe cannot check (SC 1.4.11)             | `every colour pair the stylesheet ships clears its ratio > puts no colour beneath the ratio its use requires`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| All user-facing copy routes through the dictionary, accessible names included                            | `user-facing copy lives in the dictionary > finds no inline copy in any client component`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Content reflows at every width laid out, with only a table and a rendered body scrolling (SC 1.4.10)     | `reflow > lays the assembled client out at 320 (reflow, 400% zoom) without scrolling the page sideways`, `reflow > lays the assembled client out at 390 (phone) without scrolling the page sideways`, `reflow > lays the assembled client out at 430 (large phone) without scrolling the page sideways`, `reflow > lays the assembled client out at 768 (tablet portrait) without scrolling the page sideways`, `reflow > lays the assembled client out at 1024 (tablet landscape) without scrolling the page sideways`, `reflow > lays the assembled client out at 1280 (desktop) without scrolling the page sideways`, `reflow > lays the assembled client out at 1920 (wide desktop) without scrolling the page sideways`, `reflow > keeps content that cannot reflow inside its own scroller at 320 (reflow, 400% zoom)`, `reflow > keeps content that cannot reflow inside its own scroller at 390 (phone)`, `reflow > keeps content that cannot reflow inside its own scroller at 430 (large phone)`, `reflow > keeps content that cannot reflow inside its own scroller at 768 (tablet portrait)`, `reflow > keeps content that cannot reflow inside its own scroller at 1024 (tablet landscape)`, `reflow > keeps content that cannot reflow inside its own scroller at 1280 (desktop)`, `reflow > keeps content that cannot reflow inside its own scroller at 1920 (wide desktop)` |
+| Every control clears 24x24 CSS pixels, and 44x44 wherever the pointer is coarse (SC 2.5.8)               | `target size > gives every control at least 24px with a fine pointer at 320 (reflow, 400% zoom)`, `target size > gives every control at least 24px with a fine pointer at 390 (phone)`, `target size > gives every control at least 24px with a fine pointer at 430 (large phone)`, `target size > gives every control at least 24px with a fine pointer at 768 (tablet portrait)`, `target size > gives every control at least 24px with a fine pointer at 1024 (tablet landscape)`, `target size > gives every control at least 24px with a fine pointer at 1280 (desktop)`, `target size > gives every control at least 24px with a fine pointer at 1920 (wide desktop)`, `target size > gives every control at least 44px with a coarse pointer at 320 (reflow, 400% zoom)`, `target size > gives every control at least 44px with a coarse pointer at 390 (phone)`, `target size > gives every control at least 44px with a coarse pointer at 430 (large phone)`, `target size > gives every control at least 44px with a coarse pointer at 768 (tablet portrait)`, `target size > gives every control at least 44px with a coarse pointer at 1024 (tablet landscape)`, `target size > gives every control at least 44px with a coarse pointer at 1280 (desktop)`, `target size > gives every control at least 44px with a coarse pointer at 1920 (wide desktop)`                      |
+| Nothing is clipped under the text-spacing overrides, at every width laid out (SC 1.4.12)                 | `text spacing > loses no content under the text-spacing overrides at 320 (reflow, 400% zoom)`, `text spacing > loses no content under the text-spacing overrides at 390 (phone)`, `text spacing > loses no content under the text-spacing overrides at 430 (large phone)`, `text spacing > loses no content under the text-spacing overrides at 768 (tablet portrait)`, `text spacing > loses no content under the text-spacing overrides at 1024 (tablet landscape)`, `text spacing > loses no content under the text-spacing overrides at 1280 (desktop)`, `text spacing > loses no content under the text-spacing overrides at 1920 (wide desktop)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| These fragments take the host’s colour scheme, not the system’s, wherever the two disagree (SC 1.4.3)    | `colour scheme > resolves 'light' where the host declares "'light dark'" and the system prefers 'light'`, `colour scheme > resolves 'dark' where the host declares "'light dark'" and the system prefers 'dark'`, `colour scheme > resolves 'light' where the host declares "'light'" and the system prefers 'light'`, `colour scheme > resolves 'light' where the host declares "'light'" and the system prefers 'dark'`, `colour scheme > resolves 'dark' where the host declares "'dark'" and the system prefers 'light'`, `colour scheme > resolves 'dark' where the host declares "'dark'" and the system prefers 'dark'`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Below the engine floor the surfaces fall back to the host’s colours with the accent buttons still filled | `without light-dark() > degrades to the host’s own colours, and keeps the accent buttons legible`, `without light-dark() > still resolves every colour on an engine that has it`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Every class the stylesheet styles is rendered by a surface the lanes scan                                | `the surfaces this lane scans > renders every class the shipped stylesheet styles`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 Screenshots are not in that list: `cloudflare_browser_screenshot` returns the
 image as a harness attachment block, which the host renders, so this package has
@@ -680,9 +826,18 @@ commitment outlived the code by two restarts.
 
 ## MCP passthrough
 
-`cloudflare-dsh/mcp` exports patch rows for Cloudflare's eight hosted MCP
-servers: docs, bindings, observability, radar, browser, AI Gateway, AutoRAG and
-Logpush.
+`cloudflare-dsh/mcp` exports patch rows for **17 hosted MCP servers** — every
+one Cloudflare publishes — each carrying a one-line summary so a profile can
+choose without leaving the file. They range from the Code Mode server, which
+reaches the whole Cloudflare API through code execution, to the per-product
+servers for docs, bindings, builds, observability, containers, browser
+rendering, Logpush, AI Gateway, AutoRAG, audit logs, DNS analytics, Digital
+Experience Monitoring, CASB, Radar, the blog, and a published demo.
+
+`cloudflare-autorag` keeps that name deliberately: the REST product was renamed
+AI Search, which is why the tools address `/ai-search`, but the hosted MCP
+server is still published as AutoRAG at the AutoRAG host. This list names
+servers as Cloudflare publishes them.
 
 **Nothing ships enabled.** Each server is a remote endpoint reached outside the
 agent sandbox, so turning one on is a deliberate act by whoever owns the
@@ -738,7 +893,13 @@ wrap stay reachable. It is a bounded capability, not a bypass:
 
 ## Quality
 
-CI runs on Node 22 and 24, and every gate below fails the build:
+Every gate below fails the build. The typecheck, lint, format, invariant and
+coverage lanes run on Node 22 and 24, and so does packaging, which loads the
+built artifacts the way a consumer on either would. The accessibility and
+mutation lanes run on Node 22 alone — a Chromium scan and a mutation run do not
+change with the Node major, and doubling either buys a longer wait rather than
+a stronger signal. `test:invariants` asserts that split, so the sentence and
+the workflow cannot drift apart.
 
 | Gate               | Bar                                                                                                                                                       |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -748,19 +909,30 @@ CI runs on Node 22 and 24, and every gate below fails the build:
 | `test:invariants`  | The gate configuration itself is asserted, so a threshold cannot be quietly lowered, and every count and diagram on this page is checked against the tree |
 | `test:coverage`    | 100% lines, branches, functions, statements                                                                                                               |
 | `test:dist`        | The built artifacts load the way a consumer resolves them                                                                                                 |
-| `test:a11y`        | Real Chromium, both colour schemes, zero axe violations, no rule filtering                                                                                |
+| `test:a11y`        | Real Chromium, both colour schemes, seven viewports; zero axe violations and nothing left for review, no rule filtering                                   |
 | `stryker`          | 100% mutation score, no file exclusions                                                                                                                   |
 | `knip` / `publint` | No unused code or dependencies; packages are publishable                                                                                                  |
 
-Two toolchain notes for contributors:
+Three toolchain notes for contributors, each a pin with a reason rather than a
+version left behind:
 
 - Tests run on Vitest under Node rather than `bun test`, because Stryker has no
   official Bun runner and DSH executes plugins on Node. Bun is the package
   manager and script runner.
 - Vitest is pinned to 4.x. On Vitest 5 the Stryker vitest runner's per-test
   filter matches nothing and every covered mutant reports as surviving
-  ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)).
-  Unpin once that is fixed.
+  ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)),
+  which would leave the mutation gate green and meaningless. The pin is
+  asserted, so a caret cannot appear without a gate going red. Unpin once that
+  is fixed.
+- TypeScript is on 6.x, not 7. TypeScript 7 is the native compiler and ships no
+  programmatic API — its `lib/` holds `tsc.js` and nothing else — and every
+  gate on this page that reads a syntax tree is built on that API: the escape-
+  hatch scan, the superseded-doc scan, the inline-copy scan, and the README's
+  tool, field and slot discovery. A stable API is expected in 7.1. The tree is
+  ready for it otherwise: `baseUrl` is gone, since it stops functioning in 7,
+  and `ignoreDeprecations` is banned — silencing a deprecation is a suppression
+  comment in configuration form.
 
 ## Development
 
@@ -776,7 +948,7 @@ bun install
 | `bun run test`            | Vitest on Node                                                                                                                                                                                   |
 | `bun run test:coverage`   | The same, with 100% thresholds                                                                                                                                                                   |
 | `bun run test:invariants` | Asserts every rule in [Quality gates](#quality), each check of the mutation guard, and this page's tool counts, tool names, configuration fields, accessibility commitments and Mermaid diagrams |
-| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered                                                                                                                                               |
+| `bun run test:a11y`       | Real Chromium, both colour schemes, axe unfiltered, and the layout at seven viewports from 320px up                                                                                              |
 | `bun run build`           | `tsdown`, per package                                                                                                                                                                            |
 | `bun run test:dist`       | Loads the **built** artifacts as a consumer resolves them                                                                                                                                        |
 | `bun run stryker`         | Mutation testing, then the escape guard                                                                                                                                                          |
@@ -793,6 +965,7 @@ packages/
     src/    client.ts is the only module that performs I/O;
             config, credentials, errors, paginate, request, retry, scope are pure
   bundle/   cloudflare-dsh               — the bundle
+    src/seam.ts reaching ctx.cloudflare, in one place rather than five
     src/ai/     adapter, transducer, sse, headers, request, errors
     src/tools/  ai, data, web, meta
     src/tools/_shared/  json, render, paging, batch — what every tool group shares
@@ -836,17 +1009,20 @@ Not yet done, and worth knowing before you depend on this:
 - **R2 object access and D1 database creation are missing.** Buckets can be
   listed and created, and Vectorize indexes read and written; R2 object-level
   work needs the S3 API and is not wrapped yet.
-- **The Web Client components take props no host currently supplies.** The
-  registrations are correct — the right slots, the right kind fields, disposers
-  returned to the declarations that own them — and the components render and are
-  covered by tests, but a registered tool view is handed the harness's own owner
-  props (`callId`, `toolName`, the running-or-settled `block`) and these take
-  their own shapes instead. Closing that means projecting each tool's result
-  through `output.presentationMeta` and `presentResult`, which is not written.
-  The published client contracts cannot be imported to typecheck it either:
-  their declarations reference type-only packages they do not depend on, and one
-  does not typecheck against its own `SlotMap`, so the shapes here are modelled
-  from those declarations and pinned by the contract suite instead.
+- **The Web Client's host contract is modelled, not compiled.** The tool views
+  now take the owner props a host supplies and read each tool's
+  `output.presentationMeta` projection to get the value they render, so they
+  render the tool's result rather than nothing. What remains unverified by a
+  compiler is the shape of that contract: `ToolCallViewProps` is not exported
+  from `@deepseek-ai/dsh-client-ui-tool`'s package root, and these packages'
+  declarations do not typecheck with `skipLibCheck` off, so the owner props and
+  the settled block are modelled from the published declarations and pinned by
+  the contract suite instead. A field renamed upstream is a test to fix, not a
+  compiler error.
+- **`presentCall` and `presentResult` are not declared.** The provider-neutral
+  render intents would give the pending and completed cards a title and a
+  category; the tools rely on the harness's generic card today. The tool views
+  do not depend on them.
 
 ## License
 
