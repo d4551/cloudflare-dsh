@@ -54,6 +54,17 @@ export interface PageWalk<T> {
 export type PageStepper = (envelope: CloudflareEnvelope<readonly unknown[]>, seen: number) => NextPageQuery
 
 /**
+ * Next step for a page-numbered endpoint that reports no `result_info`, such
+ * as the Workers AI model catalogue.
+ *
+ * With no total to compare against, the only signal that the data ran out is
+ * a page shorter than the size asked for; a full page asks for the next one.
+ */
+export function nextPageByLength(perPage: number): PageStepper {
+  return (envelope, seen) => (envelope.result.length < perPage ? null : { page: seen / perPage + 1 })
+}
+
+/**
  * Walk every page, yielding items one at a time.
  *
  * `maxPages` is a hard stop so a server that keeps returning the same cursor

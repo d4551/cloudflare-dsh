@@ -25,6 +25,16 @@ import {
   r2BucketListSpec,
 } from '../specs/data.ts'
 import { isInteger, isObject, isStringArray, type JsonValue } from './_shared/json.ts'
+import {
+  PAGE_OUTCOME_PROPERTIES,
+  cursorNote,
+  cursorOutcome,
+  pageNote,
+  pageOutcome,
+  requestedPage,
+  wholeListNote,
+  wholeListOutcome,
+} from './_shared/paging.ts'
 import { json, listing, plural, text, truncate } from './_shared/render.ts'
 
 /** Context shape these tools require. */
@@ -128,15 +138,17 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_kv_namespace_list',
-      description: 'List the Workers KV namespaces in the Cloudflare account.',
+      description:
+        'List the Workers KV namespaces in the Cloudflare account, one page at a time. Returns the total and whether this page is the last.',
       parameters: {
+        page: { type: 'integer', description: 'Page number, from 1; the first page when omitted.' },
         perPage: { type: 'integer', description: `Namespaces per page (default ${config.pageSize}).` },
       },
       output: {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'KV namespaces in the account.',
+          description: 'One page of KV namespaces, and where it sits in the whole.',
           properties: {
             namespaces: {
               type: 'array',
@@ -144,17 +156,23 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
               description: 'Namespace records as the API returns them.',
               items: { type: 'object', additionalProperties: true },
             },
+            ...PAGE_OUTCOME_PROPERTIES,
           },
         },
-        render: (_args, value) => listing(value.namespaces.length, 'namespace', value),
+        render: (_args, value) => listing(value.namespaces.length, 'namespace', value, pageNote(value)),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const namespaces = await cf.accountRequest<Record<string, JsonValue>[]>({
-          ...kvNamespaceListSpec(args.perPage ?? config.pageSize),
+        const page = requestedPage(args.page)
+        const perPage = args.perPage ?? config.pageSize
+        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+          ...kvNamespaceListSpec(page, perPage),
           signal: exec.signal,
         })
-        return { namespaces }
+        return {
+          namespaces: envelope.result,
+          ...pageOutcome(envelope.result_info, page, perPage, envelope.result.length),
+        }
       },
     }),
   )
@@ -197,7 +215,7 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
             },
           },
         },
-        render: (_args, value) => listing(value.keys.length, 'key', value),
+        render: (_args, value) => listing(value.keys.length, 'key', value, cursorNote(value)),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
@@ -208,12 +226,7 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
           ...kvListKeysSpec(args.namespaceId, args.prefix, args.limit ?? config.keyListLimit, args.cursor),
           signal: exec.signal,
         })
-        const raw = page.result_info?.cursor
-        if (raw !== undefined && typeof raw !== 'string') {
-          throw new TypeError(`KV result_info.cursor must be a string, got ${typeof raw}`)
-        }
-        const cursor = raw ?? ''
-        return { keys: page.result, cursor, complete: cursor === '' }
+        return { keys: page.result, ...cursorOutcome(page.result_info) }
       },
     }),
   )
@@ -366,15 +379,17 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_d1_list',
-      description: 'List the D1 databases in the Cloudflare account.',
+      description:
+        'List the D1 databases in the Cloudflare account, one page at a time. Returns the total and whether this page is the last.',
       parameters: {
+        page: { type: 'integer', description: 'Page number, from 1; the first page when omitted.' },
         perPage: { type: 'integer', description: `Databases per page (default ${config.pageSize}).` },
       },
       output: {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'D1 databases in the account.',
+          description: 'One page of D1 databases, and where it sits in the whole.',
           properties: {
             databases: {
               type: 'array',
@@ -382,17 +397,23 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
               description: 'Database records as the API returns them.',
               items: { type: 'object', additionalProperties: true },
             },
+            ...PAGE_OUTCOME_PROPERTIES,
           },
         },
-        render: (_args, value) => listing(value.databases.length, 'database', value),
+        render: (_args, value) => listing(value.databases.length, 'database', value, pageNote(value)),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const databases = await cf.accountRequest<Record<string, JsonValue>[]>({
-          ...d1ListSpec(args.perPage ?? config.pageSize),
+        const page = requestedPage(args.page)
+        const perPage = args.perPage ?? config.pageSize
+        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+          ...d1ListSpec(page, perPage),
           signal: exec.signal,
         })
-        return { databases }
+        return {
+          databases: envelope.result,
+          ...pageOutcome(envelope.result_info, page, perPage, envelope.result.length),
+        }
       },
     }),
   )
@@ -435,15 +456,14 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_queue_list',
-      description: 'List the Cloudflare Queues in the account.',
-      parameters: {
-        perPage: { type: 'integer', description: `Queues per page (default ${config.pageSize}).` },
-      },
+      description:
+        'List the Cloudflare Queues in the account. The endpoint takes no paging parameters, so this is the whole listing; the result says if the API reported more than it returned.',
+      parameters: {},
       output: {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'Queues in the account.',
+          description: 'The queues in the account, and whether the API reported more than it returned.',
           properties: {
             queues: {
               type: 'array',
@@ -451,17 +471,27 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
               description: 'Queue records as the API returns them.',
               items: { type: 'object', additionalProperties: true },
             },
+            total: {
+              oneOf: [{ type: 'integer' }, { type: 'null' }],
+              required: true,
+              description: 'Queues the API says exist in all; null when it did not say.',
+            },
+            complete: {
+              type: 'boolean',
+              required: true,
+              description: 'Whether every queue the API reported was returned.',
+            },
           },
         },
-        render: (_args, value) => listing(value.queues.length, 'queue', value),
+        render: (_args, value) => listing(value.queues.length, 'queue', value, wholeListNote(value)),
       },
       isConcurrencySafe: () => true,
-      async execute(args, exec) {
-        const queues = await cf.accountRequest<Record<string, JsonValue>[]>({
-          ...queueListSpec(args.perPage ?? config.pageSize),
+      async execute(_args, exec) {
+        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+          ...queueListSpec(),
           signal: exec.signal,
         })
-        return { queues }
+        return { queues: envelope.result, ...wholeListOutcome(envelope.result_info, envelope.result.length) }
       },
     }),
   )
@@ -579,15 +609,20 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_r2_bucket_list',
-      description: 'List the R2 buckets in the Cloudflare account.',
+      description:
+        'List the R2 buckets in the Cloudflare account. Returns the cursor for the next page and whether the listing is complete.',
       parameters: {
         perPage: { type: 'integer', description: `Buckets per page (default ${config.pageSize}).` },
+        cursor: {
+          type: 'string',
+          description: 'Cursor returned by a previous page; omit for the first page.',
+        },
       },
       output: {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'R2 buckets in the account.',
+          description: 'One page of R2 buckets and the cursor for the next.',
           properties: {
             buckets: {
               type: 'array',
@@ -595,17 +630,27 @@ export function apply(ctx: Context, config: DataToolsConfig): void {
               description: 'Bucket records as the API returns them.',
               items: { type: 'object', additionalProperties: true },
             },
+            cursor: {
+              type: 'string',
+              required: true,
+              description: 'Cursor for the next page; empty when complete.',
+            },
+            complete: {
+              type: 'boolean',
+              required: true,
+              description: 'Whether every bucket has been returned.',
+            },
           },
         },
-        render: (_args, value) => listing(value.buckets.length, 'bucket', value),
+        render: (_args, value) => listing(value.buckets.length, 'bucket', value, cursorNote(value)),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const result = await cf.accountRequest<{ buckets?: Record<string, JsonValue>[] }>({
-          ...r2BucketListSpec(args.perPage ?? config.pageSize),
+        const envelope = await cf.accountRequestEnvelope<{ buckets?: Record<string, JsonValue>[] }>({
+          ...r2BucketListSpec(args.perPage ?? config.pageSize, args.cursor),
           signal: exec.signal,
         })
-        return { buckets: result.buckets ?? [] }
+        return { buckets: envelope.result.buckets ?? [], ...cursorOutcome(envelope.result_info) }
       },
     }),
   )

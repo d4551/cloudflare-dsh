@@ -27,8 +27,9 @@ export function plural(count: number, singular: string): string {
  * Keeping the count in the text means the model can act on "how many" without
  * parsing the JSON, while the JSON stays available for programmatic use.
  */
-export function listing(count: number, noun: string, value: unknown): ContentBlock[] {
-  return text(`${plural(count, noun)}\n${JSON.stringify(value, null, 2)}`)
+export function listing(count: number, noun: string, value: unknown, note?: string): ContentBlock[] {
+  const context = note === undefined ? '' : ` (${note})`
+  return text(`${plural(count, noun)}${context}\n${JSON.stringify(value, null, 2)}`)
 }
 
 /**

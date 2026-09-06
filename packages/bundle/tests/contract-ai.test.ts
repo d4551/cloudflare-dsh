@@ -41,7 +41,8 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
   },
   cloudflare_ai_models_search: {
-    description: 'Search the Workers AI model catalogue by name or task.',
+    description:
+      'Search the Workers AI model catalogue by name or task, one page at a time. The catalogue reports no total, so a full page means more may follow.',
     parameters: {
       type: 'object',
       properties: {
@@ -52,6 +53,10 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
         task: {
           type: 'string',
           description: 'Task filter, e.g. "Text Generation".',
+        },
+        page: {
+          type: 'integer',
+          description: 'Page number, from 1; the first page when omitted.',
         },
         perPage: {
           type: 'integer',
@@ -71,9 +76,26 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           },
           description: 'Catalogue entries as the API returns them.',
         },
+        page: {
+          type: 'integer',
+          description: 'The page this is.',
+        },
+        perPage: {
+          type: 'integer',
+          description: 'Items requested per page.',
+        },
+        total: {
+          oneOf: [{ type: 'integer' }, { type: 'null' }],
+          description: 'Items the API says exist in all; null when it did not say.',
+        },
+        complete: {
+          type: 'boolean',
+          description:
+            'Whether this page is the last: certain when the total is known, inferred from a short page otherwise.',
+        },
       },
-      required: ['models'],
-      description: 'Model catalogue entries.',
+      required: ['models', 'page', 'perPage', 'total', 'complete'],
+      description: 'One page of model catalogue entries, and where it sits in the whole.',
     },
   },
   cloudflare_ai_run: {
@@ -166,10 +188,15 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
   },
   cloudflare_aigateway_list: {
-    description: 'List the AI Gateways in the Cloudflare account.',
+    description:
+      'List the AI Gateways in the Cloudflare account, one page at a time. The endpoint reports no total, so a full page means more may follow.',
     parameters: {
       type: 'object',
       properties: {
+        page: {
+          type: 'integer',
+          description: 'Page number, from 1; the first page when omitted.',
+        },
         perPage: {
           type: 'integer',
           description: 'Gateways per page (default 50).',
@@ -188,9 +215,26 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           },
           description: 'Gateway records as the API returns them.',
         },
+        page: {
+          type: 'integer',
+          description: 'The page this is.',
+        },
+        perPage: {
+          type: 'integer',
+          description: 'Items requested per page.',
+        },
+        total: {
+          oneOf: [{ type: 'integer' }, { type: 'null' }],
+          description: 'Items the API says exist in all; null when it did not say.',
+        },
+        complete: {
+          type: 'boolean',
+          description:
+            'Whether this page is the last: certain when the total is known, inferred from a short page otherwise.',
+        },
       },
-      required: ['gateways'],
-      description: 'Gateways in the account.',
+      required: ['gateways', 'page', 'perPage', 'total', 'complete'],
+      description: 'One page of gateways, and where it sits in the whole.',
     },
   },
   cloudflare_aigateway_log_body: {

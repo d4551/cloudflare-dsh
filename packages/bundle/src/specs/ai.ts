@@ -21,12 +21,14 @@ export function aiRunSpec(model: string, input: unknown): RequestSpec {
 export function aiModelsSearchSpec(
   search: string | undefined,
   task: string | undefined,
+  page: number,
   perPage: number,
 ): RequestSpec {
   return {
     method: 'GET',
     path: '/ai/models/search',
     query: {
+      page,
       per_page: perPage,
       ...(search === undefined ? {} : { search }),
       ...(task === undefined ? {} : { task }),
@@ -42,8 +44,8 @@ export function aiModelSchemaSpec(model: string): RequestSpec {
 // --- AI Gateway -----------------------------------------------------------
 
 /** List gateways. */
-export function gatewayListSpec(perPage: number): RequestSpec {
-  return { method: 'GET', path: '/ai-gateway/gateways', query: { per_page: perPage } }
+export function gatewayListSpec(page: number, perPage: number): RequestSpec {
+  return { method: 'GET', path: '/ai-gateway/gateways', query: { page, per_page: perPage } }
 }
 
 /** Fetch one gateway. */

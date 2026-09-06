@@ -13,10 +13,15 @@ import { envelope, makeHarness } from './harness.ts'
  */
 const CONTRACT: Record<string, { description: string; parameters: unknown; output: unknown }> = {
   cloudflare_d1_list: {
-    description: 'List the D1 databases in the Cloudflare account.',
+    description:
+      'List the D1 databases in the Cloudflare account, one page at a time. Returns the total and whether this page is the last.',
     parameters: {
       type: 'object',
       properties: {
+        page: {
+          type: 'integer',
+          description: 'Page number, from 1; the first page when omitted.',
+        },
         perPage: {
           type: 'integer',
           description: 'Databases per page (default 50).',
@@ -35,9 +40,26 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           },
           description: 'Database records as the API returns them.',
         },
+        page: {
+          type: 'integer',
+          description: 'The page this is.',
+        },
+        perPage: {
+          type: 'integer',
+          description: 'Items requested per page.',
+        },
+        total: {
+          oneOf: [{ type: 'integer' }, { type: 'null' }],
+          description: 'Items the API says exist in all; null when it did not say.',
+        },
+        complete: {
+          type: 'boolean',
+          description:
+            'Whether this page is the last: certain when the total is known, inferred from a short page otherwise.',
+        },
       },
-      required: ['databases'],
-      description: 'D1 databases in the account.',
+      required: ['databases', 'page', 'perPage', 'total', 'complete'],
+      description: 'One page of D1 databases, and where it sits in the whole.',
     },
   },
   cloudflare_d1_query: {
@@ -198,10 +220,15 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
   },
   cloudflare_kv_namespace_list: {
-    description: 'List the Workers KV namespaces in the Cloudflare account.',
+    description:
+      'List the Workers KV namespaces in the Cloudflare account, one page at a time. Returns the total and whether this page is the last.',
     parameters: {
       type: 'object',
       properties: {
+        page: {
+          type: 'integer',
+          description: 'Page number, from 1; the first page when omitted.',
+        },
         perPage: {
           type: 'integer',
           description: 'Namespaces per page (default 50).',
@@ -220,9 +247,26 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           },
           description: 'Namespace records as the API returns them.',
         },
+        page: {
+          type: 'integer',
+          description: 'The page this is.',
+        },
+        perPage: {
+          type: 'integer',
+          description: 'Items requested per page.',
+        },
+        total: {
+          oneOf: [{ type: 'integer' }, { type: 'null' }],
+          description: 'Items the API says exist in all; null when it did not say.',
+        },
+        complete: {
+          type: 'boolean',
+          description:
+            'Whether this page is the last: certain when the total is known, inferred from a short page otherwise.',
+        },
       },
-      required: ['namespaces'],
-      description: 'KV namespaces in the account.',
+      required: ['namespaces', 'page', 'perPage', 'total', 'complete'],
+      description: 'One page of KV namespaces, and where it sits in the whole.',
     },
   },
   cloudflare_kv_put: {
@@ -321,15 +365,11 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
   },
   cloudflare_queue_list: {
-    description: 'List the Cloudflare Queues in the account.',
+    description:
+      'List the Cloudflare Queues in the account. The endpoint takes no paging parameters, so this is the whole listing; the result says if the API reported more than it returned.',
     parameters: {
       type: 'object',
-      properties: {
-        perPage: {
-          type: 'integer',
-          description: 'Queues per page (default 50).',
-        },
-      },
+      properties: {},
     },
     output: {
       type: 'object',
@@ -343,9 +383,17 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           },
           description: 'Queue records as the API returns them.',
         },
+        total: {
+          oneOf: [{ type: 'integer' }, { type: 'null' }],
+          description: 'Queues the API says exist in all; null when it did not say.',
+        },
+        complete: {
+          type: 'boolean',
+          description: 'Whether every queue the API reported was returned.',
+        },
       },
-      required: ['queues'],
-      description: 'Queues in the account.',
+      required: ['queues', 'total', 'complete'],
+      description: 'The queues in the account, and whether the API reported more than it returned.',
     },
   },
   cloudflare_queue_pull: {
@@ -443,13 +491,18 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
     },
   },
   cloudflare_r2_bucket_list: {
-    description: 'List the R2 buckets in the Cloudflare account.',
+    description:
+      'List the R2 buckets in the Cloudflare account. Returns the cursor for the next page and whether the listing is complete.',
     parameters: {
       type: 'object',
       properties: {
         perPage: {
           type: 'integer',
           description: 'Buckets per page (default 50).',
+        },
+        cursor: {
+          type: 'string',
+          description: 'Cursor returned by a previous page; omit for the first page.',
         },
       },
     },
@@ -465,9 +518,17 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           },
           description: 'Bucket records as the API returns them.',
         },
+        cursor: {
+          type: 'string',
+          description: 'Cursor for the next page; empty when complete.',
+        },
+        complete: {
+          type: 'boolean',
+          description: 'Whether every bucket has been returned.',
+        },
       },
-      required: ['buckets'],
-      description: 'R2 buckets in the account.',
+      required: ['buckets', 'cursor', 'complete'],
+      description: 'One page of R2 buckets and the cursor for the next.',
     },
   },
 }

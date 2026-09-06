@@ -49,24 +49,29 @@ type ScreenshotMediaType = Exclude<ImageMediaType, 'image/gif'>
 const SCREENSHOT_MEDIA_TYPES: readonly ScreenshotMediaType[] = ['image/png', 'image/jpeg', 'image/webp']
 
 /**
+ * Content types the screenshot endpoint may declare, mapped to the media type
+ * the attachment store registers. Cloudflare's own schema lists `image/jpg`
+ * beside `image/jpeg`, so both map to the one registered type.
+ *
+ * A lookup rather than a switch: a `default` arm returning `undefined` is what
+ * a missing key already yields, so the switch carried a branch no behaviour
+ * depended on.
+ */
+const STORED_MEDIA_TYPES = new Map<string, ScreenshotMediaType>([
+  ['image/png', 'image/png'],
+  ['image/jpeg', 'image/jpeg'],
+  ['image/jpg', 'image/jpeg'],
+  ['image/webp', 'image/webp'],
+])
+
+/**
  * The media type Cloudflare declared for a screenshot, as the attachment store
- * names it. Cloudflare's own schema lists `image/jpg` beside `image/jpeg`, so
- * both map to the registered type. Parameters after `;` are not the type.
+ * names it, or `undefined` for anything that is not an image it can hold.
+ * Parameters after `;` are not part of the type, and case is not significant.
  */
 export function screenshotMediaType(contentType: string | null): ScreenshotMediaType | undefined {
   if (contentType === null) return undefined
-  const type = contentType.split(';')[0]!.trim().toLowerCase()
-  switch (type) {
-    case 'image/png':
-      return 'image/png'
-    case 'image/jpeg':
-    case 'image/jpg':
-      return 'image/jpeg'
-    case 'image/webp':
-      return 'image/webp'
-    default:
-      return undefined
-  }
+  return STORED_MEDIA_TYPES.get(contentType.split(';')[0]!.trim().toLowerCase())
 }
 
 /** Raised when a screenshot is requested in a composition without an attachment store. */

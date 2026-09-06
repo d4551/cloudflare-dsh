@@ -45,7 +45,27 @@ What it found, and what changed:
    this restart's remaining work and is recorded below as it lands.
 4. **Six list tools presented one page as the whole listing**, with no page
    number in and no total or completeness out; the queue listing sent a
-   `per_page` its endpoint does not take. The fix is recorded below as it lands.
+   `per_page` its endpoint does not take. Each now pages the way its own
+   endpoint does, read from Cloudflare's OpenAPI schema and its TypeScript
+   client: KV namespaces and D1 databases are page-numbered and report a
+   `total_count`, so completeness is certain; the model catalogue and the
+   gateway listing are page-numbered and report nothing, so a full page means
+   more may follow and a short one is the last; R2 buckets are cursor-paged
+   like KV keys; and the queue listing takes no paging parameters at all, so it
+   returns the whole listing and says when the API reported more than it gave
+   back. A shared `_shared/paging.ts` projects `result_info` — refusing a
+   `total_count` that is not an integer and a `cursor` that is not a string
+   rather than guessing — and every count line now carries its page context.
+   The adapter's `listModels` walks every catalogue page instead of sampling
+   the first, and refuses to present a walk the page ceiling cut short as the
+   whole catalogue.
+
+The mutation run on the tree with the screenshot tool scored 99.97%: one
+survivor, and an equivalent one — emptying `default: return undefined` in the
+content-type switch, which is what falling out of a switch already does. The
+rule is that an equivalent mutant means dead code, so the branch is gone: the
+switch is a lookup, and a content type the map does not hold is a miss rather
+than a case nothing distinguishes.
 
 </details>
 

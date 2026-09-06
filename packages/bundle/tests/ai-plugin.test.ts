@@ -20,6 +20,7 @@ function envelope<T>(result: T): Response {
 function harness(
   config: Partial<aiPlugin.AiConfig> = {},
   fetchImpl: (r: Request) => Promise<Response> = async () => envelope(null),
+  cloudflare: Partial<Parameters<typeof CloudflareConfig>[0]> = {},
 ) {
   const requests: Request[] = []
   const registered: { providers: string[]; adapter: CloudflareAiAdapter }[] = []
@@ -34,7 +35,7 @@ function harness(
   })
   const service = new CloudflareService(
     ctx,
-    CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }),
+    CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4', ...cloudflare }),
     {
       credentials,
       fetch: async (request) => {
@@ -249,7 +250,7 @@ describe('resolveModel', () => {
       context: { contextWindow: 7968 },
     })
     expect(requests[0]!.url).toBe(
-      'https://api.test/v4/accounts/a1/ai/models/search?per_page=100&search=%40cf%2Fm',
+      'https://api.test/v4/accounts/a1/ai/models/search?page=1&per_page=100&search=%40cf%2Fm',
     )
   })
 
@@ -297,7 +298,27 @@ describe('listModels', () => {
     await expect(registered[0]!.adapter.listModels('cloudflare-workers-ai')).resolves.toEqual([
       { provider: 'cloudflare-workers-ai', id: '@cf/a', name: '@cf/a' },
     ])
-    expect(requests[0]!.url).toContain('/ai/models/search?per_page=100')
+    expect(requests[0]!.url).toContain('/ai/models/search?page=1&per_page=100')
+  })
+
+  it('walks every page of the catalogue, which reports no total, until a short page', async () => {
+    const pages = [
+      Array.from({ length: 100 }, (_item, index) => ({ name: `@cf/m${index}` })),
+      [{ name: '@cf/last' }],
+    ]
+    const { registered, requests } = harness({}, async () => envelope(pages.shift() ?? []))
+    const models = await registered[0]!.adapter.listModels('cloudflare-workers-ai')
+    expect(models).toHaveLength(101)
+    expect(models[100]).toEqual({ provider: 'cloudflare-workers-ai', id: '@cf/last', name: '@cf/last' })
+    expect(requests.map((request) => new URL(request.url).searchParams.get('page'))).toEqual(['1', '2'])
+  })
+
+  it('refuses to present a catalogue the page ceiling cut short as the whole', async () => {
+    const full = Array.from({ length: 100 }, (_item, index) => ({ name: `@cf/m${index}` }))
+    const { registered } = harness({}, async () => envelope(full), { maxPages: 1 })
+    await expect(registered[0]!.adapter.listModels('cloudflare-workers-ai')).rejects.toThrow(
+      'the Workers AI catalogue has more than 1 pages of 100 models and the page ceiling (maxPages) stopped the listing; raise maxPages or configure models explicitly',
+    )
   })
 
   it('uses the configured list without querying the catalogue', async () => {

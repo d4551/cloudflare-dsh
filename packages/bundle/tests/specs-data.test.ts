@@ -16,11 +16,11 @@ import {
 } from '../src/specs/data.ts'
 
 describe('KV specs', () => {
-  it('lists namespaces with the requested page size', () => {
-    expect(kvNamespaceListSpec(50)).toEqual({
+  it('lists one numbered page of namespaces', () => {
+    expect(kvNamespaceListSpec(2, 50)).toEqual({
       method: 'GET',
       path: '/storage/kv/namespaces',
-      query: { per_page: 50 },
+      query: { page: 2, per_page: 50 },
     })
   })
 
@@ -84,7 +84,11 @@ describe('KV key paging', () => {
 
 describe('D1 specs', () => {
   it('lists databases against the singular resource path', () => {
-    expect(d1ListSpec(25)).toEqual({ method: 'GET', path: '/d1/database', query: { per_page: 25 } })
+    expect(d1ListSpec(3, 25)).toEqual({
+      method: 'GET',
+      path: '/d1/database',
+      query: { page: 3, per_page: 25 },
+    })
   })
 
   it('posts sql and params to the query endpoint', () => {
@@ -105,8 +109,8 @@ describe('D1 specs', () => {
 })
 
 describe('Queue specs', () => {
-  it('lists queues', () => {
-    expect(queueListSpec(20)).toEqual({ method: 'GET', path: '/queues', query: { per_page: 20 } })
+  it('lists queues with no paging parameters, since the endpoint has none', () => {
+    expect(queueListSpec()).toEqual({ method: 'GET', path: '/queues' })
   })
 
   it('wraps a sent message in a body envelope', () => {
@@ -143,8 +147,16 @@ describe('Queue specs', () => {
 })
 
 describe('R2 specs', () => {
-  it('lists buckets', () => {
-    expect(r2BucketListSpec(100)).toEqual({ method: 'GET', path: '/r2/buckets', query: { per_page: 100 } })
+  it('lists the first page of buckets without a cursor', () => {
+    expect(r2BucketListSpec(100, undefined)).toEqual({
+      method: 'GET',
+      path: '/r2/buckets',
+      query: { per_page: 100 },
+    })
+  })
+
+  it('continues a bucket listing from a cursor', () => {
+    expect(r2BucketListSpec(100, 'c1').query).toEqual({ per_page: 100, cursor: 'c1' })
   })
 
   it('creates a bucket without emitting an undefined location hint', () => {

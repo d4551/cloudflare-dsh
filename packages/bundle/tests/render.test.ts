@@ -60,3 +60,15 @@ describe('truncate', () => {
     expect(truncate('abcdef', 5)).toBe('abcde\n… truncated 1 character')
   })
 })
+
+describe('listing with a note', () => {
+  it('puts the note beside the count, before the payload', () => {
+    expect(listing(2, 'thing', [1, 2], 'page 1 of 3')).toEqual([
+      { type: 'text', text: '2 things (page 1 of 3)\n[\n  1,\n  2\n]' },
+    ])
+  })
+
+  it('has no parenthesis when there is no note', () => {
+    expect(listing(1, 'thing', [1])).toEqual([{ type: 'text', text: '1 thing\n[\n  1\n]' }])
+  })
+})

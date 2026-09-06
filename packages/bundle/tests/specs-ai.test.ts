@@ -34,16 +34,17 @@ describe('Workers AI specs', () => {
     expect(aiRunSpec('@cf/a b/c', {}).path).toBe('/ai/run/%40cf/a%20b/c')
   })
 
-  it('searches models with only a page size by default', () => {
-    expect(aiModelsSearchSpec(undefined, undefined, 50)).toStrictEqual({
+  it('searches models with only a page and page size by default', () => {
+    expect(aiModelsSearchSpec(undefined, undefined, 1, 50)).toStrictEqual({
       method: 'GET',
       path: '/ai/models/search',
-      query: { per_page: 50 },
+      query: { page: 1, per_page: 50 },
     })
   })
 
   it('adds search and task filters when given', () => {
-    expect(aiModelsSearchSpec('llama', 'Text Generation', 10).query).toStrictEqual({
+    expect(aiModelsSearchSpec('llama', 'Text Generation', 2, 10).query).toStrictEqual({
+      page: 2,
       per_page: 10,
       search: 'llama',
       task: 'Text Generation',
@@ -51,14 +52,16 @@ describe('Workers AI specs', () => {
   })
 
   it('adds only the search filter when the task is omitted', () => {
-    expect(aiModelsSearchSpec('llama', undefined, 10).query).toStrictEqual({
+    expect(aiModelsSearchSpec('llama', undefined, 1, 10).query).toStrictEqual({
+      page: 1,
       per_page: 10,
       search: 'llama',
     })
   })
 
   it('adds only the task filter when the search is omitted', () => {
-    expect(aiModelsSearchSpec(undefined, 'Summarization', 10).query).toStrictEqual({
+    expect(aiModelsSearchSpec(undefined, 'Summarization', 1, 10).query).toStrictEqual({
+      page: 1,
       per_page: 10,
       task: 'Summarization',
     })
@@ -75,14 +78,14 @@ describe('Workers AI specs', () => {
 
 describe('AI Gateway specs', () => {
   it('uses the hyphenated ai-gateway prefix, not /ai/gateways', () => {
-    expect(gatewayListSpec(50).path).toBe('/ai-gateway/gateways')
+    expect(gatewayListSpec(1, 50).path).toBe('/ai-gateway/gateways')
   })
 
-  it('lists gateways with a page size', () => {
-    expect(gatewayListSpec(25)).toStrictEqual({
+  it('lists one numbered page of gateways', () => {
+    expect(gatewayListSpec(2, 25)).toStrictEqual({
       method: 'GET',
       path: '/ai-gateway/gateways',
-      query: { per_page: 25 },
+      query: { page: 2, per_page: 25 },
     })
   })
 

@@ -123,32 +123,49 @@ describe('cloudflare_ai_run', () => {
 })
 
 describe('model catalogue tools', () => {
-  it('searches models with the default page size', async () => {
+  it('searches the first page of 50 models by default, inferring completeness from a short page', async () => {
     const h = makeHarness(aiTools, async () => envelope([{ name: '@cf/m' }]))
     await expect(h.run('cloudflare_ai_models_search', {})).resolves.toEqual({
       models: [{ name: '@cf/m' }],
+      page: 1,
+      perPage: 50,
+      total: null,
+      complete: true,
     })
-    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/ai/models/search?per_page=50')
+    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/ai/models/search?page=1&per_page=50')
   })
 
-  it('passes search and task filters', async () => {
+  it('says more may follow a full page, since the catalogue reports no total', async () => {
+    const h = makeHarness(aiTools, async () => envelope([{ name: '@cf/a' }, { name: '@cf/b' }]))
+    await expect(h.run('cloudflare_ai_models_search', { perPage: 2 })).resolves.toMatchObject({
+      total: null,
+      complete: false,
+    })
+  })
+
+  it('passes page, search and task filters', async () => {
     const h = makeHarness(aiTools, async () => envelope([]))
     await h.run('cloudflare_ai_models_search', {
       search: 'llama',
       task: 'Text Generation',
+      page: 2,
       perPage: 5,
     })
     const url = h.requests[0]!.url
     expect(url).toContain('search=llama')
     expect(url).toContain('task=Text+Generation')
-    expect(url).toContain('per_page=5')
+    expect(url).toContain('page=2&per_page=5')
   })
 
-  it('renders a model count', () => {
+  it('renders a model count with its page context', () => {
     const h = makeHarness(aiTools, async () => envelope([]))
-    expect(h.render('cloudflare_ai_models_search', {}, { models: [{}, {}] })).toEqual([
-      { type: 'text', text: expect.stringContaining('2 models') },
-    ])
+    expect(
+      h.render(
+        'cloudflare_ai_models_search',
+        {},
+        { models: [{}, {}], page: 1, perPage: 2, total: null, complete: false },
+      ),
+    ).toEqual([{ type: 'text', text: expect.stringContaining('2 models (page 1, more may follow)') }])
   })
 
   it('fetches a model schema', async () => {
@@ -169,19 +186,33 @@ describe('model catalogue tools', () => {
 })
 
 describe('gateway tools', () => {
-  it('lists gateways with the default page size', async () => {
+  it('lists the first page of 50 gateways by default', async () => {
     const h = makeHarness(aiTools, async () => envelope([{ id: 'gw1' }]))
     await expect(h.run('cloudflare_aigateway_list', {})).resolves.toEqual({
       gateways: [{ id: 'gw1' }],
+      page: 1,
+      perPage: 50,
+      total: null,
+      complete: true,
     })
-    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/ai-gateway/gateways?per_page=50')
+    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/ai-gateway/gateways?page=1&per_page=50')
   })
 
-  it('renders a gateway count', () => {
+  it('honours an explicit page of gateways', async () => {
     const h = makeHarness(aiTools, async () => envelope([]))
-    expect(h.render('cloudflare_aigateway_list', {}, { gateways: [{}] })).toEqual([
-      { type: 'text', text: expect.stringContaining('1 gateway') },
-    ])
+    await h.run('cloudflare_aigateway_list', { page: 4, perPage: 10 })
+    expect(h.requests[0]!.url).toContain('page=4&per_page=10')
+  })
+
+  it('renders a gateway count with its page context', () => {
+    const h = makeHarness(aiTools, async () => envelope([]))
+    expect(
+      h.render(
+        'cloudflare_aigateway_list',
+        {},
+        { gateways: [{}], page: 1, perPage: 50, total: null, complete: true },
+      ),
+    ).toEqual([{ type: 'text', text: expect.stringContaining('1 gateway (page 1, the last)') }])
   })
 
   it('fetches one gateway', async () => {

@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { type NextPageQuery, nextPageQuery, paginate } from '../src/paginate.ts'
+import {
+  type NextPageQuery,
+  type PageFetcher,
+  nextPageByLength,
+  nextPageQuery,
+  paginate,
+} from '../src/paginate.ts'
 import type { CloudflareEnvelope } from '../src/types.ts'
 
 function page<T>(
@@ -16,6 +22,29 @@ const byCursor = (envelope: Pick<CloudflareEnvelope, 'result_info'>): NextPageQu
   const cursor = envelope.result_info?.cursor
   return cursor === undefined || cursor === '' ? null : { cursor }
 }
+
+describe('nextPageByLength', () => {
+  it('asks for the next page after a full one, counting from what has been seen', () => {
+    expect(nextPageByLength(2)(page([1, 2]), 2)).toEqual({ page: 2 })
+    expect(nextPageByLength(2)(page([3, 4]), 4)).toEqual({ page: 3 })
+  })
+
+  it('stops on a short page, the only sign the data ran out without a total', () => {
+    expect(nextPageByLength(2)(page([5]), 5)).toBeNull()
+    expect(nextPageByLength(2)(page([]), 4)).toBeNull()
+  })
+
+  it('walks a catalogue that reports no result_info to its short last page', async () => {
+    const pages = [page([1, 2]), page([3, 4]), page([5])]
+    const fetchPage = vi.fn<PageFetcher<number>>(async () => pages.shift()!)
+    await expect(paginate(fetchPage, nextPageByLength(2), 10)).resolves.toEqual({
+      items: [1, 2, 3, 4, 5],
+      pages: 3,
+      truncated: false,
+    })
+    expect(fetchPage.mock.calls.map((call) => call[0])).toEqual([{}, { page: 2 }, { page: 3 }])
+  })
+})
 
 describe('nextPageQuery', () => {
   it('advances to the next page', () => {

@@ -12,7 +12,7 @@
  * Cloudflare is the authority on its own endpoint shape, and a hardcoded URL
  * would also be a tunable that config could not change.
  */
-import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
+import { type CloudflareService, nextPageByLength } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import Schema from '@deepseek-ai/schemastery'
@@ -93,6 +93,16 @@ export const Config: Schema<Partial<AiConfig>, AiConfig> = Schema.object({
 
 export const name = 'cloudflare-llm'
 export const inject = ['llm', 'cloudflare']
+
+/** Raised when the page ceiling stopped the catalogue walk before the catalogue ran out. */
+export class CatalogueTruncatedError extends RangeError {
+  override readonly name = 'CatalogueTruncatedError'
+  constructor(pages: number) {
+    super(
+      `the Workers AI catalogue has more than ${pages} pages of ${CATALOGUE_LOOKUP_PAGE_SIZE} models and the page ceiling (maxPages) stopped the listing; raise maxPages or configure models explicitly`,
+    )
+  }
+}
 
 /** Raised when the gateway route is used without a gateway configured. */
 export class MissingGatewayError extends Error {
@@ -225,7 +235,7 @@ export function apply(ctx: Context, config: AiConfig): void {
     const known = modelInfo.get(key)
     if (known !== undefined) return known
     const matches = await cf.accountRequest<CatalogueModel[]>({
-      ...aiModelsSearchSpec(model, undefined, CATALOGUE_LOOKUP_PAGE_SIZE),
+      ...aiModelsSearchSpec(model, undefined, 1, CATALOGUE_LOOKUP_PAGE_SIZE),
       signal,
     })
     const info = toResolvedModelInfo(
@@ -241,10 +251,15 @@ export function apply(ctx: Context, config: AiConfig): void {
     if (config.models.length > 0) {
       return config.models.map((id) => ({ provider, id, name: id }))
     }
-    const models = await cf.accountRequest<{ name?: string; description?: string }[]>(
-      aiModelsSearchSpec(undefined, undefined, 100),
+    // Every page, not the first: the catalogue reports no total, so the walk
+    // stops on a short page, and a walk the page ceiling cut short is an error
+    // rather than a shorter list presented as the whole.
+    const walk = await cf.accountListAll<{ name?: string; description?: string }>(
+      aiModelsSearchSpec(undefined, undefined, 1, CATALOGUE_LOOKUP_PAGE_SIZE),
+      nextPageByLength(CATALOGUE_LOOKUP_PAGE_SIZE),
     )
-    return toModelInfo(provider, models)
+    if (walk.truncated) throw new CatalogueTruncatedError(walk.pages)
+    return toModelInfo(provider, walk.items)
   }
 
   const adapter = new CloudflareAiAdapter({

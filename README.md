@@ -261,7 +261,13 @@ Two properties are worth calling out.
 meaning generated code can call `await tools.cloudflare_kv_list_keys({...})` and
 receive the value directly. So results carry ids and cursors that feed the next
 call rather than prose a model has to parse. `cloudflare_kv_list_keys` returns
-`{ keys, cursor, complete }` precisely so a generated loop can page. Every tool
+`{ keys, cursor, complete }` precisely so a generated loop can page, and every
+list tool pages the way its endpoint does: page-numbered endpoints take `page`
+and `perPage` and return `page`, `perPage`, `total` (when Cloudflare reports
+one, else `null`) and `complete`; cursor endpoints (`cloudflare_kv_list_keys`,
+`cloudflare_r2_bucket_list`) return `cursor` and `complete`; and
+`cloudflare_queue_list`, whose endpoint takes no paging parameters, returns the
+whole listing and says if the API reported more than it returned. Every tool
 declares a closed output object with each field described and required; the
 registry validates a value against it before the model or generated code sees
 it, and a presenter reads typed fields rather than casting.

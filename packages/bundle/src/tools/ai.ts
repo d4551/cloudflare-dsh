@@ -35,6 +35,7 @@ import {
   vectorizeQuerySpec,
 } from '../specs/ai.ts'
 import { isFiniteNumber, isObject, type JsonValue } from './_shared/json.ts'
+import { PAGE_OUTCOME_PROPERTIES, pageNote, pageOutcome, requestedPage } from './_shared/paging.ts'
 import { json, listing, text } from './_shared/render.ts'
 
 interface CloudflareContext extends Context {
@@ -125,17 +126,19 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_ai_models_search',
-      description: 'Search the Workers AI model catalogue by name or task.',
+      description:
+        'Search the Workers AI model catalogue by name or task, one page at a time. The catalogue reports no total, so a full page means more may follow.',
       parameters: {
         search: { type: 'string', description: 'Substring to match against model names.' },
         task: { type: 'string', description: 'Task filter, e.g. "Text Generation".' },
+        page: { type: 'integer', description: 'Page number, from 1; the first page when omitted.' },
         perPage: { type: 'integer', description: `Models per page (default ${config.pageSize}).` },
       },
       output: {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'Model catalogue entries.',
+          description: 'One page of model catalogue entries, and where it sits in the whole.',
           properties: {
             models: {
               type: 'array',
@@ -143,17 +146,23 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
               description: 'Catalogue entries as the API returns them.',
               items: { type: 'object', additionalProperties: true },
             },
+            ...PAGE_OUTCOME_PROPERTIES,
           },
         },
-        render: (_args, value) => listing(value.models.length, 'model', value),
+        render: (_args, value) => listing(value.models.length, 'model', value, pageNote(value)),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const models = await cf.accountRequest<Record<string, JsonValue>[]>({
-          ...aiModelsSearchSpec(args.search, args.task, args.perPage ?? config.pageSize),
+        const page = requestedPage(args.page)
+        const perPage = args.perPage ?? config.pageSize
+        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+          ...aiModelsSearchSpec(args.search, args.task, page, perPage),
           signal: exec.signal,
         })
-        return { models }
+        return {
+          models: envelope.result,
+          ...pageOutcome(envelope.result_info, page, perPage, envelope.result.length),
+        }
       },
     }),
   )
@@ -194,15 +203,17 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
   ctx.tools.register(
     defineTool({
       name: 'cloudflare_aigateway_list',
-      description: 'List the AI Gateways in the Cloudflare account.',
+      description:
+        'List the AI Gateways in the Cloudflare account, one page at a time. The endpoint reports no total, so a full page means more may follow.',
       parameters: {
+        page: { type: 'integer', description: 'Page number, from 1; the first page when omitted.' },
         perPage: { type: 'integer', description: `Gateways per page (default ${config.pageSize}).` },
       },
       output: {
         schema: {
           type: 'object',
           additionalProperties: false,
-          description: 'Gateways in the account.',
+          description: 'One page of gateways, and where it sits in the whole.',
           properties: {
             gateways: {
               type: 'array',
@@ -210,17 +221,23 @@ export function apply(ctx: Context, config: AiToolsConfig): void {
               description: 'Gateway records as the API returns them.',
               items: { type: 'object', additionalProperties: true },
             },
+            ...PAGE_OUTCOME_PROPERTIES,
           },
         },
-        render: (_args, value) => listing(value.gateways.length, 'gateway', value),
+        render: (_args, value) => listing(value.gateways.length, 'gateway', value, pageNote(value)),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const gateways = await cf.accountRequest<Record<string, JsonValue>[]>({
-          ...gatewayListSpec(args.perPage ?? config.pageSize),
+        const page = requestedPage(args.page)
+        const perPage = args.perPage ?? config.pageSize
+        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+          ...gatewayListSpec(page, perPage),
           signal: exec.signal,
         })
-        return { gateways }
+        return {
+          gateways: envelope.result,
+          ...pageOutcome(envelope.result_info, page, perPage, envelope.result.length),
+        }
       },
     }),
   )

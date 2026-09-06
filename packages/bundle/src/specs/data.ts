@@ -15,8 +15,8 @@ function seg(value: string): string {
 // --- Workers KV -----------------------------------------------------------
 
 /** List the account's KV namespaces. */
-export function kvNamespaceListSpec(perPage: number): RequestSpec {
-  return { method: 'GET', path: '/storage/kv/namespaces', query: { per_page: perPage } }
+export function kvNamespaceListSpec(page: number, perPage: number): RequestSpec {
+  return { method: 'GET', path: '/storage/kv/namespaces', query: { page, per_page: perPage } }
 }
 
 /** Read one key's value. The response is raw, not an envelope. */
@@ -66,8 +66,8 @@ export function kvBulkDeleteSpec(namespaceId: string, keys: readonly string[]): 
 // --- D1 -------------------------------------------------------------------
 
 /** List D1 databases. The resource is singular: `/d1/database`. */
-export function d1ListSpec(perPage: number): RequestSpec {
-  return { method: 'GET', path: '/d1/database', query: { per_page: perPage } }
+export function d1ListSpec(page: number, perPage: number): RequestSpec {
+  return { method: 'GET', path: '/d1/database', query: { page, per_page: perPage } }
 }
 
 /**
@@ -85,9 +85,12 @@ export function d1QuerySpec(databaseId: string, sql: string, params: readonly st
 
 // --- Queues ---------------------------------------------------------------
 
-/** List queues. */
-export function queueListSpec(perPage: number): RequestSpec {
-  return { method: 'GET', path: '/queues', query: { per_page: perPage } }
+/**
+ * List queues. The endpoint takes no paging parameters — Cloudflare's own
+ * client sends none — so this is the whole listing in one call.
+ */
+export function queueListSpec(): RequestSpec {
+  return { method: 'GET', path: '/queues' }
 }
 
 /** Push one message. */
@@ -128,8 +131,12 @@ export function queueAckSpec(
 // --- R2 (bucket management; objects go through the S3 API) ----------------
 
 /** List R2 buckets. */
-export function r2BucketListSpec(perPage: number): RequestSpec {
-  return { method: 'GET', path: '/r2/buckets', query: { per_page: perPage } }
+export function r2BucketListSpec(perPage: number, cursor: string | undefined): RequestSpec {
+  return {
+    method: 'GET',
+    path: '/r2/buckets',
+    query: { per_page: perPage, ...(cursor === undefined ? {} : { cursor }) },
+  }
 }
 
 /** Create an R2 bucket. */

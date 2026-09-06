@@ -69,29 +69,62 @@ describe('plugin shape', () => {
 })
 
 describe('cloudflare_kv_namespace_list', () => {
-  it('returns the namespaces', async () => {
-    const h = makeHarness(dataTools, async () => envelope([{ id: 'n1', title: 'One' }]))
+  const info = { count: 1, page: 1, per_page: 50, total_count: 1 }
+
+  it('returns the namespaces with the page outcome the API reported', async () => {
+    const h = makeHarness(dataTools, async () => envelope([{ id: 'n1', title: 'One' }], info))
     await expect(h.run('cloudflare_kv_namespace_list', {})).resolves.toEqual({
       namespaces: [{ id: 'n1', title: 'One' }],
+      page: 1,
+      perPage: 50,
+      total: 1,
+      complete: true,
     })
   })
 
-  it('defaults to 50 per page', async () => {
-    const h = makeHarness(dataTools, async () => envelope([]))
+  it('asks for the first page of 50 by default', async () => {
+    const h = makeHarness(dataTools, async () => envelope([], info))
     await h.run('cloudflare_kv_namespace_list', {})
-    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/storage/kv/namespaces?per_page=50')
+    expect(h.requests[0]!.url).toBe(
+      'https://api.test/v4/accounts/a1/storage/kv/namespaces?page=1&per_page=50',
+    )
   })
 
-  it('honours an explicit page size', async () => {
-    const h = makeHarness(dataTools, async () => envelope([]))
-    await h.run('cloudflare_kv_namespace_list', { perPage: 5 })
-    expect(h.requests[0]!.url).toContain('per_page=5')
+  it('honours an explicit page and page size', async () => {
+    const h = makeHarness(dataTools, async () => envelope([], { ...info, page: 3, per_page: 5 }))
+    await expect(h.run('cloudflare_kv_namespace_list', { page: 3, perPage: 5 })).resolves.toMatchObject({
+      page: 3,
+      perPage: 5,
+    })
+    expect(h.requests[0]!.url).toContain('page=3&per_page=5')
   })
 
-  it('renders a count and the payload', () => {
+  it('says when more pages follow', async () => {
+    const h = makeHarness(dataTools, async () =>
+      envelope([{ id: 'n1' }, { id: 'n2' }], { ...info, total_count: 5 }),
+    )
+    await expect(h.run('cloudflare_kv_namespace_list', { perPage: 2 })).resolves.toMatchObject({
+      total: 5,
+      complete: false,
+    })
+  })
+
+  it('refuses a page before the first without a request', async () => {
     const h = makeHarness(dataTools, async () => envelope([]))
-    const blocks = h.render('cloudflare_kv_namespace_list', {}, { namespaces: [{ id: 'n1' }] })
-    expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('1 namespace') }])
+    await expect(h.run('cloudflare_kv_namespace_list', { page: 0 })).rejects.toThrow(
+      'page must be 1 or more, got 0',
+    )
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('renders the count with its page context, then the payload', () => {
+    const h = makeHarness(dataTools, async () => envelope([]))
+    const blocks = h.render(
+      'cloudflare_kv_namespace_list',
+      {},
+      { namespaces: [{ id: 'n1' }], page: 2, perPage: 1, total: 3, complete: false },
+    )
+    expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('1 namespace (page 2 of 3)') }])
   })
 })
 
@@ -400,23 +433,41 @@ describe('cloudflare_kv_delete', () => {
 })
 
 describe('cloudflare_d1_list and cloudflare_d1_query', () => {
-  it('lists databases', async () => {
-    const h = makeHarness(dataTools, async () => envelope([{ uuid: 'db1', name: 'main' }]))
+  it('lists databases with the page outcome the API reported', async () => {
+    const h = makeHarness(dataTools, async () =>
+      envelope([{ uuid: 'db1', name: 'main' }], { count: 1, page: 1, per_page: 50, total_count: 1 }),
+    )
     await expect(h.run('cloudflare_d1_list', {})).resolves.toEqual({
       databases: [{ uuid: 'db1', name: 'main' }],
+      page: 1,
+      perPage: 50,
+      total: 1,
+      complete: true,
     })
   })
 
-  it('defaults to 50 databases per page', async () => {
+  it('asks for the first page of 50 databases by default', async () => {
     const h = makeHarness(dataTools, async () => envelope([]))
     await h.run('cloudflare_d1_list', {})
-    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/d1/database?per_page=50')
+    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/d1/database?page=1&per_page=50')
   })
 
-  it('renders a database count', () => {
+  it('honours an explicit page', async () => {
     const h = makeHarness(dataTools, async () => envelope([]))
-    const blocks = h.render('cloudflare_d1_list', {}, { databases: [{}, {}] })
-    expect(blocks).toEqual([{ type: 'text', text: expect.stringContaining('2 databases') }])
+    await h.run('cloudflare_d1_list', { page: 2 })
+    expect(h.requests[0]!.url).toContain('page=2&per_page=50')
+  })
+
+  it('renders a database count with its page context', () => {
+    const h = makeHarness(dataTools, async () => envelope([]))
+    const blocks = h.render(
+      'cloudflare_d1_list',
+      {},
+      { databases: [{}, {}], page: 1, perPage: 50, total: null, complete: true },
+    )
+    expect(blocks).toEqual([
+      { type: 'text', text: expect.stringContaining('2 databases (page 1, the last)') },
+    ])
   })
 
   it('runs a query and returns its result sets', async () => {
@@ -453,21 +504,33 @@ describe('cloudflare_d1_list and cloudflare_d1_query', () => {
 })
 
 describe('queue tools', () => {
-  it('lists queues', async () => {
+  it('lists queues, complete when the API reports no total', async () => {
     const h = makeHarness(dataTools, async () => envelope([{ queue_id: 'q1' }]))
-    await expect(h.run('cloudflare_queue_list', {})).resolves.toEqual({ queues: [{ queue_id: 'q1' }] })
+    await expect(h.run('cloudflare_queue_list', {})).resolves.toEqual({
+      queues: [{ queue_id: 'q1' }],
+      total: null,
+      complete: true,
+    })
   })
 
-  it('defaults to 50 queues per page', async () => {
+  it('sends no paging parameters, since the endpoint has none', async () => {
     const h = makeHarness(dataTools, async () => envelope([]))
     await h.run('cloudflare_queue_list', {})
-    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/queues?per_page=50')
+    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/queues')
   })
 
-  it('renders a queue count', () => {
+  it('says when the API reports more queues than it returned', async () => {
+    const h = makeHarness(dataTools, async () => envelope([{ queue_id: 'q1' }], { total_count: 3 }))
+    await expect(h.run('cloudflare_queue_list', {})).resolves.toMatchObject({ total: 3, complete: false })
+  })
+
+  it('renders a queue count, noting an incomplete listing', () => {
     const h = makeHarness(dataTools, async () => envelope([]))
-    expect(h.render('cloudflare_queue_list', {}, { queues: [{}] })).toEqual([
-      { type: 'text', text: expect.stringContaining('1 queue') },
+    expect(h.render('cloudflare_queue_list', {}, { queues: [{}], total: null, complete: true })).toEqual([
+      { type: 'text', text: expect.stringContaining('1 queue\n') },
+    ])
+    expect(h.render('cloudflare_queue_list', {}, { queues: [{}], total: 3, complete: false })).toEqual([
+      { type: 'text', text: expect.stringContaining('1 queue (the API reports 3 in all)') },
     ])
   })
 
@@ -539,27 +602,51 @@ describe('queue tools', () => {
 })
 
 describe('r2 bucket tools', () => {
-  it('lists buckets', async () => {
+  it('lists buckets, complete when the API sends no cursor', async () => {
     const h = makeHarness(dataTools, async () => envelope({ buckets: [{ name: 'media' }] }))
-    await expect(h.run('cloudflare_r2_bucket_list', {})).resolves.toEqual({ buckets: [{ name: 'media' }] })
+    await expect(h.run('cloudflare_r2_bucket_list', {})).resolves.toEqual({
+      buckets: [{ name: 'media' }],
+      cursor: '',
+      complete: true,
+    })
+  })
+
+  it('hands back the cursor the API sends for the next page', async () => {
+    const h = makeHarness(dataTools, async () =>
+      envelope({ buckets: [{ name: 'a' }] }, { cursor: 'c2', per_page: 1 }),
+    )
+    await expect(h.run('cloudflare_r2_bucket_list', { perPage: 1 })).resolves.toEqual({
+      buckets: [{ name: 'a' }],
+      cursor: 'c2',
+      complete: false,
+    })
+  })
+
+  it('continues from a cursor', async () => {
+    const h = makeHarness(dataTools, async () => envelope({ buckets: [] }))
+    await h.run('cloudflare_r2_bucket_list', { cursor: 'c2' })
+    expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/r2/buckets?per_page=50&cursor=c2')
   })
 
   it('treats a missing buckets field as empty', async () => {
     const h = makeHarness(dataTools, async () => envelope({}))
-    await expect(h.run('cloudflare_r2_bucket_list', {})).resolves.toEqual({ buckets: [] })
+    await expect(h.run('cloudflare_r2_bucket_list', {})).resolves.toMatchObject({ buckets: [] })
   })
 
-  it('defaults to 50 buckets per page', async () => {
+  it('defaults to 50 buckets per page and no cursor', async () => {
     const h = makeHarness(dataTools, async () => envelope({}))
     await h.run('cloudflare_r2_bucket_list', {})
     expect(h.requests[0]!.url).toBe('https://api.test/v4/accounts/a1/r2/buckets?per_page=50')
   })
 
-  it('renders a bucket count', () => {
+  it('renders a bucket count, noting when more follow', () => {
     const h = makeHarness(dataTools, async () => envelope({}))
-    expect(h.render('cloudflare_r2_bucket_list', {}, { buckets: [{}] })).toEqual([
-      { type: 'text', text: expect.stringContaining('1 bucket') },
+    expect(h.render('cloudflare_r2_bucket_list', {}, { buckets: [{}], cursor: '', complete: true })).toEqual([
+      { type: 'text', text: expect.stringContaining('1 bucket\n') },
     ])
+    expect(
+      h.render('cloudflare_r2_bucket_list', {}, { buckets: [{}], cursor: 'c2', complete: false }),
+    ).toEqual([{ type: 'text', text: expect.stringContaining('1 bucket (more follow the cursor)') }])
   })
 
   it('creates a bucket', async () => {
@@ -619,7 +706,7 @@ describe('cloudflare_kv_list_keys paging', () => {
   it('refuses a cursor that is not a string rather than ending the listing early', async () => {
     const h = makeHarness(dataTools, async () => envelope([], { cursor: 7 }))
     await expect(h.run('cloudflare_kv_list_keys', { namespaceId: 'n1' })).rejects.toThrow(
-      'KV result_info.cursor must be a string, got number',
+      'result_info.cursor must be a string, got number',
     )
   })
 })
@@ -639,7 +726,7 @@ describe('DataToolsConfig', () => {
     expect(() => dataTools.Config({ pageSize: 0 })).toThrow('$.pageSize expected number >= 1 but got 0')
   })
 
-  it('applies a configured page size to every listing', async () => {
+  it('applies a configured page size to every paged listing', async () => {
     const h = makeHarness(dataTools, async () => envelope([]), {}, { pageSize: 7 })
     await h.run('cloudflare_kv_namespace_list', {})
     expect(h.requests[0]!.url).toContain('per_page=7')
