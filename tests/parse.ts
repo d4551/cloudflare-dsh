@@ -49,10 +49,12 @@ export function parseModule(name: string, text: string): ParsedModule {
  *
  * The predicate is the boundary between the parser's plain objects and the
  * declared tree: a member of the walk is anything shaped like a node whose
- * type the parser's own visitor keys know how to descend into.
+ * type the parser's own visitor keys know how to descend into. Values reach
+ * here as plain JSON, so a string like `"Program"` — a node's own type field —
+ * arrives as a primitive and is refused before the `in` check.
  */
 function isAstNode(value: object | null | undefined): value is Node {
-  if (value === null || value === undefined || Array.isArray(value) || !('type' in value)) return false
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || !('type' in value)) return false
   return typeof value.type === 'string' && visitorKeys[value.type] !== undefined
 }
 

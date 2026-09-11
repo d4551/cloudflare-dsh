@@ -25,9 +25,9 @@ import { markdown, read, root } from './gates/support.ts'
 
 /** Every `.ts`/`.tsx` file under one directory of the repository. */
 function sourcesUnder(dir: string): string[] {
-  return readdirSync(root(`../${dir}`)).flatMap((entry) => {
+  return readdirSync(root(dir)).flatMap((entry) => {
     const path = `${dir}/${entry}`
-    if (statSync(root(`../${path}`)).isDirectory()) return sourcesUnder(path)
+    if (statSync(root(path)).isDirectory()) return sourcesUnder(path)
     return /\.tsx?$/.test(path) ? [path] : []
   })
 }
@@ -39,7 +39,7 @@ const directoryOf = (file: string): string => file.slice(0, file.lastIndexOf('/'
 const TOOL_DIR = 'packages/bundle/src/tools'
 
 /** Every source root a package has, found rather than listed. */
-const PACKAGE_SOURCES = readdirSync(root('../packages')).map((pkg) => `packages/${pkg}/src`)
+const PACKAGE_SOURCES = readdirSync(root('packages')).map((pkg) => `packages/${pkg}/src`)
 
 /**
  * Every tool one module defines, read from its syntax tree rather than its

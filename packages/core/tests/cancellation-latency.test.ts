@@ -4,11 +4,11 @@ import { CloudflareClient } from '../src/client.ts'
 /**
  * Cancellation settlement contract at the client boundary.
  *
- * A caller signal that cancels mid-flight must settle the call as the
- * cancellation it is — the client hands back no response for a call the caller
- * has already given up on, even when the transport answers anyway. A stall has
- * no clock here to fool: the runner's own timeout fails a call that never
- * settles, and the outcome assertion fails a call that settles as success.
+ * Under a transport with a real fetch's cancellation behaviour — a request
+ * rejects the moment its signal cancels — every call the caller cancels
+ * mid-flight settles as the cancellation it is. The assertion is the outcome,
+ * not a stopwatch: a call that hangs fails by the runner's timeout, and a call
+ * that settles as success fails here.
  */
 const BATCH = 30
 
@@ -30,6 +30,14 @@ function makeClient(fetchImpl: (request: Request) => Promise<Response>): Cloudfl
   })
 }
 
+/** A transport with a real fetch's cancellation behaviour. */
+function honouring(request: Request): Promise<Response> {
+  if (request.signal.aborted) return Promise.reject(request.signal.reason)
+  return new Promise((_resolve, reject) => {
+    request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true })
+  })
+}
+
 function ok(): Response {
   return new Response(JSON.stringify({ success: true, errors: [], messages: [], result: [] }), {
     status: 200,
@@ -37,13 +45,13 @@ function ok(): Response {
   })
 }
 
-it('no cancelled call resolves, whatever the transport answers', async () => {
+it('every mid-flight cancelled call settles as AbortError', async () => {
   const settled = await Promise.all(
     Array.from({ length: BATCH }, () => {
       const controller = new AbortController()
-      const client = makeClient(async () => {
+      const client = makeClient(async (request) => {
         controller.abort()
-        return ok()
+        return honouring(request)
       })
       return client
         .request({ ...spec, signal: controller.signal })

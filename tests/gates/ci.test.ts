@@ -46,8 +46,9 @@ describe('the pure/impure split holds', () => {
     // `client.ts` and the provider module dispatch; the two plugin entries do
     // nothing with it but hand the global in as the default dependency. A
     // fifth module naming `fetch` is a new I/O site, which is what this is
-    // here to notice.
-    expect(usersOf(/\bfetch\s*\(/)).toEqual([
+    // here to notice. `client.ts` names its injected transport by type rather
+    // than by call, so the pattern reads the seam's type as well as the call.
+    expect(usersOf(/\bfetch\s*\(|\bFetchLike\b/u)).toEqual([
       PROVIDER_MODULE,
       'packages/bundle/src/ai/index.ts',
       'packages/core/src/client.ts',

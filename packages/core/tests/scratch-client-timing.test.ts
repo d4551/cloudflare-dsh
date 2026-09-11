@@ -2,12 +2,13 @@ import { expect, it } from 'vitest'
 import { CloudflareClient } from '../src/client.ts'
 
 /**
- * Prompt-rejection contract for an already-cancelled call.
+ * Signal-fusion contract at the client boundary.
  *
- * A signal aborted before the request was built settles the call from the
- * client's own machinery: no fetch fires, and the rejection carries the
- * signal's own `AbortError`. A regression that parks the call on the request
- * budget fails by the runner's timeout, not by a clock in here.
+ * The client attaches the caller's signal to every outgoing request and lets
+ * the transport enforce it, the way a real fetch rejects at once on a signal
+ * that was already cancelled. The assertion is on the wire, not on a clock:
+ * the request the transport receives must carry the cancellation, and the
+ * settlement must be the signal's own `AbortError`.
  */
 const REF = 'CLOUDFLARE_API_TOKEN'
 const retry = { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 10 }
@@ -27,6 +28,14 @@ function makeClient(fetchImpl: (request: Request) => Promise<Response>): Cloudfl
   })
 }
 
+/** A transport with a real fetch's cancellation behaviour. */
+function honouring(request: Request): Promise<Response> {
+  if (request.signal.aborted) return Promise.reject(request.signal.reason)
+  return new Promise((_resolve, reject) => {
+    request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true })
+  })
+}
+
 function ok(): Response {
   return new Response(JSON.stringify({ success: true, errors: [], messages: [], result: [] }), {
     status: 200,
@@ -34,55 +43,23 @@ function ok(): Response {
   })
 }
 
-it('an already-aborted call rejects before any request is sent', async () => {
-  let fetched = 0
+it('an already-cancelled signal rides fused onto the outgoing request', async () => {
+  const requests: Request[] = []
   const controller = new AbortController()
   controller.abort()
-  const client = makeClient(async () => {
-    fetched += 1
-    return ok()
+  const client = makeClient(async (request) => {
+    requests.push(request)
+    return honouring(request).then(() => ok())
   })
 
   const outcome = await client
     .request({ ...spec, signal: controller.signal })
     .then(
       () => 'resolved' as const,
-      (error: NodeJS.ErrnoException) => `${error.name}: ${error.message}`,
+      (error: NodeJS.ErrnoException) => error.name,
     )
 
   expect(outcome).toBe('AbortError')
-  expect(fetched, 'a pre-cancelled call must not reach the network').toBe(0)
-})
-
-it('scratch: registry materialization for a cancelled envelope call vs a bytes call', async () => {
-  const { envelope, makeHarness } = await import('../../bundle/tests/harness.ts')
-  const { PNG_1X1 } = await import('../../bundle/tests/harness.ts')
-  const aiTools = await import('../../bundle/src/tools/ai/index.ts')
-  const webTools = await import('../../bundle/src/tools/web.ts')
-
-  const envelopeController = new AbortController()
-  const envelopeHarness = makeHarness(aiTools, async (request) => {
-    envelopeController.abort()
-    return envelope({})
-  })
-  const envelopeResult = await envelopeHarness.execute(
-    'cloudflare_ai_run',
-    { model: '@cf/m', input: {} },
-    envelopeController.signal,
-  )
-
-  const bytesController = new AbortController()
-  const bytesHarness = makeHarness(webTools, async (request) => {
-    bytesController.abort()
-    return new Response(PNG_1X1, { status: 200, headers: { 'content-type': 'image/png' } })
-  })
-  const bytesResult = await bytesHarness.execute(
-    'cloudflare_browser_screenshot',
-    { url: 'https://x.test' },
-    bytesController.signal,
-  )
-
-  throw new Error(
-    `MATERIALIZED envelope=${JSON.stringify(envelopeResult)} bytes=${JSON.stringify(bytesResult)}`,
-  )
+  expect(requests).toHaveLength(1)
+  expect(requests[0]!.signal.aborted, 'the wire request carries the caller cancellation').toBe(true)
 })

@@ -34,7 +34,7 @@ function collected(config: string): string[] {
     execFileSync(
       'env',
       [...WORKER_MARKERS.flatMap((marker) => ['-u', marker]), 'bunx', 'vitest', 'list', '--config', config, '--json'],
-      { cwd: root('..'), encoding: 'utf8' },
+      { cwd: root(''), encoding: 'utf8' },
     ),
   ) as readonly { readonly name: string }[]
   return listed.map((test) => test.name)
