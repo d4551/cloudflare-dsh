@@ -3,19 +3,17 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { CloudflareConfig } from '@d4551/dsh-cloudflare-core'
-import * as aiTools from '../src/tools/ai.ts'
+import * as aiTools from '../src/tools/ai/index.ts'
 import * as metaTools from '../src/tools/meta.ts'
 import { envelope, makeHarness } from './harness.ts'
 
 /**
- * The shipped preset, which nothing read.
+ * The shipped preset, read as an artifact.
  *
  * `presets/pi-ai.yaml` is listed in the package's `files` and documented on the
- * page as a zero-code path, and the only thing any test said about it was that
- * the manifest mentions the directory. It could have been malformed YAML, or
- * have named a credential reference this plugin does not default to, or two
- * tools that no longer exist, and every gate would have stayed green — it is a
- * shipped artifact, so a reader would have found out instead.
+ * page as a zero-code path, so these tests parse the file itself: malformed
+ * YAML, a credential reference the plugin does not default to, or a tool name
+ * that no longer registers fails here rather than in front of a reader.
  */
 const preset = readFileSync(fileURLToPath(new URL('../presets/pi-ai.yaml', import.meta.url)), 'utf8')
 

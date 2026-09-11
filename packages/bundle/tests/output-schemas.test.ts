@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
-import * as aiTools from '../src/tools/ai.ts'
-import * as dataTools from '../src/tools/data.ts'
+import * as aiTools from '../src/tools/ai/index.ts'
+import * as dataTools from '../src/tools/data/index.ts'
 import * as metaTools from '../src/tools/meta.ts'
 import * as webTools from '../src/tools/web.ts'
 import { envelope, makeHarness } from './harness.ts'
@@ -33,18 +33,22 @@ describe('every tool declares a typed output object', () => {
   // reads named fields from it. A closed root means a field the model reads
   // is one the tool declared; a description on each means the generated SDK
   // documents it; a required list covering every property means no field is
-  // sometimes absent.
-  it.each(TOOLS)('%s: a closed object whose every property is described and required', (_name, schema) => {
-    expect(schema).toMatchObject({ type: 'object', additionalProperties: false })
-    const properties = propertiesOf(schema)
-    expect(properties.length).toBeGreaterThan(0)
-    for (const [key, property] of properties) {
-      expect(property, key).toHaveProperty('description', expect.stringMatching(/\S/))
+  // sometimes absent. The walk is a loop over the registry rather than a
+  // generated case list, so a tool added tomorrow is covered without this
+  // file naming it; a failure names its tool through the labelled expectation.
+  it('every tool: a closed object whose every property is described and required', () => {
+    for (const [name, schema] of TOOLS) {
+      expect(schema, name).toMatchObject({ type: 'object', additionalProperties: false })
+      const properties = propertiesOf(schema)
+      expect(properties.length, name).toBeGreaterThan(0)
+      for (const [key, property] of properties) {
+        expect(property, `${name}: ${key}`).toHaveProperty('description', expect.stringMatching(/\S/))
+      }
+      expect(schema, name).toHaveProperty(
+        'required',
+        properties.map(([key]) => key),
+      )
     }
-    expect(schema).toHaveProperty(
-      'required',
-      properties.map(([key]) => key),
-    )
   })
 })
 

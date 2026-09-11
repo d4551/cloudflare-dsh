@@ -17,12 +17,12 @@
   ],
   "exports": {
     "./tools/ai": {
-      "types": "./lib/tools/ai.d.mts",
-      "default": "./lib/tools/ai.mjs"
+      "types": "./lib/tools/ai/index.d.mts",
+      "default": "./lib/tools/ai/index.mjs"
     },
     "./tools/data": {
-      "types": "./lib/tools/data.d.mts",
-      "default": "./lib/tools/data.mjs"
+      "types": "./lib/tools/data/index.d.mts",
+      "default": "./lib/tools/data/index.mjs"
     },
     "./tools/web": {
       "types": "./lib/tools/web.d.mts",

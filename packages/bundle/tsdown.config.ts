@@ -2,8 +2,8 @@ import { defineConfig } from 'tsdown'
 
 export default defineConfig({
   entry: [
-    'src/tools/ai.ts',
-    'src/tools/data.ts',
+    'src/tools/ai/index.ts',
+    'src/tools/data/index.ts',
     'src/tools/web.ts',
     'src/tools/meta.ts',
     'src/ai/index.ts',
