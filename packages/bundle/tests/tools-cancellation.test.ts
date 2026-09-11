@@ -162,21 +162,24 @@ describe('every tool forwards the caller signal to Cloudflare', () => {
   // as the cancellation it was. The walk is a loop over the registry rather
   // than a generated case list, so a tool added tomorrow is covered without
   // this file naming it; a failure names its tool through the labelled
-  // expectations.
+  // expectations. Each case owns its controller, harness and closure, so the
+  // walk runs the cases concurrently.
   it('every tool: the request follows the signal, and the call is reported aborted', async () => {
-    for (const [name, harness, args, respond] of CASES) {
-      const controller = new AbortController()
-      let followed: boolean | undefined
-      const h = harness(async (request) => {
-        // Cancel while the request is in flight, then ask the request itself.
-        controller.abort()
-        followed = request.signal.aborted
-        return respond()
-      })
-      const result = await h.execute(name, args, controller.signal)
-      expect(followed, name).toBe(true)
-      expect(result, name).toMatchObject({ isError: true, error: { info: { code: 'ABORTED' } } })
-    }
+    await Promise.all(
+      CASES.map(async ([name, harness, args, respond]) => {
+        const controller = new AbortController()
+        let followed: boolean | undefined
+        const h = harness(async (request) => {
+          // Cancel while the request is in flight, then ask the request itself.
+          controller.abort()
+          followed = request.signal.aborted
+          return respond()
+        })
+        const result = await h.execute(name, args, controller.signal)
+        expect(followed, name).toBe(true)
+        expect(result, name).toMatchObject({ isError: true, error: { info: { code: 'ABORTED' } } })
+      }),
+    )
   })
 })
 

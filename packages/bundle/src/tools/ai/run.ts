@@ -15,7 +15,7 @@ import {
 } from '../../specs/ai.ts'
 import { PAGE_OUTCOME_PROPERTIES, PAGE_PARAMETER, pageNote, pageOutcome, requestedPage } from '../_shared/paging.ts'
 import { isObject, type JsonValue } from '../_shared/json.ts'
-import { apiRecords, json, listing } from '../_shared/render.ts'
+import { json, listing } from '../_shared/render.ts'
 import type { AiToolsConfig } from './config.ts'
 import { AiRunStreamError } from './stream.ts'
 

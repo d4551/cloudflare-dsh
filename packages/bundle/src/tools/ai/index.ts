@@ -8,7 +8,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { registerAiSearch } from './aisearch.ts'
-import { Config, type AiToolsConfig } from './config.ts'
+import type { AiToolsConfig } from './config.ts'
 import { registerGateway } from './gateway.ts'
 import { registerSessionCost } from './sessionCost.ts'
 import { registerVectorize } from './vectorize.ts'

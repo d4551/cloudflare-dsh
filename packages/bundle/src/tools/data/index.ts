@@ -8,7 +8,7 @@
  * is re-exported here by name.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { Config, type DataToolsConfig } from './config.ts'
+import type { DataToolsConfig } from './config.ts'
 import { registerD1 } from './d1.ts'
 import { registerKv } from './kv.ts'
 import { registerQueues } from './queue.ts'
