@@ -163,11 +163,8 @@ export class CloudflareClient {
   async #send<T>(spec: RequestSpec): Promise<CloudflareEnvelope<T>> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
-    const request = this.#buildRequest(spec, token)
-    request.signal.throwIfAborted()
-    const response = await this.#transmit(request)
+    const response = await this.#transmit(this.#buildRequest(spec, token))
     const read = await readEnvelope<T>(response)
-    request.signal.throwIfAborted()
     const retryAfter = response.headers.get('retry-after')
 
     if (!read.ok) {
@@ -222,11 +219,8 @@ export class CloudflareClient {
   async #sendText(spec: RequestSpec): Promise<string> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
-    const request = this.#buildRequest(spec, token)
-    request.signal.throwIfAborted()
-    const response = await this.#transmit(request)
+    const response = await this.#transmit(this.#buildRequest(spec, token))
     const body = await response.text()
-    request.signal.throwIfAborted()
     if (!response.ok) throw this.#rawFailure(response, body, ref)
     return body
   }
@@ -246,10 +240,7 @@ export class CloudflareClient {
   async #sendBytes(spec: RequestSpec): Promise<BinaryBody> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
-    const request = this.#buildRequest(spec, token)
-    request.signal.throwIfAborted()
-    const response = await this.#transmit(request)
-    request.signal.throwIfAborted()
+    const response = await this.#transmit(this.#buildRequest(spec, token))
     if (!response.ok) throw this.#rawFailure(response, await response.text(), ref)
     return {
       bytes: new Uint8Array(await response.arrayBuffer()),

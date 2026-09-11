@@ -8,7 +8,7 @@
  */
 import { type Node } from 'oxc-parser'
 import { describe, expect, it } from 'vitest'
-import { firstNodeFrom, parseModule, walk } from '../parse.ts'
+import { parseModule, walk } from '../parse.ts'
 import { containing, modules, read, sources, testFiles } from './base.ts'
 
 /**

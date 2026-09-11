@@ -17,7 +17,6 @@ import {
   json,
   read,
   sources,
-  tracked,
 } from './base.ts'
 
 /** A rule entry's severity, whether written bare or beside its options. */

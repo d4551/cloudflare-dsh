@@ -47,9 +47,42 @@ it('an already-aborted call rejects before any request is sent', async () => {
     .request({ ...spec, signal: controller.signal })
     .then(
       () => 'resolved' as const,
-      (error: NodeJS.ErrnoException) => error.name,
+      (error: NodeJS.ErrnoException) => `${error.name}: ${error.message}`,
     )
 
   expect(outcome).toBe('AbortError')
   expect(fetched, 'a pre-cancelled call must not reach the network').toBe(0)
+})
+
+it('scratch: registry materialization for a cancelled envelope call vs a bytes call', async () => {
+  const { envelope, makeHarness } = await import('../../bundle/tests/harness.ts')
+  const { PNG_1X1 } = await import('../../bundle/tests/harness.ts')
+  const aiTools = await import('../../bundle/src/tools/ai/index.ts')
+  const webTools = await import('../../bundle/src/tools/web.ts')
+
+  const envelopeController = new AbortController()
+  const envelopeHarness = makeHarness(aiTools, async (request) => {
+    envelopeController.abort()
+    return envelope({})
+  })
+  const envelopeResult = await envelopeHarness.execute(
+    'cloudflare_ai_run',
+    { model: '@cf/m', input: {} },
+    envelopeController.signal,
+  )
+
+  const bytesController = new AbortController()
+  const bytesHarness = makeHarness(webTools, async (request) => {
+    bytesController.abort()
+    return new Response(PNG_1X1, { status: 200, headers: { 'content-type': 'image/png' } })
+  })
+  const bytesResult = await bytesHarness.execute(
+    'cloudflare_browser_screenshot',
+    { url: 'https://x.test' },
+    bytesController.signal,
+  )
+
+  throw new Error(
+    `MATERIALIZED envelope=${JSON.stringify(envelopeResult)} bytes=${JSON.stringify(bytesResult)}`,
+  )
 })

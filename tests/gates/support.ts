@@ -10,7 +10,14 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-export const root = (path: string): string => fileURLToPath(new URL(path, import.meta.url))
+/**
+ * The repository root, anchored at this file's own location two directories up,
+ * so every path a gate passes is repository-relative and reads the same from
+ * any module in the suite.
+ */
+const REPO = fileURLToPath(new URL('../../', import.meta.url))
+
+export const root = (path: string): string => `${REPO}${path}`
 
 /**
  * Every file git tracks or would track: a new file that is not yet added is
@@ -18,13 +25,13 @@ export const root = (path: string): string => fileURLToPath(new URL(path, import
  * Ignored files stay out, so build output cannot fail a gate.
  */
 export const tracked = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
-  cwd: root('..'),
+  cwd: REPO,
   encoding: 'utf8',
 })
   .split('\n')
   .filter((line) => line !== '')
 
-export const read = (file: string): string => readFileSync(root(`../${file}`), 'utf8')
+export const read = (file: string): string => readFileSync(root(file), 'utf8')
 export const json = <T>(file: string): T => JSON.parse(read(file)) as T
 
 /** The JSON a configuration file parses to, typed so a scan cannot widen it. */
