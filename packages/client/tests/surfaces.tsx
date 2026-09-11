@@ -5,8 +5,6 @@
  * look at the same markup. Two lanes rendering two slightly different pages
  * would be two claims about two things.
  */
-import { existsSync, readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { type Browser, type BrowserContext, type Page, chromium } from 'playwright'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { expect } from 'vitest'
@@ -18,7 +16,7 @@ import { D1Result } from '../src/toolviews/D1Result.tsx'
 import { D1ResultToolView } from '../src/toolviews/fromToolCall.tsx'
 
 /** The stylesheet the package ships, read rather than reconstructed. */
-export const css = readFileSync(fileURLToPath(new URL('../src/cloudflare.css', import.meta.url)), 'utf8')
+export const css = await Bun.file(new URL('../src/cloudflare.css', import.meta.url)).text()
 
 const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
 const settings = { apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: '', gatewayId: '' }
@@ -27,10 +25,10 @@ const tree = { role: 'document', name: 'Page', children: [{ role: 'heading', nam
 /**
  * A settled tool result carrying no projection a view can read.
  *
- * Goes through the registered view rather than the fallback component, because
- * the fallback is reached by the adapter and reaching it the same way is what
- * makes this the card a host would actually draw. A replayed log written before
- * a tool published its projection is exactly this shape.
+ * Goes through the registered view rather than the default component, because
+ * the default is reached by the projection layer and reaching it the same way
+ * is what makes this the card a host would actually draw. A replayed log
+ * written before a tool published its projection is exactly this shape.
  */
 const unreadable = {
   kind: 'tool-result',
@@ -157,14 +155,15 @@ export const THEMES: ReadonlyArray<{ name: string; scheme: 'light' | 'dark' }> =
  *
  * Some sandboxes ship a browser at a fixed path whose build does not match the
  * revision this Playwright would download; using it avoids a download that the
- * network policy may not allow. Falls back to Playwright's own resolution, so
- * CI behaves normally.
+ * network policy may not allow. Otherwise Playwright resolves its own, so CI
+ * behaves normally.
  */
 const PROVIDED_CHROMIUM = '/opt/pw-browsers/chromium'
 
 /** Launch the browser both lanes drive. */
-export function launch(): Promise<Browser> {
-  return chromium.launch(existsSync(PROVIDED_CHROMIUM) ? { executablePath: PROVIDED_CHROMIUM } : {})
+export async function launch(): Promise<Browser> {
+  const provided = await Bun.file(PROVIDED_CHROMIUM).exists()
+  return chromium.launch(provided ? { executablePath: PROVIDED_CHROMIUM } : {})
 }
 
 /**
@@ -176,28 +175,38 @@ export function launch(): Promise<Browser> {
 export type HostScheme = 'light dark' | 'light' | 'dark' | 'normal'
 
 /**
- * The document a host would serve, around whatever it puts in `<main>`.
+ * The stylesheet a host would serve, around whatever it puts in `<main>`.
  *
  * One host for every browser lane, because two lanes rendering two slightly
  * different pages would be two claims about two things — and because the host
- * is itself under test. It supplies what a real one supplies: the viewport meta
- * a mobile layout depends on, landmarks, a page heading, and a colour scheme
- * declared the way pages declare one. `hostScheme` is that declaration, so a
- * test can put it at odds with the operating system preference; the chrome
- * colours are read back out of it with `light-dark()` rather than branched on,
- * so the page cannot disagree with itself.
- *
- * Page-scoped rules must fail on a real defect, not on an unrealistic harness
- * — and the fix for that is a better fixture, not a filtered rule set.
+ * is itself under test. It supplies what a real one supplies: a colour scheme
+ * declared the way pages declare one, and chrome colours read out of the
+ * scheme with `light-dark()` rather than branched on, so the page cannot
+ * disagree with itself. The shipped stylesheet rides along, because the
+ * components under scan are the ones it styles.
  */
-export function hostPage(main: string, hostScheme: HostScheme): string {
+export function hostStyles(hostScheme: HostScheme): string {
+  return (
+    `:root{color-scheme:${hostScheme}}` +
+    `body{margin:0;color:light-dark(rgb(22 24 29),rgb(242 243 245));background:light-dark(rgb(255 255 255),rgb(22 24 29))}` +
+    css
+  )
+}
+
+/**
+ * The document a host would serve, around whatever it puts in `<main>`.
+ *
+ * It supplies what a real one supplies: the viewport meta a mobile layout
+ * depends on, landmarks, and a page heading. The stylesheet travels separately
+ * — {@link hostStyles} — so the document stays markup and the styling stays in
+ * one place every lane applies identically.
+ */
+export function hostPage(main: string): string {
   return (
     `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-    `<title>Cloudflare surfaces</title><style>` +
-    `:root{color-scheme:${hostScheme}}` +
-    `body{margin:0;color:light-dark(#16181d,#f2f3f5);background:light-dark(#ffffff,#16181d)}` +
-    `${css}</style></head><body><header><h1>Cloudflare surfaces</h1></header>` +
+    `<title>Cloudflare surfaces</title></head>` +
+    `<body><header><h1>Cloudflare surfaces</h1></header>` +
     `<main>${main}</main></body></html>`
   )
 }
@@ -256,7 +265,8 @@ export async function open(
     ...(options.forcedColors === undefined ? {} : { forcedColors: options.forcedColors }),
   })
   const page = await context.newPage()
-  await page.setContent(hostPage(markup, options.hostScheme ?? 'light dark'))
+  await page.setContent(hostPage(markup))
+  await page.addStyleTag({ content: hostStyles(options.hostScheme ?? 'light dark') })
   const rendered = await page.evaluate(() => document.querySelectorAll('main *').length)
   expect(rendered, 'the page did not render the markup it was given').toBe(
     (markup.match(/<[a-zA-Z][^>]*>/gu) ?? []).length,

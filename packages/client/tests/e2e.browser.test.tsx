@@ -11,11 +11,10 @@
  * The bundle is built here rather than committed so the lane can never drift
  * from the source it claims to exercise.
  */
-import { fileURLToPath } from 'node:url'
 import { rolldown } from 'rolldown'
 import type { Browser, BrowserContext, Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { hostPage, launch } from './surfaces.tsx'
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
+import { hostPage, hostStyles, launch } from './surfaces.tsx'
 
 let browser: Browser
 let script: string
@@ -23,7 +22,7 @@ let script: string
 beforeAll(async () => {
   browser = await launch()
   const build = await rolldown({
-    input: fileURLToPath(new URL('./e2e-entry.tsx', import.meta.url)),
+    input: new URL('./e2e-entry.tsx', import.meta.url).pathname,
     platform: 'browser',
     // React reads this to pick its development or production branch; without it
     // the bundle keeps a bare `process` reference the browser cannot resolve.
@@ -44,14 +43,20 @@ afterAll(async () => {
  * Takes nothing. It carried a colour scheme and a reduced-motion preference no
  * caller ever passed, which is apparatus that reads as coverage and is not:
  * both belong to the lanes that actually vary them, and this one operates the
- * client.
+ * client. The context is registered for cleanup when the test finishes, so a
+ * failing assertion cannot leak it into the next test.
  */
 async function mount(): Promise<{ page: Page; context: BrowserContext }> {
   const context = await browser.newContext({ colorScheme: 'light' })
+  onTestFinished(() => context.close())
   const page = await context.newPage()
-  // The same host document every other browser lane loads, so what is operated
-  // here is what is scanned there.
-  await page.setContent(hostPage(`<div id="root"></div><script>${script}</script>`, 'light dark'))
+  // The same host document and stylesheet every other browser lane loads, so
+  // what is operated here is what is scanned there. The bundle is injected as
+  // a script element rather than inlined into the markup, so the document
+  // stays markup.
+  await page.setContent(hostPage(`<div id="root"></div>`))
+  await page.addStyleTag({ content: hostStyles('light dark') })
+  await page.addScriptTag({ content: script })
   await page.waitForSelector('.cf-chip__toggle')
   return { page, context }
 }
@@ -80,93 +85,69 @@ async function expectVisible(page: Page, selector: string, visible: boolean): Pr
 
 describe('the client, operated', () => {
   it('reveals the detail when the toggle is activated, and hides it again', async () => {
-    const { page, context } = await mount()
-    try {
-      await expectVisible(page, '.cf-chip__detail', false)
-      await page.locator('.cf-chip__toggle').click()
-      await expectVisible(page, '.cf-chip__detail', true)
-      expect(await page.locator('.cf-chip__toggle').getAttribute('aria-expanded')).toBe('true')
-      await expectText(page, '.cf-chip__toggle', 'Hide detail')
-      await page.locator('.cf-chip__toggle').click()
-      await expectVisible(page, '.cf-chip__detail', false)
-      await expectText(page, '.cf-chip__toggle', 'Show detail')
-    } finally {
-      await context.close()
-    }
+    const { page } = await mount()
+    await expectVisible(page, '.cf-chip__detail', false)
+    await page.locator('.cf-chip__toggle').click()
+    await expectVisible(page, '.cf-chip__detail', true)
+    expect(await page.locator('.cf-chip__toggle').getAttribute('aria-expanded')).toBe('true')
+    await expectText(page, '.cf-chip__toggle', 'Hide detail')
+    await page.locator('.cf-chip__toggle').click()
+    await expectVisible(page, '.cf-chip__detail', false)
+    await expectText(page, '.cf-chip__toggle', 'Show detail')
   }, 60_000)
 
   it('is operable by keyboard alone, which is the whole of SC 2.1.1', async () => {
-    const { page, context } = await mount()
-    try {
-      await page.locator('.cf-chip__toggle').focus()
-      // A real button responds to both; a div with a click handler to neither.
-      // This is the check that tells those apart.
-      await page.keyboard.press('Enter')
-      await expectVisible(page, '.cf-chip__detail', true)
-      await page.keyboard.press(' ')
-      await expectVisible(page, '.cf-chip__detail', false)
-    } finally {
-      await context.close()
-    }
+    const { page } = await mount()
+    await page.locator('.cf-chip__toggle').focus()
+    // A real button responds to both; a div with a click handler to neither.
+    // This is the check that tells those apart.
+    await page.keyboard.press('Enter')
+    await expectVisible(page, '.cf-chip__detail', true)
+    await page.keyboard.press(' ')
+    await expectVisible(page, '.cf-chip__detail', false)
   }, 60_000)
 
   it('announces a validation error and refuses to save', async () => {
-    const { page, context } = await mount()
-    try {
-      await page.getByLabel('API token reference', { exact: true }).fill('bad ref')
-      await page.getByRole('button', { name: 'Save Cloudflare settings' }).click()
-      await expectText(
-        page,
-        '[role="alert"]',
-        'A token reference must be an environment variable name: uppercase letters, digits and underscores.',
-      )
-      expect(await page.getByLabel('API token reference', { exact: true }).getAttribute('aria-invalid')).toBe(
-        'true',
-      )
-      expect(await page.evaluate(() => window.savedCalls.length)).toBe(0)
-    } finally {
-      await context.close()
-    }
+    const { page } = await mount()
+    await page.getByLabel('API token reference', { exact: true }).fill('bad ref')
+    await page.getByRole('button', { name: 'Save Cloudflare settings' }).click()
+    await expectText(
+      page,
+      '[role="alert"]',
+      'A token reference must be an environment variable name: uppercase letters, digits and underscores.',
+    )
+    expect(await page.getByLabel('API token reference', { exact: true }).getAttribute('aria-invalid')).toBe(
+      'true',
+    )
+    expect(await page.evaluate(() => window.savedCalls.length)).toBe(0)
   }, 60_000)
 
   it('saves what was typed, and clears the secret field afterwards', async () => {
-    const { page, context } = await mount()
-    try {
-      await page.getByLabel('Account ID', { exact: true }).fill('acct-9')
-      await page.getByLabel('API token', { exact: true }).fill('secret')
-      await page.getByRole('button', { name: 'Save Cloudflare settings' }).click()
-      await expectText(page, '.cf-saved', 'Cloudflare settings saved.')
-      expect(await page.evaluate(() => window.savedCalls)).toEqual([
-        [{ apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: 'acct-9', gatewayId: '' }, 'secret'],
-      ])
-      // Write-only: the typed secret does not survive the save.
-      expect(await page.getByLabel('API token', { exact: true }).inputValue()).toBe('')
-    } finally {
-      await context.close()
-    }
+    const { page } = await mount()
+    await page.getByLabel('Account ID', { exact: true }).fill('acct-9')
+    await page.getByLabel('API token', { exact: true }).fill('secret')
+    await page.getByRole('button', { name: 'Save Cloudflare settings' }).click()
+    await expectText(page, '.cf-saved', 'Cloudflare settings saved.')
+    expect(await page.evaluate(() => window.savedCalls)).toEqual([
+      [{ apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: 'acct-9', gatewayId: '' }, 'secret'],
+    ])
+    // Write-only: the typed secret does not survive the save.
+    expect(await page.getByLabel('API token', { exact: true }).inputValue()).toBe('')
   }, 60_000)
 
   it('withdraws the confirmation as soon as a field is edited again', async () => {
-    const { page, context } = await mount()
-    try {
-      await page.getByRole('button', { name: 'Save Cloudflare settings' }).click()
-      await expectText(page, '.cf-saved', 'Cloudflare settings saved.')
-      await page.getByLabel('Account ID', { exact: true }).fill('acct-9')
-      // The confirmation described values that are no longer the stored ones.
-      await expectText(page, '.cf-saved', '')
-    } finally {
-      await context.close()
-    }
+    const { page } = await mount()
+    await page.getByRole('button', { name: 'Save Cloudflare settings' }).click()
+    await expectText(page, '.cf-saved', 'Cloudflare settings saved.')
+    await page.getByLabel('Account ID', { exact: true }).fill('acct-9')
+    // The confirmation described values that are no longer the stored ones.
+    await expectText(page, '.cf-saved', '')
   }, 60_000)
 
   it('submits with Enter from a field, as a form is expected to', async () => {
-    const { page, context } = await mount()
-    try {
-      await page.getByLabel('Account ID', { exact: true }).fill('acct-9')
-      await page.getByLabel('Account ID', { exact: true }).press('Enter')
-      await expectText(page, '.cf-saved', 'Cloudflare settings saved.')
-    } finally {
-      await context.close()
-    }
+    const { page } = await mount()
+    await page.getByLabel('Account ID', { exact: true }).fill('acct-9')
+    await page.getByLabel('Account ID', { exact: true }).press('Enter')
+    await expectText(page, '.cf-saved', 'Cloudflare settings saved.')
   }, 60_000)
 })
