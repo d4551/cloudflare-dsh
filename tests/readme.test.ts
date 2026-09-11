@@ -262,23 +262,35 @@ describe('the tool catalogue', () => {
   })
 })
 
-/** What the tree holds, as a plain object a failure prints legibly. */
-const measuredCounts = (): Record<string, string> =>
-  Object.fromEntries([...defined].map(([module, tools]) => [module, String(tools.length)]))
+/**
+ * What the tree holds per tool family, as a plain object a failure prints
+ * legibly. The page is organised by family — `tools/ai`, `tools/data` — because
+ * that is how the server mounts them, so the measured counts aggregate the
+ * per-file map by first path segment; a tool moving between files inside one
+ * family changes no stated number, and a tool added anywhere changes one.
+ */
+const measuredCounts = (): Record<string, string> => {
+  const families = new Map<string, number>()
+  for (const [module, tools] of defined) {
+    const family = module.split('/')[0] ?? module
+    families.set(family, (families.get(family) ?? 0) + tools.length)
+  }
+  return Object.fromEntries([...families].map(([family, count]) => [family, String(count)]))
+}
 
 /** What a pattern claims, keyed the same way, so a missing claim is a missing key. */
 const statedCounts = (pattern: RegExp): Record<string, string> =>
   Object.fromEntries(claimed(readme, pattern).map((groups) => [groups[0] ?? '', groups[1] ?? '']))
 
 describe('every stated count is the measured one', () => {
-  it('heads each catalogue section with the number of tools in that module', () => {
-    expect(statedCounts(/^### .* — `cloudflare-dsh\/tools\/([a-z0-9-]+)` \((\d+)\)$/gm)).toEqual(
+  it('heads each catalogue section with the number of tools in that family', () => {
+    expect(statedCounts(/^### .* — `cloudflare-dsh\/tools\/([a-z0-9/-]+)` \((\d+)\)$/gm)).toEqual(
       measuredCounts(),
     )
   })
 
   it('labels each module in the architecture diagram with the same number', () => {
-    expect(statedCounts(/tools\/([a-z0-9-]+) — (\d+) tools/g)).toEqual(measuredCounts())
+    expect(statedCounts(/tools\/([a-z0-9/-]+) — (\d+) tools/g)).toEqual(measuredCounts())
   })
 
   it('states the total once at the top of the page', () => {

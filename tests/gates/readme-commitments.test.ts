@@ -10,6 +10,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
+import { CLOUDFLARE_MCP_SERVERS } from '../../packages/bundle/src/mcp/index.ts'
 import { read, root } from './support.ts'
 
 /**
@@ -33,7 +34,7 @@ function collected(config: string): string[] {
   const listed = JSON.parse(
     execFileSync(
       'env',
-      [...WORKER_MARKERS.flatMap((marker) => ['-u', marker]), 'bunx', 'vitest', 'list', '--config', config, '--json'],
+      [...WORKER_MARKERS.flatMap((marker) => ['-u', marker]), 'bun', 'x', 'vitest', 'list', '--config', config, '--json'],
       { cwd: root(''), encoding: 'utf8' },
     ),
   ) as readonly { readonly name: string }[]
@@ -64,12 +65,12 @@ const commitments = (): { readonly commitment: string; readonly tests: string[] 
 
 describe('the accessibility commitments', () => {
   it('states the number of hosted MCP servers the module actually exports', () => {
-    // The page said "eight" while the module carried eight, and the two were
-    // kept in step by nobody: `mcp.test.ts` pinned the count independently, so
-    // editing one literal left the other orphaned.
+    // The page's count and the module's exports are held together by reading
+    // both, so editing one literal orphans the other out loud. `mcp.test.ts`
+    // pins the count independently; this holds the page to it.
     const readme = read('README.md')
     const stated = [...readme.matchAll(/\*\*(\d+) hosted MCP servers\*\*/gu)].map((m) => Number(m[1]))
-    expect(stated).toEqual([8])
+    expect(stated).toEqual([CLOUDFLARE_MCP_SERVERS.length])
   })
 
   it('parses the commitments table rather than finding nothing in it', () => {

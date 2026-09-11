@@ -38,13 +38,6 @@ function honouring(request: Request): Promise<Response> {
   })
 }
 
-function ok(): Response {
-  return new Response(JSON.stringify({ success: true, errors: [], messages: [], result: [] }), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  })
-}
-
 it('every mid-flight cancelled call settles as AbortError', async () => {
   const settled = await Promise.all(
     Array.from({ length: BATCH }, () => {
