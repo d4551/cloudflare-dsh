@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import * as aiTools from '../src/tools/ai.ts'
-import * as dataTools from '../src/tools/data.ts'
+import * as aiTools from '../src/tools/ai/index.ts'
+import * as dataTools from '../src/tools/data/index.ts'
 import * as metaTools from '../src/tools/meta.ts'
 import * as webTools from '../src/tools/web.ts'
+import { type JsonValue } from '../src/tools/_shared/json.ts'
 import { type Harness, PNG_1X1, envelope, makeHarness } from './harness.ts'
 
 type Fetch = (request: Request) => Promise<Response>
@@ -11,7 +12,7 @@ type Fetch = (request: Request) => Promise<Response>
  * Every tool, with arguments that pass its schema and a response its output
  * schema admits, so the only thing that can end the call is the cancellation.
  */
-const CASES: [string, (fetchImpl: Fetch) => Harness, Record<string, unknown>, () => Response][] = [
+const CASES: [string, (fetchImpl: Fetch) => Harness, Record<string, JsonValue>, () => Response][] = [
   ['cloudflare_ai_run', (f) => makeHarness(aiTools, f), { model: '@cf/m', input: {} }, () => envelope({})],
   ['cloudflare_ai_models_search', (f) => makeHarness(aiTools, f), {}, () => envelope([])],
   ['cloudflare_ai_model_schema', (f) => makeHarness(aiTools, f), { model: '@cf/m' }, () => envelope({})],
@@ -158,10 +159,12 @@ describe('every tool forwards the caller signal to Cloudflare', () => {
   // `timeoutMs` is declarative: the registry does not interrupt a body, so a
   // tool that ignores `exec.signal` runs to completion however long ago the
   // caller gave up. The request must carry the signal, and the call must end
-  // as the cancellation it was.
-  it.each(CASES)(
-    '%s: the request follows the signal, and the call is reported aborted',
-    async (name, harness, args, respond) => {
+  // as the cancellation it was. The walk is a loop over the registry rather
+  // than a generated case list, so a tool added tomorrow is covered without
+  // this file naming it; a failure names its tool through the labelled
+  // expectations.
+  it('every tool: the request follows the signal, and the call is reported aborted', async () => {
+    for (const [name, harness, args, respond] of CASES) {
       const controller = new AbortController()
       let followed: boolean | undefined
       const h = harness(async (request) => {
@@ -171,10 +174,10 @@ describe('every tool forwards the caller signal to Cloudflare', () => {
         return respond()
       })
       const result = await h.execute(name, args, controller.signal)
-      expect(followed).toBe(true)
-      expect(result).toMatchObject({ isError: true, error: { info: { code: 'ABORTED' } } })
-    },
-  )
+      expect(followed, name).toBe(true)
+      expect(result, name).toMatchObject({ isError: true, error: { info: { code: 'ABORTED' } } })
+    }
+  })
 })
 
 /** Resolve after the client would have aborted a request whose budget is a few milliseconds. */
