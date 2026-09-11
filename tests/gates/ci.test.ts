@@ -251,7 +251,9 @@ describe('nothing the gates stand on is left unread', () => {
     // `.gitignore` is the root of trust: the file list every invariant scans
     // comes from git, and the formatter's and linter's ignore lists are checked
     // against this one. A source directory added here would empty all three at
-    // once and leave every gate green.
+    // once and leave every gate green. The Playwright browser download the
+    // a11y lane needs is provisioned outside the workspace (a per-run cache
+    // path), so nothing third-party enters the tree this gate polices.
     expect(
       read('.gitignore')
         .split('\n')
