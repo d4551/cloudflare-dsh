@@ -9,6 +9,13 @@ import * as webTools from '../src/tools/web.ts'
 import { PNG_1X1, envelope, makeHarness } from './harness.ts'
 import { CASES } from './cases.ts'
 
+/**
+ * Budget for the whole-registry walks. Each case builds a full composition,
+ * and thirty-six of them at once take longer than the runner's default on a
+ * loaded machine; the bound stays finite so a hung walk still fails.
+ */
+const WALK_TIMEOUT_MS = 30_000
+
 describe('every tool forwards the caller signal to Cloudflare', () => {
   it('covers all 36 tools', () => {
     expect(CASES).toHaveLength(36)
@@ -22,23 +29,27 @@ describe('every tool forwards the caller signal to Cloudflare', () => {
   // this file naming it; a failure names its tool through the labelled
   // expectations. Each case owns its controller, harness and closure, so the
   // walk runs the cases concurrently.
-  it('every tool: the request follows the signal, and the call is reported aborted', async () => {
-    await Promise.all(
-      CASES.map(async ([name, harness, args, respond]) => {
-        const controller = new AbortController()
-        let followed: boolean | undefined
-        const h = harness(async (request) => {
-          // Cancel while the request is in flight, then ask the request itself.
-          controller.abort()
-          followed = request.signal.aborted
-          return respond()
-        })
-        const result = await h.execute(name, args, controller.signal)
-        expect(followed, name).toBe(true)
-        expect(result, name).toMatchObject({ isError: true, error: { info: { code: 'ABORTED' } } })
-      }),
-    )
-  })
+  it(
+    'every tool: the request follows the signal, and the call is reported aborted',
+    { timeout: WALK_TIMEOUT_MS },
+    async () => {
+      await Promise.all(
+        CASES.map(async ([name, harness, args, respond]) => {
+          const controller = new AbortController()
+          let followed: boolean | undefined
+          const h = harness(async (request) => {
+            // Cancel while the request is in flight, then ask the request itself.
+            controller.abort()
+            followed = request.signal.aborted
+            return respond()
+          })
+          const result = await h.execute(name, args, controller.signal)
+          expect(followed, name).toBe(true)
+          expect(result, name).toMatchObject({ isError: true, error: { info: { code: 'ABORTED' } } })
+        }),
+      )
+    },
+  )
 })
 
 /** Resolve after the client would have aborted a request whose budget is a few milliseconds. */

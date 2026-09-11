@@ -155,20 +155,20 @@ export interface Harness {
    * Execute one call through the real registry and return the result the
    * agent loop would receive, error or success.
    */
-  execute(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<ToolExecutionResult>
+  execute(name: string, args: Record<string, JsonValue>, signal?: AbortSignal): Promise<ToolExecutionResult>
   /**
    * Execute one call and resolve its canonical value, which has passed
    * validation against the tool's declared output schema; a failure rejects
    * with {@link ToolRunError}.
    */
-  run(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>
+  run(name: string, args: Record<string, JsonValue>, signal?: AbortSignal): Promise<JsonValue>
   /**
    * Render a hand-built value. The registry renders only values that passed
    * output validation, so the value (and the arguments) must satisfy the
    * declared schemas first; a test cannot render a shape the tool never
    * produces.
    */
-  render(name: string, args: Record<string, unknown>, value: JsonValue): ContentBlock[]
+  render(name: string, args: Record<string, JsonValue>, value: JsonValue): ContentBlock[]
 }
 
 /** Build a harness around one tool-registering plugin. */
@@ -185,11 +185,13 @@ export function makeHarness<C>(
   const attachments = options.attachments === false ? undefined : new MemoryAttachmentStore(ctx)
 
   // The registry injects the system-prompt service to publish tool guidance.
-  // There is no prompt here, so the three members it calls are inert.
+  // This composition publishes none, so the section builder returns an empty
+  // prompt and the tool list is empty — real implementations of "nothing to
+  // publish", which a call would observe rather than silently discard.
   ctx.provide('systemPrompt', {
-    section: () => () => {},
+    section: () => () => '',
     getSectionOrder: () => 0,
-    tools: () => () => {},
+    tools: () => () => [],
   })
   const tools = new ToolRuntime(ctx)
   const credentials = { resolve: () => 'tok' }
@@ -215,7 +217,7 @@ export function makeHarness<C>(
   plugin.apply(ctx, plugin.Config(pluginConfig))
 
   let calls = 0
-  const execute = (name: string, args: Record<string, unknown>, signal = new AbortController().signal) => {
+  const execute = (name: string, args: Record<string, JsonValue>, signal = new AbortController().signal) => {
     calls += 1
     return tools.execute({ callId: ToolCallId(`call-${calls}`), name, arguments: args, signal })
   }

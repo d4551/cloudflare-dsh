@@ -20,8 +20,7 @@ import {
 } from './base.ts'
 
 /** A rule entry's severity, whether written bare or beside its options. */
-const severityOf = (value: ConfigValue): ConfigValue | undefined =>
-  Array.isArray(value) ? value[0] : value
+const severityOf = (value: ConfigValue): ConfigValue | undefined => (Array.isArray(value) ? value[0] : value)
 
 /** An exact package version, the only spelling a pin can take. */
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/

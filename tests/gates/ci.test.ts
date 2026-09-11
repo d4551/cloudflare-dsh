@@ -96,7 +96,9 @@ describe('accessibility cannot be filtered', () => {
   })
 
   it('scans every surface with the whole rule set', () => {
-    expect(read('packages/client/tests/a11y.browser.test.tsx')).toContain('new AxeBuilder({ page }).analyze()')
+    expect(read('packages/client/tests/a11y.browser.test.tsx')).toContain(
+      'new AxeBuilder({ page }).analyze()',
+    )
   })
 
   it('gives the jsdom helper no way to take options, since that is where a filter would hide', () => {
@@ -123,7 +125,9 @@ describe('accessibility cannot be filtered', () => {
     // Rendering each surface separately and concatenating restarts `useId`, so
     // the page would carry id collisions no host could produce and the scan
     // would be reporting on a fixture rather than on the client.
-    expect(read('packages/client/tests/surfaces.tsx')).toContain('export const ASSEMBLED = renderToStaticMarkup(')
+    expect(read('packages/client/tests/surfaces.tsx')).toContain(
+      'export const ASSEMBLED = renderToStaticMarkup(',
+    )
   })
 
   it.each([

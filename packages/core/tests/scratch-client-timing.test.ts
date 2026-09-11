@@ -52,12 +52,10 @@ it('an already-cancelled signal rides fused onto the outgoing request', async ()
     return honouring(request).then(() => ok())
   })
 
-  const outcome = await client
-    .request({ ...spec, signal: controller.signal })
-    .then(
-      () => 'resolved' as const,
-      (error: NodeJS.ErrnoException) => error.name,
-    )
+  const outcome = await client.request({ ...spec, signal: controller.signal }).then(
+    () => 'resolved' as const,
+    (error: NodeJS.ErrnoException) => error.name,
+  )
 
   expect(outcome).toBe('AbortError')
   expect(requests).toHaveLength(1)

@@ -67,7 +67,7 @@ export interface TsConfigBase {
 export interface TsConfig {
   readonly include: readonly string[]
 }
-export interface KnipWorkspace {
+interface KnipWorkspace {
   readonly project?: readonly string[]
   readonly entry?: readonly string[]
   readonly ignore?: readonly string[]
@@ -87,16 +87,6 @@ export const code = tracked.filter((file) => /\.(ts|tsx|mjs|cjs|js|json|ya?ml)$/
  */
 export const tests = code.filter((file) => /(^|\/)tests\//.test(file))
 export const sources = code.filter((file) => /^packages\/[^/]+\/src\//.test(file))
-/**
- * Every TypeScript module in the tree, not only those under `src` and `tests`.
- *
- * The gate configuration is itself TypeScript — four vitest configs, three
- * tsdown configs and the two mutation-guard scripts — so a scan that stops at
- * the package directories cannot see the files that decide what the other
- * gates do. One escaped exactly there: a superseded doc block sat in
- * `vitest.a11y.config.ts` while this suite reported the tree clean.
- */
-export const modules = code.filter((file) => /\.tsx?$/.test(file))
 /**
  * Every Markdown page git tracks or would track: a page added but not yet
  * staged is part of the tree CI will see, so it is part of the tree the

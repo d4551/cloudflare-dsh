@@ -14,12 +14,16 @@ import { inlineCopy } from './scanners.ts'
 
 describe('no client component carries inline copy', () => {
   it('finds the components this gate holds', () => {
-    const components = sources.filter((file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'))
+    const components = sources.filter(
+      (file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'),
+    )
     expect(components.length).toBeGreaterThan(0)
   })
 
   it('finds no inline copy in any of them', () => {
-    const components = sources.filter((file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'))
+    const components = sources.filter(
+      (file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'),
+    )
     expect(components.flatMap((file) => inlineCopy(file, read(file)))).toEqual([])
   })
 })

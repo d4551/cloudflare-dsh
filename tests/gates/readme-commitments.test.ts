@@ -34,7 +34,16 @@ function collected(config: string): string[] {
   const listed = JSON.parse(
     execFileSync(
       'env',
-      [...WORKER_MARKERS.flatMap((marker) => ['-u', marker]), 'bun', 'x', 'vitest', 'list', '--config', config, '--json'],
+      [
+        ...WORKER_MARKERS.flatMap((marker) => ['-u', marker]),
+        'bun',
+        'x',
+        'vitest',
+        'list',
+        '--config',
+        config,
+        '--json',
+      ],
       { cwd: root(''), encoding: 'utf8' },
     ),
   ) as readonly { readonly name: string }[]
@@ -86,7 +95,10 @@ describe('the accessibility commitments', () => {
     // holds, which is what the prose list allowed.
     const readme = read('README.md')
     const rows = readme.slice(readme.indexOf('| Commitment ')).split('\n').slice(2)
-    const stated = rows.slice(0, rows.findIndex((line) => !line.startsWith('| ')))
+    const stated = rows.slice(
+      0,
+      rows.findIndex((line) => !line.startsWith('| ')),
+    )
     expect(commitments()).toHaveLength(stated.length)
   })
 

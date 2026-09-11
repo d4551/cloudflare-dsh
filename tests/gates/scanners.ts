@@ -44,8 +44,7 @@ const isMachineFacing = (node: Node, parent: Node | undefined): boolean => {
   if (parent.type !== 'BinaryExpression') return false
   const other = parent.left === node ? parent.right : parent.left
   return (
-    (other.type === 'UnaryExpression' && other.operator === 'typeof') ||
-    other.type === 'MemberExpression'
+    (other.type === 'UnaryExpression' && other.operator === 'typeof') || other.type === 'MemberExpression'
   )
 }
 

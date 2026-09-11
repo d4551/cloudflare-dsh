@@ -50,7 +50,10 @@ describe('summariseSessionLogs', () => {
 })
 
 /** A log row carrying the metadata the gateway records. */
-function row(sessionId: string, rest: Record<string, string | number | boolean> = {}): Record<string, string | number | boolean> {
+function row(
+  sessionId: string,
+  rest: Record<string, string | number | boolean> = {},
+): Record<string, string | number | boolean> {
   return { metadata: JSON.stringify({ sessionId }), ...rest }
 }
 

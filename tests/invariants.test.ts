@@ -67,7 +67,10 @@ describe('the lists every scan in this suite starts from', () => {
     // One labelled expectation per list: a failure names the list whose filter
     // stopped matching, which is the same report a generated case would give.
     for (const { name, list, required } of ROOTS) {
-      expect(required.filter((file) => !list.includes(file)), name).toEqual([])
+      expect(
+        required.filter((file) => !list.includes(file)),
+        name,
+      ).toEqual([])
     }
   })
 })

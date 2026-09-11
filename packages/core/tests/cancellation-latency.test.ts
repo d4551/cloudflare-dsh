@@ -46,12 +46,10 @@ it('every mid-flight cancelled call settles as AbortError', async () => {
         controller.abort()
         return honouring(request)
       })
-      return client
-        .request({ ...spec, signal: controller.signal })
-        .then(
-          () => 'resolved' as const,
-          (error: NodeJS.ErrnoException) => error.name,
-        )
+      return client.request({ ...spec, signal: controller.signal }).then(
+        () => 'resolved' as const,
+        (error: NodeJS.ErrnoException) => error.name,
+      )
     }),
   )
   expect(settled).toEqual(Array.from({ length: BATCH }, () => 'AbortError'))

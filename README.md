@@ -92,7 +92,7 @@ that value. The correlation is exact, not inferred from timestamps.
 | **A model provider**         | Two routes — `cloudflare-workers-ai` and `cloudflare-ai-gateway` — registered as a real `LlmAdapter`, streaming SSE into the harness chunk contract |
 | **Session cost attribution** | `cf-aig-metadata` carries the harness session id and call purpose, so gateway logs and billing join to sessions exactly                             |
 | **Web Client surfaces**      | A settings card, a per-session usage chip, and three tool views, all WCAG 2.2 AA                                                                    |
-| **MCP passthrough**          | Patch rows for Cloudflare's hosted MCP servers, off by default                                                                                       |
+| **MCP passthrough**          | Patch rows for Cloudflare's hosted MCP servers, off by default                                                                                      |
 
 ### Packages
 

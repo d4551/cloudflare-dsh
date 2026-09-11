@@ -8,12 +8,14 @@
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { aiModelSchemaSpec, aiModelsSearchSpec, aiRunSpec } from '../../specs/ai.ts'
 import {
-  aiModelSchemaSpec,
-  aiModelsSearchSpec,
-  aiRunSpec,
-} from '../../specs/ai.ts'
-import { PAGE_OUTCOME_PROPERTIES, PAGE_PARAMETER, pageNote, pageOutcome, requestedPage } from '../_shared/paging.ts'
+  PAGE_OUTCOME_PROPERTIES,
+  PAGE_PARAMETER,
+  pageNote,
+  pageOutcome,
+  requestedPage,
+} from '../_shared/paging.ts'
 import { isObject, type JsonValue } from '../_shared/json.ts'
 import { json, listing } from '../_shared/render.ts'
 import type { AiToolsConfig } from './config.ts'

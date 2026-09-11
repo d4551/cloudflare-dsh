@@ -5,7 +5,7 @@
  * a comment or a string that quotes the pattern it forbids. Parsing comes from
  * oxc-parser, the native parser the repository's linter and formatter run on.
  */
-import { parseSync, type Comment, type Program, type Span } from 'oxc-parser'
+import { parseSync, type Comment, type Program } from 'oxc-parser'
 
 /** One parsed module, with the text positions resolve against. */
 export interface Source {
@@ -25,9 +25,3 @@ export function parseSource(name: string, text: string): Source {
   if (failure !== undefined) throw new Error(`${name}: ${failure.message}`)
   return { name, text, program: parsed.program, comments: parsed.comments }
 }
-
-/** The one-based line a byte offset sits on. */
-export const lineOf = (text: string, start: number): number => text.slice(0, start).split('\n').length
-
-/** Where a node sits, as `file:line`, so a finding names its place. */
-export const at = (source: Source, node: Span): string => `${source.name}:${lineOf(source.text, node.start)}`

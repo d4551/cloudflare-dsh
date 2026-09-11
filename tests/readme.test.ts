@@ -168,7 +168,9 @@ const configured = PACKAGE_SOURCES.flatMap(sourcesUnder)
     if (entry.row === undefined) return []
     const own = fieldsIn(entry.file, read(entry.file))
     const fields =
-      own.length > 0 ? own : sourcesUnder(directoryOf(entry.file)).flatMap((file) => fieldsIn(file, read(file)))
+      own.length > 0
+        ? own
+        : sourcesUnder(directoryOf(entry.file)).flatMap((file) => fieldsIn(file, read(file)))
     return fields.length > 0 ? [{ row: entry.row, fields }] : []
   })
   .toSorted((left, right) => left.row.localeCompare(right.row))
@@ -227,7 +229,10 @@ describe('the tool scanner', () => {
 
   it('reads every tool in a module', () => {
     expect(
-      toolsIn('m.ts', ["defineTool({ name: 'cloudflare_a' })", "defineTool({ name: 'cloudflare_b' })"].join('\n')),
+      toolsIn(
+        'm.ts',
+        ["defineTool({ name: 'cloudflare_a' })", "defineTool({ name: 'cloudflare_b' })"].join('\n'),
+      ),
     ).toEqual(['cloudflare_a', 'cloudflare_b'])
   })
 
@@ -235,7 +240,10 @@ describe('the tool scanner', () => {
     // An output schema describes a field called `name`; a description quotes a
     // tool. Neither registers anything.
     expect(
-      toolsIn('m.ts', ["const output = { name: 'cloudflare_not_a_tool' }", "other({ name: 'cloudflare_x' })"].join('\n')),
+      toolsIn(
+        'm.ts',
+        ["const output = { name: 'cloudflare_not_a_tool' }", "other({ name: 'cloudflare_x' })"].join('\n'),
+      ),
     ).toEqual([])
   })
 

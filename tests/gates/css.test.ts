@@ -207,7 +207,13 @@ function unreadableColours(css: string): string[] {
     for (const property of ['color', ...NON_TEXT_PROPERTIES]) {
       const value = declaration(rule.body, property)
       if (value === undefined || colourOf(value, tokens) !== undefined) continue
-      if (value.toLowerCase().split(/\s+/u).some((word) => excused.has(word))) continue
+      if (
+        value
+          .toLowerCase()
+          .split(/\s+/u)
+          .some((word) => excused.has(word))
+      )
+        continue
       unreadable.push(`${rule.selector} { ${property}: ${value} }`)
     }
   }
@@ -244,9 +250,9 @@ describe('every colour the stylesheet paints is one the analyzer can read', () =
   })
 
   it('excuses the keywords that place no colour', () => {
-    expect(unreadableColours('.a { border: 1px solid transparent; outline: 1px solid currentColor }')).toEqual(
-      [],
-    )
+    expect(
+      unreadableColours('.a { border: 1px solid transparent; outline: 1px solid currentColor }'),
+    ).toEqual([])
   })
 
   it('reads every foreground the shipped stylesheet declares', () => {

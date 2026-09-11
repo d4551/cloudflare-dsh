@@ -57,6 +57,8 @@ describe('the Web Client surfaces', () => {
       readme.indexOf('## Web Client surfaces'),
       readme.indexOf('\n## ', readme.indexOf('## Web Client surfaces') + 1),
     )
-    expect([...new Set(slotsDocumented(section))].toSorted()).toEqual(slotsIn(CLIENT, read(CLIENT)).toSorted())
+    expect([...new Set(slotsDocumented(section))].toSorted()).toEqual(
+      slotsIn(CLIENT, read(CLIENT)).toSorted(),
+    )
   })
 })

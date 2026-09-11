@@ -237,9 +237,12 @@ export function aiSearchSyncSpec(instanceId: string): RequestSpec {
 
 // --- Vectorize ------------------------------------------------------------
 
-/** List Vectorize indexes. Note the `/v2/` version segment. */
+/** The Vectorize REST path; the `v2` segment is the API's own versioning. */
+const VECTORIZE_INDEXES = '/vectorize/v2/indexes'
+
+/** List Vectorize indexes. */
 export function vectorizeIndexListSpec(): RequestSpec {
-  return { method: 'GET', path: '/vectorize/v2/indexes' }
+  return { method: 'GET', path: VECTORIZE_INDEXES }
 }
 
 /**

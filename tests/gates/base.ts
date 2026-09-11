@@ -16,18 +16,17 @@ import { fileURLToPath } from 'node:url'
  */
 const REPO = fileURLToPath(new URL('../../', import.meta.url))
 
-export const root = (path: string): string => `${REPO}${path}`
+const root = (path: string): string => `${REPO}${path}`
 
 /**
  * Every file git tracks or would track: a new file that is not yet added is
  * part of the tree CI will see, so it is part of the tree these gates see.
  * Ignored files stay out, so build output cannot fail a gate.
  */
-export const tracked = execFileSync(
-  'git',
-  ['ls-files', '--cached', '--others', '--exclude-standard'],
-  { cwd: REPO, encoding: 'utf8' },
-)
+const tracked = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
+  cwd: REPO,
+  encoding: 'utf8',
+})
   .split('\n')
   .filter((line) => line !== '')
 
@@ -52,38 +51,15 @@ export interface OxfmtConfig {
   readonly ignorePatterns?: readonly string[]
   readonly overrides?: ConfigValue
 }
-export interface StrykerConfig {
-  readonly mutate: readonly string[]
-  readonly thresholds: Readonly<Record<string, number>>
-}
-export interface StrykerRunner {
-  readonly testRunner: string
-  readonly vitest: { readonly configFile: string }
-}
 export interface OxlintConfig {
   readonly categories: Readonly<Record<string, string>>
   readonly plugins: readonly string[]
   readonly rules?: Readonly<Record<string, ConfigValue>>
   readonly ignorePatterns?: readonly string[]
 }
-export interface TsConfigBase {
-  readonly compilerOptions: Readonly<Record<string, ConfigValue>>
-}
-export interface TsConfig {
-  readonly include: readonly string[]
-}
-export interface KnipWorkspace {
-  readonly project?: readonly string[]
-  readonly entry?: readonly string[]
-  readonly ignore?: readonly string[]
-  readonly ignoreDependencies?: readonly string[]
-}
-export interface KnipConfig {
-  readonly workspaces: Readonly<Record<string, KnipWorkspace>>
-}
 
 /** Code files: every tracked file a scanner could mean. */
-export const code = tracked.filter((file) => /\.(ts|tsx|mjs|cjs|js|json|ya?ml)$/.test(file))
+const code = tracked.filter((file) => /\.(ts|tsx|mjs|cjs|js|json|ya?ml)$/.test(file))
 
 /**
  * Every file under a tests directory, not only `*.test.ts`.
@@ -96,9 +72,6 @@ export const testFiles = code.filter((file) => /(^|\/)tests\//.test(file))
 
 /** Every published source module of the packages. */
 export const sources = code.filter((file) => /^packages\/[^/]+\/src\//.test(file))
-
-/** Every published Markdown page, which the diagram and commitment gates scan. */
-export const markdown = tracked.filter((file) => file.endsWith('.md'))
 
 /**
  * Every TypeScript module in the tree, not only those under `src` and `tests`.

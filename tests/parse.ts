@@ -65,10 +65,7 @@ function isAstNode(value: object | null | undefined): value is Node {
  * returns `false` to prune: the node itself stays visited, its subtree does
  * not get walked.
  */
-export function walk(
-  root: Node,
-  visit: (node: Node, parent: Node | undefined) => boolean | void,
-): void {
+export function walk(root: Node, visit: (node: Node, parent: Node | undefined) => boolean | void): void {
   const visitNode = (node: Node, parent: Node | undefined): void => {
     if (visit(node, parent) === false) return
     for (const [key, value] of Object.entries(node)) {
@@ -83,17 +80,4 @@ export function walk(
     }
   }
   visitNode(root, undefined)
-}
-
-/** The first node in the tree whose start sits at or after one offset. */
-export function firstNodeFrom(program: Program, offset: number): Node | undefined {
-  let best: Node | undefined
-  let bestStart = Number.POSITIVE_INFINITY
-  walk(program, (node) => {
-    if (node.start >= offset && node.start < bestStart) {
-      best = node
-      bestStart = node.start
-    }
-  })
-  return best
 }

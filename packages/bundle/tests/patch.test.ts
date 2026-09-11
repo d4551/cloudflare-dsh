@@ -81,7 +81,9 @@ describe('bundle manifest', () => {
       // The tool groups are directory modules, so their entries build to an
       // index file; web and meta stay single-file modules.
       const built =
-        subpath === './tools/ai' || subpath === './tools/data' ? `${subpath.slice(1)}/index` : subpath.slice(1)
+        subpath === './tools/ai' || subpath === './tools/data'
+          ? `${subpath.slice(1)}/index`
+          : subpath.slice(1)
       expect(manifest.exports[subpath]).toEqual({
         types: `./lib${built}.d.mts`,
         default: `./lib${built}.mjs`,
