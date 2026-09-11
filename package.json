@@ -29,12 +29,14 @@
     "@stryker-mutator/vitest-runner": "10.0.0",
     "@types/node": "^22.19.0",
     "@vitest/coverage-v8": "4.1.11",
-    "knip": "^6.0.0",
-    "oxfmt": "0.66.0",
-    "oxlint": "^1.81.0",
-    "publint": "^0.3.14",
+    "knip": "6.35.1",
+    "oxc-parser": "0.149.0",
+    "oxc-transform": "0.149.0",
+    "oxfmt": "0.67.0",
+    "oxlint": "1.82.0",
+    "publint": "0.3.24",
     "tsdown": "^0.23.0",
-    "typescript": "^6.0.0",
+    "typescript": "7.0.2",
     "vitest": "4.1.11"
   }
 }

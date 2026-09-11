@@ -2,10 +2,9 @@
  * The checks behind `verify-mutation-files.ts`, as pure functions.
  *
  * Each takes what it needs as data, so a test can hand it a synthetic report
- * and watch it fail; the script gathers the tree and prints. A gate nobody has
- * seen fail is not known to work.
+ * and watch it fail; the script gathers the tree and prints.
  */
-import ts from 'typescript'
+import { transformSync } from 'oxc-transform'
 
 /** The subset of Stryker's JSON report the guard reads. */
 export interface MutantResult {
@@ -78,16 +77,10 @@ export function unloadableMutants(report: MutationReport): string[] {
  * legitimate reason for a source file to produce no mutants.
  */
 export function isTypeOnly(text: string, fileName: string): boolean {
-  const { outputText } = ts.transpileModule(text, {
-    fileName,
-    compilerOptions: {
-      module: ts.ModuleKind.ESNext,
-      target: ts.ScriptTarget.ESNext,
-      jsx: ts.JsxEmit.ReactJSX,
-      removeComments: true,
-    },
-  })
-  return outputText.replace(/export\s*\{\s*\}\s*;?/g, '').trim() === ''
+  const { code, errors } = transformSync(fileName, text, { lang: fileName.endsWith('x') ? 'tsx' : 'ts' })
+  const failure = errors[0]
+  if (failure !== undefined) throw new Error(`${fileName}: ${failure.message}`)
+  return code.replace(/export\s*\{\s*\}\s*;?/g, '').trim() === ''
 }
 
 /**
@@ -96,9 +89,8 @@ export function isTypeOnly(text: string, fileName: string): boolean {
  * Stryker omits a file from its report when it produced no mutants, and a file
  * can produce none for an illegitimate reason: a `const` assertion silently
  * removes everything inside it from mutation, which once hid an entire locale
- * dictionary — 47 mutants, ten of them untested — behind a report that read as
- * complete. Whether a file has runtime code is decided by transpiling it, not
- * by a list anyone could append to.
+ * dictionary behind a report that looked complete. Whether a file has runtime
+ * code is decided by transpiling it, not by a list anyone could append to.
  */
 export function escapedFiles(
   report: MutationReport,

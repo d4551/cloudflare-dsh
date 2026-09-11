@@ -1,5 +1,5 @@
 /**
- * The README's measurable claims, and its diagrams, as a gate.
+ * The README's measurable claims, as a gate.
  *
  * Three kinds of rot reached the published page because nothing checked it.
  *
@@ -9,51 +9,19 @@
  * named only by suffix, so those names appeared nowhere and no reader could
  * search for them.
  *
- * The configuration tables fell behind their schemas: `cloudflare-llm` had
+ * And the configuration tables fell behind their schemas: `cloudflare-llm` had
  * grown three fields a `cordis.yml` could set and the page did not mention,
  * under a sentence promising that no tunable is hidden.
  *
- * And one diagram stopped rendering: Mermaid reads a semicolon as a statement
- * separator wherever one appears — inside the text of a `Note over` exactly as
- * much as between two statements — so a sentence written with one ended the
- * note early, the clause after it was read as an actor, and "How a model call
- * flows" became a parse error on the project page. Mermaid documents the entity
- * `#59;` as the way to write one that survives its lexer, and this suite
- * refuses that too: a reader of the source meets the escape rather than the
- * punctuation, and a diagram label that needs one is a sentence to rewrite. So
- * the rule is that no diagram carries a semicolon in any form.
- *
- * What this suite does not do is parse the diagrams. Parsing would mean the
- * `mermaid` package, whose published declarations import `type-fest` without
- * depending on it (mermaid-js/mermaid#6629): with `skipLibCheck` off the
- * compiler stops, and adding `type-fest` to satisfy it leaves knip reporting a
- * dependency no source file imports — whose only documented remedy is the
- * `ignoreDependencies` list the invariants forbid. Rather than soften one gate
- * to install another, this asserts the rule that actually failed and states
- * what it leaves unchecked: a malformed arrow or an unknown diagram keyword is
- * not caught here.
+ * The diagram, slot and commitment gates live beside this one in `tests/gates/`.
+ * What this file holds is the tool catalogue, the counts, and the configuration
+ * tables.
  */
-import { execFileSync } from 'node:child_process'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
+import { readdirSync, statSync } from 'node:fs'
+import { Visitor } from 'oxc-parser'
 import { describe, expect, it } from 'vitest'
-import { CLOUDFLARE_MCP_SERVERS } from '../packages/bundle/src/mcp/index.ts'
-
-const root = (path: string) => fileURLToPath(new URL(path, import.meta.url))
-const read = (file: string): string => readFileSync(root(`../${file}`), 'utf8')
-
-/**
- * Every Markdown file git tracks or would track: a page added but not yet
- * staged is part of the tree CI will see, so it is part of the tree this gate
- * sees. Ignored files stay out.
- */
-const markdown = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
-  cwd: root('..'),
-  encoding: 'utf8',
-})
-  .split('\n')
-  .filter((file) => file.endsWith('.md'))
+import { parseSource } from './gates/scan.ts'
+import { markdown, read, root } from './gates/support.ts'
 
 /** Every `.ts`/`.tsx` file under one directory of the repository. */
 function sourcesUnder(dir: string): string[] {
@@ -78,32 +46,28 @@ const PACKAGE_SOURCES = readdirSync(root('../packages')).map((pkg) => `packages/
  * text: `defineTool` is what makes a tool, so a `name` in an output schema or a
  * description that quotes one cannot be counted as a registration.
  */
-function toolsIn(file: string, text: string): string[] {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS)
+export function toolsIn(file: string, text: string): string[] {
+  const source = parseSource(file, text)
   const found: string[] = []
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'defineTool'
-    ) {
-      const [definition] = node.arguments
-      if (definition !== undefined && ts.isObjectLiteralExpression(definition)) {
-        for (const property of definition.properties) {
-          if (
-            ts.isPropertyAssignment(property) &&
-            ts.isIdentifier(property.name) &&
-            property.name.text === 'name' &&
-            ts.isStringLiteral(property.initializer)
-          ) {
-            found.push(property.initializer.text)
-          }
+  const visitor = new Visitor({
+    CallExpression: (node) => {
+      if (node.callee.type !== 'Identifier' || node.callee.name !== 'defineTool') return
+      const definition = node.arguments[0]
+      if (definition === undefined || definition.type !== 'ObjectExpression') return
+      for (const property of definition.properties) {
+        if (
+          property.type === 'Property' &&
+          property.key.type === 'Identifier' &&
+          property.key.name === 'name' &&
+          property.value.type === 'Literal' &&
+          typeof property.value.value === 'string'
+        ) {
+          found.push(property.value.value)
         }
       }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
+    },
+  })
+  visitor.visit(source.program)
   return found
 }
 
@@ -144,29 +108,24 @@ const named = (text: string): string[] => [...new Set(text.match(/cloudflare_[a-
  * a `Schema.object` shape is what `cordis.yml` may set, so a field added there
  * and nowhere else is exactly the kind that goes undocumented.
  */
-function fieldsIn(file: string, text: string): string[] {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS)
+export function fieldsIn(file: string, text: string): string[] {
+  const source = parseSource(file, text)
   const found: string[] = []
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === 'Schema' &&
-      node.expression.name.text === 'object'
-    ) {
-      const [shape] = node.arguments
-      if (shape !== undefined && ts.isObjectLiteralExpression(shape)) {
-        for (const property of shape.properties) {
-          if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name)) {
-            found.push(property.name.text)
-          }
-        }
+  const visitor = new Visitor({
+    CallExpression: (node) => {
+      if (node.callee.type !== 'MemberExpression') return
+      const object = node.callee.object
+      const property = node.callee.property
+      if (object.type !== 'Identifier' || object.name !== 'Schema') return
+      if (property.type !== 'Identifier' || property.name !== 'object') return
+      const shape = node.arguments[0]
+      if (shape === undefined || shape.type !== 'ObjectExpression') return
+      for (const entry of shape.properties) {
+        if (entry.type === 'Property' && entry.key.type === 'Identifier') found.push(entry.key.name)
       }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
+    },
+  })
+  visitor.visit(source.program)
   return found
 }
 
@@ -175,20 +134,21 @@ function fieldsIn(file: string, text: string): string[] {
  * Read from the tree so a new configured row cannot be added without the page
  * having to account for it.
  */
-function rowNameIn(file: string, text: string): string | undefined {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS)
-  for (const statement of source.statements) {
-    if (!ts.isVariableStatement(statement)) continue
-    const exported = statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
-    if (exported !== true) continue
-    for (const declaration of statement.declarationList.declarations) {
+export function rowNameIn(file: string, text: string): string | undefined {
+  const source = parseSource(file, text)
+  for (const statement of source.program.body) {
+    if (statement.type !== 'ExportNamedDeclaration') continue
+    const declaration = statement.declaration
+    if (declaration === null || declaration.type !== 'VariableDeclaration') continue
+    for (const declarator of declaration.declarations) {
       if (
-        ts.isIdentifier(declaration.name) &&
-        declaration.name.text === 'name' &&
-        declaration.initializer !== undefined &&
-        ts.isStringLiteral(declaration.initializer)
+        declarator.id.type === 'Identifier' &&
+        declarator.id.name === 'name' &&
+        declarator.init !== null &&
+        declarator.init.type === 'Literal' &&
+        typeof declarator.init.value === 'string'
       ) {
-        return declaration.initializer.text
+        return declarator.init.value
       }
     }
   }
@@ -208,9 +168,7 @@ const configured = PACKAGE_SOURCES.flatMap(sourcesUnder)
     if (entry.row === undefined) return []
     const own = fieldsIn(entry.file, read(entry.file))
     const fields =
-      own.length > 0
-        ? own
-        : sourcesUnder(directoryOf(entry.file)).flatMap((file) => fieldsIn(file, read(file)))
+      own.length > 0 ? own : sourcesUnder(directoryOf(entry.file)).flatMap((file) => fieldsIn(file, read(file)))
     return fields.length > 0 ? [{ row: entry.row, fields }] : []
   })
   .toSorted((left, right) => left.row.localeCompare(right.row))
@@ -259,146 +217,8 @@ const fieldsDocumented = (section: string): string[] =>
       return field?.[1] === undefined ? [] : [field[1]]
     })
 
-/** Every slot the client package names, read from its `*_SLOT` constants. */
-function slotsIn(file: string, text: string): string[] {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS)
-  const found: string[] = []
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text.endsWith('_SLOT') &&
-      node.initializer !== undefined &&
-      ts.isStringLiteral(node.initializer)
-    ) {
-      found.push(node.initializer.text)
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return found
-}
-
-/** The slot each row of the Web Client table names, from its second column. */
-const slotsDocumented = (section: string): string[] =>
-  section
-    .split('\n')
-    .filter((line) => line.startsWith('| '))
-    .flatMap((line) => {
-      const cell = line.slice(1).split('|')[1] ?? ''
-      const first = /`([a-z][a-zA-Z0-9.]*)`/.exec(cell)
-      return first?.[1] === undefined ? [] : [first[1]]
-    })
-
-/**
- * Budget for collecting a whole vitest suite as a subprocess. Collecting over a
- * thousand tests takes seconds locally and longer on a two-core runner; the
- * bound is finite so a hung collection fails rather than waits.
- */
-const COLLECTION_TIMEOUT_MS = 120_000
-
-/** Every test name vitest collects for one config, as `describe > it`. */
-function collected(config: string): string[] {
-  const listed = JSON.parse(
-    execFileSync('bunx', ['vitest', 'list', '--config', config, '--json'], {
-      cwd: root('..'),
-      encoding: 'utf8',
-      // A vitest run inherits the outer worker's environment; the listing must
-      // not believe it is one of this run's workers.
-      env: {
-        ...process.env,
-        VITEST: undefined,
-        VITEST_MODE: undefined,
-        VITEST_POOL_ID: undefined,
-        VITEST_WORKER_ID: undefined,
-      },
-    }),
-  ) as readonly { readonly name: string }[]
-  return listed.map((test) => test.name)
-}
-
-/**
- * The accessibility commitments and the test each one names.
- *
- * The page used to list these as prose "covered by tests", and one of them —
- * alternative text on a screenshot — outlived the code by two restarts: the
- * client's screenshot branch was deleted, so no test covered it and none could.
- * A commitment now carries the name of the test that holds it, and that name is
- * checked against what vitest actually collects.
- */
-const commitments = (): { readonly commitment: string; readonly tests: string[] }[] => {
-  const start = readme.indexOf('| Commitment ')
-  const rows = readme.slice(start).split('\n')
-  const found: { commitment: string; tests: string[] }[] = []
-  for (const line of rows.slice(2)) {
-    if (!line.startsWith('| ')) break
-    const [commitment, cited] = line.slice(1).split('|')
-    // Every name in the cell, not the first: a commitment about every input is
-    // not held by one input's test, and citing one would be the same over-claim
-    // in the citation that the prose list made in the commitment.
-    const tests = [...(cited ?? '').matchAll(/`([^`]+)`/g)].flatMap((match) =>
-      match[1] === undefined ? [] : [match[1]],
-    )
-    if (tests.length > 0) found.push({ commitment: (commitment ?? '').trim(), tests })
-  }
-  return found
-}
-
-/** One fenced Mermaid block. */
-interface Diagram {
-  readonly file: string
-  /** 1-based line of the block's first line, so a finding names it. */
-  readonly line: number
-  readonly body: readonly string[]
-}
-
-/** Assembled rather than written, so this file is not itself one long fence. */
-const FENCE = '`'.repeat(3)
-
-/**
- * The Mermaid blocks in one Markdown file.
- *
- * A block whose fence was never closed still yields its content: a fence
- * someone forgot to close must not be how a diagram slips past the rules.
- */
-function diagramsIn(file: string, text: string): Diagram[] {
-  const found: Diagram[] = []
-  let line: number | undefined
-  let body: string[] = []
-  for (const [index, content] of text.split('\n').entries()) {
-    if (line === undefined) {
-      if (content === `${FENCE}mermaid`) {
-        line = index + 2
-        body = []
-      }
-    } else if (content === FENCE) {
-      found.push({ file, line, body })
-      line = undefined
-    } else {
-      body.push(content)
-    }
-  }
-  if (line !== undefined) found.push({ file, line, body })
-  return found
-}
-
-/** What Mermaid reads as the end of a statement, wherever it appears. */
-const SEPARATOR = ';'
-
-/** Every line of a diagram carrying a raw statement separator. */
-const separators = (diagram: Diagram): string[] =>
-  diagram.body.flatMap((text, index) =>
-    text.includes(SEPARATOR) ? [`${diagram.file}:${diagram.line + index}: ${text.trim()}`] : [],
-  )
-
-/** A block Mermaid would be handed nothing to draw. */
-const isBlank = (diagram: Diagram): boolean => diagram.body.every((text) => text.trim() === '')
-
-const page = (...lines: readonly string[]): string => lines.join('\n')
-
 describe('the tool scanner', () => {
-  // The scanner is proven on snippets before it is trusted on the tree: a gate
-  // nobody has seen fail is not known to work.
+  // The scanner is proven on snippets before it is trusted on the tree.
   it('reads the name of a defined tool', () => {
     expect(
       toolsIn('m.ts', "ctx.tools.register(defineTool({ name: 'cloudflare_x', description: 'd' }))"),
@@ -407,7 +227,7 @@ describe('the tool scanner', () => {
 
   it('reads every tool in a module', () => {
     expect(
-      toolsIn('m.ts', page("defineTool({ name: 'cloudflare_a' })", "defineTool({ name: 'cloudflare_b' })")),
+      toolsIn('m.ts', ["defineTool({ name: 'cloudflare_a' })", "defineTool({ name: 'cloudflare_b' })"].join('\n')),
     ).toEqual(['cloudflare_a', 'cloudflare_b'])
   })
 
@@ -415,10 +235,7 @@ describe('the tool scanner', () => {
     // An output schema describes a field called `name`; a description quotes a
     // tool. Neither registers anything.
     expect(
-      toolsIn(
-        'm.ts',
-        page("const output = { name: 'cloudflare_not_a_tool' }", "other({ name: 'cloudflare_x' })"),
-      ),
+      toolsIn('m.ts', ["const output = { name: 'cloudflare_not_a_tool' }", "other({ name: 'cloudflare_x' })"].join('\n')),
     ).toEqual([])
   })
 
@@ -498,27 +315,12 @@ describe('the configuration schemas', () => {
     expect(documentedRows()).toEqual(configured.map((row) => row.row).toSorted())
   })
 
-  it.each(configured.map((row) => [row.row]))('documents every field %s accepts, and invents none', (row) => {
-    const found = configured.find((entry) => entry.row === row)
-    expect(fieldsDocumented(sectionFor(row)).toSorted()).toEqual((found?.fields ?? []).toSorted())
-  })
-})
-
-describe('the Web Client surfaces', () => {
-  const CLIENT = 'packages/client/src/index.ts'
-
-  it('reads the slots a package names', () => {
-    expect(slotsIn('c.ts', "export const A_SLOT = 'one.two'\nconst other = 'three'")).toEqual(['one.two'])
-  })
-
-  it('names every slot the client contributes into, and no other', () => {
-    const section = readme.slice(
-      readme.indexOf('## Web Client surfaces'),
-      readme.indexOf('\n## ', readme.indexOf('## Web Client surfaces') + 1),
-    )
-    expect([...new Set(slotsDocumented(section))].toSorted()).toEqual(
-      slotsIn(CLIENT, read(CLIENT)).toSorted(),
-    )
+  it('documents every field each configured row accepts, and invents none', () => {
+    // One labelled expectation per row: a failure names the row whose table
+    // drifted, which is the same report a generated case would give.
+    for (const entry of configured) {
+      expect(fieldsDocumented(sectionFor(entry.row)).toSorted(), entry.row).toEqual(entry.fields.toSorted())
+    }
   })
 })
 
@@ -527,9 +329,9 @@ describe('the lists this suite derives from the tree', () => {
    * Each derived list, and what it must contain.
    *
    * Every check below filters one of these and asserts the filter came back
-   * empty, or generates a case per entry — and an empty list satisfies both
-   * shapes without reading a thing. `allDefined` and the diagram list already
-   * carry a guard of their own; these did not.
+   * empty, or walks it with a labelled expectation — and an empty list
+   * satisfies both shapes without reading a thing. `allDefined` and the
+   * diagram list already carry a guard of their own; these did not.
    *
    * Membership rather than a floor: a count drifts with the tree, while a
    * `configured` that stopped matching an exported `name`, or a commitments
@@ -550,134 +352,8 @@ describe('the lists this suite derives from the tree', () => {
     expect(configured.map((row) => row.row)).not.toContain('cloudflare-client')
   })
 
-  it('parses the commitments table rather than finding nothing in it', () => {
-    // The count check below compares two readings of the same table, so both
-    // going to zero passes it; this is the reading that cannot.
-    expect(commitments().map((row) => row.commitment)).toContain(
-      'All user-facing copy routes through the dictionary, accessible names included',
-    )
-  })
-
   it('reads the markdown pages the diagram scan walks', () => {
     expect(markdown).toContain('README.md')
     expect(markdown).toContain('QUALITY-LOOP.md')
-  })
-})
-
-describe('the accessibility commitments', () => {
-  it('states the number of hosted MCP servers the module actually exports', () => {
-    // The page said "eight" while the module carried eight, and the two were
-    // kept in step by nobody: `mcp.test.ts` pinned the count independently, so
-    // editing one literal left the other orphaned.
-    const stated = [...readme.matchAll(/\*\*(\d+) hosted MCP servers\*\*/gu)].map((m) => Number(m[1]))
-    expect(stated).toEqual([CLOUDFLARE_MCP_SERVERS.length])
-  })
-
-  it('names a test for every commitment it makes', () => {
-    // A row whose second column carries no test name is a commitment nothing
-    // holds, which is what the prose list allowed.
-    const rows = readme.slice(readme.indexOf('| Commitment ')).split('\n').slice(2)
-    const stated = rows.slice(
-      0,
-      rows.findIndex((line) => !line.startsWith('| ')),
-    )
-    expect(commitments()).toHaveLength(stated.length)
-  })
-
-  it('names only tests that exist and run', { timeout: COLLECTION_TIMEOUT_MS }, () => {
-    // All three lanes: a commitment may be held in the unit suite, in Chromium,
-    // or — for the criteria axe has no rule for — by a gate that computes the
-    // answer from the shipped stylesheet.
-    const running = new Set([
-      ...collected('vitest.config.ts'),
-      ...collected('vitest.a11y.config.ts'),
-      ...collected('vitest.invariants.config.ts'),
-    ])
-    expect(
-      commitments()
-        .flatMap((row) => row.tests)
-        .filter((test) => !running.has(test)),
-    ).toEqual([])
-  })
-})
-
-describe('the diagram scanner', () => {
-  it('reads a block and reports the line its first line sits on', () => {
-    expect(
-      diagramsIn('page.md', page('# Title', '', `${FENCE}mermaid`, 'graph LR', '  A --> B', FENCE)),
-    ).toEqual([{ file: 'page.md', line: 4, body: ['graph LR', '  A --> B'] }])
-  })
-
-  it('reads every block on a page, not just the first', () => {
-    expect(
-      diagramsIn(
-        'page.md',
-        page(`${FENCE}mermaid`, 'graph LR', FENCE, '', `${FENCE}mermaid`, 'graph TD', FENCE),
-      ).map((diagram) => diagram.body),
-    ).toEqual([['graph LR'], ['graph TD']])
-  })
-
-  it('reads a block whose fence was never closed, so nothing escapes by omission', () => {
-    expect(diagramsIn('page.md', page(`${FENCE}mermaid`, 'graph LR'))).toEqual([
-      { file: 'page.md', line: 2, body: ['graph LR'] },
-    ])
-  })
-
-  it('leaves a fence of another language alone', () => {
-    expect(diagramsIn('page.md', page(`${FENCE}ts`, 'const a = 1', FENCE))).toEqual([])
-  })
-})
-
-describe('the separator rule', () => {
-  it('names the line and quotes it, so a finding is actionable', () => {
-    const [diagram] = diagramsIn(
-      'page.md',
-      page(
-        `${FENCE}mermaid`,
-        'sequenceDiagram',
-        '  A->>B: go',
-        `  Note over A: remembered${SEPARATOR} the token never is.`,
-        FENCE,
-      ),
-    )
-    expect(diagram === undefined ? [] : separators(diagram)).toEqual([
-      'page.md:4: Note over A: remembered; the token never is.',
-    ])
-  })
-
-  it('passes a diagram whose prose carries no separator', () => {
-    expect(separators({ file: 'page.md', line: 1, body: ['graph LR', '  A --> B'] })).toEqual([])
-  })
-
-  it('refuses the entity form too, since a reader would not know which was meant', () => {
-    expect(
-      separators({ file: 'page.md', line: 1, body: ['sequenceDiagram', '  A->>B: one#59; two'] }),
-    ).toEqual(['page.md:2: A->>B: one#59; two'])
-  })
-})
-
-describe('the blank-block rule', () => {
-  it('finds a block with nothing in it to draw', () => {
-    expect(isBlank({ file: 'page.md', line: 1, body: ['', '   '] })).toBe(true)
-  })
-
-  it('leaves a block with a diagram in it alone', () => {
-    expect(isBlank({ file: 'page.md', line: 1, body: ['graph LR'] })).toBe(false)
-  })
-})
-
-describe('the documentation', () => {
-  const diagrams = markdown.flatMap((file) => diagramsIn(file, read(file)))
-
-  it('carries diagrams for this gate to hold', () => {
-    expect(diagrams.length).toBeGreaterThan(0)
-  })
-
-  it('writes no statement separator inside one', () => {
-    expect(diagrams.flatMap(separators)).toEqual([])
-  })
-
-  it('leaves none of them empty', () => {
-    expect(diagrams.filter(isBlank).map((diagram) => `${diagram.file}:${diagram.line}`)).toEqual([])
   })
 })

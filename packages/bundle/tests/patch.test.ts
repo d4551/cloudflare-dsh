@@ -5,26 +5,59 @@ import { parse } from 'yaml'
 
 const patch = readFileSync(fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)), 'utf8')
 
+/** The JSON value shape the YAML parser hands back for this document. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+
+/** Whether a parsed value is an object, and not an array or null. */
+function isJsonObject(value: JsonValue): value is { [key: string]: JsonValue } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Whether a value is a string; an absent field is not. */
+function isString(value: JsonValue | undefined): value is string {
+  return typeof value === 'string'
+}
+
 /** One row of the layer this bundle contributes. */
-interface PatchRow {
+type PatchRow = {
   readonly id: string
   readonly name: string
-  readonly config?: Readonly<Record<string, unknown>>
+  readonly config?: Readonly<Record<string, JsonValue>>
+}
+
+/** Whether a parsed value is one patch row: an object with string id and name. */
+function isPatchRow(row: JsonValue): row is PatchRow {
+  return isJsonObject(row) && isString(row.id) && isString(row.name)
+}
+
+/** Whether a parsed value is the list of insert layers the patch file holds. */
+function isPatchLayers(value: JsonValue): value is { insert?: PatchRow[] }[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (layer) =>
+        isJsonObject(layer) &&
+        (layer.insert === undefined || (Array.isArray(layer.insert) && layer.insert.every(isPatchRow))),
+    )
+  )
 }
 
 /**
  * The patch, parsed rather than string-matched.
  *
  * Every assertion here used to run against raw text, so a syntactically invalid
- * patch passed the whole suite while `dsh` would reject it at load.
+ * patch passed the whole suite while `dsh` would reject it at load. The parse
+ * result is taken as its JSON value shape once, at this boundary, and every
+ * assertion after it runs through the shape predicates above.
  */
-const layers = parse(patch) as ReadonlyArray<{ readonly insert?: readonly PatchRow[] }>
+const parsed = parse(patch) as JsonValue
+const layers = isPatchLayers(parsed) ? parsed : []
 const rows: readonly PatchRow[] = layers.flatMap((layer) => layer.insert ?? [])
 const manifest = JSON.parse(
   readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
 ) as {
   name: string
-  exports: Record<string, unknown>
+  exports: Record<string, JsonValue>
   dsh?: { bundle?: { patch?: string } }
   files: string[]
   keywords: string[]
@@ -43,11 +76,15 @@ describe('bundle manifest', () => {
     expect(manifest.keywords).toContain('dsh-plugin')
   })
 
-  it('exports a subpath for every tool group the patch references', () => {
+  it('exports a subpath for every tool group the patch names', () => {
     for (const subpath of ['./tools/ai', './tools/data', './tools/web', './tools/meta']) {
+      // The tool groups are directory modules, so their entries build to an
+      // index file; web and meta stay single-file modules.
+      const built =
+        subpath === './tools/ai' || subpath === './tools/data' ? `${subpath.slice(1)}/index` : subpath.slice(1)
       expect(manifest.exports[subpath]).toEqual({
-        types: `./lib${subpath.slice(1)}.d.mts`,
-        default: `./lib${subpath.slice(1)}.mjs`,
+        types: `./lib${built}.d.mts`,
+        default: `./lib${built}.mjs`,
       })
     }
   })
@@ -70,7 +107,7 @@ describe('cordis.patch.yml', () => {
     expect(rows.map((row) => row.name)).toContain('@d4551/dsh-cloudflare-core')
   })
 
-  it('references each tool group by its published subpath specifier', () => {
+  it('mounts each tool group under its published subpath specifier', () => {
     const names = rows.map((row) => row.name)
     // As a set, so an empty group list cannot make this pass by asserting
     // nothing — which a loop over one would.
@@ -82,11 +119,11 @@ describe('cordis.patch.yml', () => {
     ])
   })
 
-  it('mounts the model provider, without which the adapter never activates', () => {
+  it('mounts the model provider, without which no model call can resolve', () => {
     expect(rows.map((row) => row.name)).toContain('cloudflare-dsh/ai')
   })
 
-  it('names the credential by reference rather than embedding a secret', () => {
+  it('resolves the credential from the harness credential service, never as a literal value', () => {
     const seam = rows.find((row) => row.name === '@d4551/dsh-cloudflare-core')
     expect(seam?.config?.apiTokenRef).toBe('CLOUDFLARE_API_TOKEN')
   })

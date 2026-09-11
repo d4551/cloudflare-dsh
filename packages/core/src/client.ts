@@ -112,12 +112,15 @@ function parseEnvelope<T>(text: string): EnvelopeRead<T> {
 export class CloudflareClient {
   readonly #options: CloudflareClientOptions
   readonly #baseUrl: string
+  /** The transport injected at construction — the only I/O boundary of this class. */
+  readonly #transmit: FetchLike
 
-  constructor(options: CloudflareClientOptions) {
-    this.#options = options
+  constructor(input: CloudflareClientOptions) {
+    this.#options = input
+    this.#transmit = input.fetch
     // Validated here so a bad REST root fails at plugin load, not at the
     // first call — and so path containment has a known origin to contain to.
-    this.#baseUrl = assertSafeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL)
+    this.#baseUrl = assertSafeBaseUrl(input.baseUrl ?? DEFAULT_BASE_URL)
   }
 
   /** The credential reference this client authenticates with. */
@@ -160,8 +163,11 @@ export class CloudflareClient {
   async #send<T>(spec: RequestSpec): Promise<CloudflareEnvelope<T>> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
-    const response = await this.#options.fetch(this.#buildRequest(spec, token))
+    const request = this.#buildRequest(spec, token)
+    request.signal.throwIfAborted()
+    const response = await this.#transmit(request)
     const read = await readEnvelope<T>(response)
+    request.signal.throwIfAborted()
     const retryAfter = response.headers.get('retry-after')
 
     if (!read.ok) {
@@ -216,8 +222,11 @@ export class CloudflareClient {
   async #sendText(spec: RequestSpec): Promise<string> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
-    const response = await this.#options.fetch(this.#buildRequest(spec, token))
+    const request = this.#buildRequest(spec, token)
+    request.signal.throwIfAborted()
+    const response = await this.#transmit(request)
     const body = await response.text()
+    request.signal.throwIfAborted()
     if (!response.ok) throw this.#rawFailure(response, body, ref)
     return body
   }
@@ -237,7 +246,10 @@ export class CloudflareClient {
   async #sendBytes(spec: RequestSpec): Promise<BinaryBody> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
-    const response = await this.#options.fetch(this.#buildRequest(spec, token))
+    const request = this.#buildRequest(spec, token)
+    request.signal.throwIfAborted()
+    const response = await this.#transmit(request)
+    request.signal.throwIfAborted()
     if (!response.ok) throw this.#rawFailure(response, await response.text(), ref)
     return {
       bytes: new Uint8Array(await response.arrayBuffer()),
