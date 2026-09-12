@@ -135,6 +135,16 @@ describe('SettingsCard', () => {
     )
   })
 
+  it('saves the edited token reference, which is the field whose invalid path is tested elsewhere', () => {
+    // Every other save test keeps the reference at its initial value, so a
+    // save that dropped the edited reference and kept the old one would pass
+    // this whole suite while persisting a reference the form no longer shows.
+    const { onSave } = setup()
+    fireEvent.change(screen.getByLabelText('API token reference'), { target: { value: 'CF_TOKEN' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Cloudflare settings' }))
+    expect(onSave).toHaveBeenCalledWith({ apiTokenRef: 'CF_TOKEN', accountId: '', gatewayId: '' }, undefined)
+  })
+
   it('passes a typed token through and then clears the field', () => {
     const { onSave } = setup()
     const field = screen.getByLabelText('API token')
@@ -142,6 +152,19 @@ describe('SettingsCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Cloudflare settings' }))
     expect(onSave).toHaveBeenCalledWith(settings, 'secret')
     expect((field as HTMLInputElement).value).toBe('')
+  })
+
+  it('keeps a typed token when validation fails, so the secret is never typed twice', () => {
+    // SC 3.3.7 asks that a value already entered not be demanded again. The
+    // clearing on success is the other test; a clear on the error path would
+    // throw the typed secret away along with the mistake.
+    setup()
+    const token = screen.getByLabelText('API token')
+    fireEvent.change(token, { target: { value: 'secret' } })
+    fireEvent.change(screen.getByLabelText('API token reference'), { target: { value: 'bad ref' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Cloudflare settings' }))
+    expect(screen.getByRole('alert').textContent).not.toBe('')
+    expect((token as HTMLInputElement).value).toBe('secret')
   })
 
   it('confirms a save in a polite status region', () => {

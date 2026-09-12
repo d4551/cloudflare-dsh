@@ -31,5 +31,12 @@ export default defineConfig({
     exclude: ['**/node_modules/**'],
     testTimeout: BROWSER_TEST_TIMEOUT_MS,
     hookTimeout: BROWSER_TEST_TIMEOUT_MS,
+    /**
+     * Process CSS, so the shipped stylesheet's bytes reach the lanes. The
+     * lanes load it with a `?raw` import, and with CSS processing off vitest
+     * rewrites every CSS module — raw imports included — to an empty string,
+     * which styles no page and scans no bytes.
+     */
+    css: true,
   },
 })

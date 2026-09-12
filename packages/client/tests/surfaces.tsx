@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 /**
  * The surfaces this package contributes, as a host would assemble them.
  *
@@ -16,8 +15,15 @@ import { BrowserRender } from '../src/toolviews/BrowserRender.tsx'
 import { D1Result } from '../src/toolviews/D1Result.tsx'
 import { D1ResultToolView } from '../src/toolviews/fromToolCall.tsx'
 
-/** The stylesheet the package ships, imported rather than reconstructed. */
+/**
+ * The stylesheet the package ships, imported rather than reconstructed.
+ *
+ * Re-exported because the browser lanes scan the same bytes this module
+ * styles with: one stylesheet, one source of bytes, no second copy.
+ */
 import css from '../src/cloudflare.css?raw'
+
+export { css }
 
 const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
 const settings = { apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: '', gatewayId: '' }
@@ -149,7 +155,7 @@ export const OVERFLOWING = renderToStaticMarkup(
 export const THEMES: ReadonlyArray<{ name: string; scheme: 'light' | 'dark' }> = [
   { name: 'light', scheme: 'light' },
   { name: 'dark', scheme: 'dark' },
-}
+]
 
 /**
  * Launch the browser both lanes drive.
