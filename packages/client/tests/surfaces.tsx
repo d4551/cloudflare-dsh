@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 /**
  * The surfaces this package contributes, as a host would assemble them.
  *
@@ -15,8 +16,8 @@ import { BrowserRender } from '../src/toolviews/BrowserRender.tsx'
 import { D1Result } from '../src/toolviews/D1Result.tsx'
 import { D1ResultToolView } from '../src/toolviews/fromToolCall.tsx'
 
-/** The stylesheet the package ships, read rather than reconstructed. */
-export const css = await Bun.file(new URL('../src/cloudflare.css', import.meta.url)).text()
+/** The stylesheet the package ships, imported rather than reconstructed. */
+import css from '../src/cloudflare.css?raw'
 
 const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
 const settings = { apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: '', gatewayId: '' }
@@ -148,22 +149,17 @@ export const OVERFLOWING = renderToStaticMarkup(
 export const THEMES: ReadonlyArray<{ name: string; scheme: 'light' | 'dark' }> = [
   { name: 'light', scheme: 'light' },
   { name: 'dark', scheme: 'dark' },
-]
+}
 
 /**
- * Prefer a Chromium the environment has already provisioned.
+ * Launch the browser both lanes drive.
  *
- * Some sandboxes ship a browser at a fixed path whose build does not match the
- * revision this Playwright would download; using it avoids a download that the
- * network policy may not allow. Otherwise Playwright resolves its own, so CI
- * behaves normally.
+ * Playwright resolves the browser itself, honouring the environment's own
+ * browser-path configuration; a lane that pinned an executable path would
+ * bypass that resolution and drift from what CI drives.
  */
-const PROVIDED_CHROMIUM = '/opt/pw-browsers/chromium'
-
-/** Launch the browser both lanes drive. */
-export async function launch(): Promise<Browser> {
-  const provided = await Bun.file(PROVIDED_CHROMIUM).exists()
-  return chromium.launch(provided ? { executablePath: PROVIDED_CHROMIUM } : {})
+export function launch(): Promise<Browser> {
+  return chromium.launch()
 }
 
 /**
