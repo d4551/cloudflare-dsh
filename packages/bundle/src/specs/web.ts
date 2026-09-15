@@ -4,7 +4,7 @@
  * The REST paths are account-scoped — `/accounts/{id}/browser-rendering/...` —
  * and the accessibility endpoint is camelCase where the rest are lower-case.
  */
-import type { RequestSpec } from '@d4551/dsh-cloudflare-core'
+import type { RequestSpec } from '@d4551/dsh-cloudflare-core/types'
 
 /**
  * Endpoints that turn a URL into a JSON envelope. `screenshot` and `pdf` are
@@ -83,8 +83,16 @@ export interface RenderOptions {
   readonly rejectResourceTypes?: readonly string[] | undefined
 }
 
+/** The body the rendering endpoints accept, built field by field. */
+interface RenderBody {
+  readonly url: string
+  readonly gotoOptions?: { readonly timeout: number; readonly waitUntil: 'networkidle0' }
+  readonly waitForSelector?: { readonly selector: string }
+  readonly rejectResourceTypes?: readonly string[]
+}
+
 /** Build the body common to the rendering endpoints. */
-export function renderBody(options: RenderOptions): Record<string, unknown> {
+export function renderBody(options: RenderOptions): RenderBody {
   return {
     url: options.url,
     ...(options.gotoTimeoutMs === undefined

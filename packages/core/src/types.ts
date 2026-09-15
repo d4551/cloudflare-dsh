@@ -48,6 +48,22 @@ export type QueryValue = string | number | boolean | readonly (string | number |
  */
 export type QueryPair = readonly [key: string, value: string | number | boolean]
 
+/**
+ * One JSON value, as the wire carries it.
+ *
+ * A request body is always serialized with `JSON.stringify`, so it is exactly
+ * this shape; a payload that is not one JSON document (Vectorize's NDJSON
+ * upsert) travels as `encodedBody` instead. Arrays and index signatures are
+ * readonly because a serialized body is immutable once written.
+ */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue }
+
 /** A description of one Cloudflare REST call, before dispatch. */
 export interface RequestSpec {
   readonly method: HttpMethod
@@ -56,7 +72,7 @@ export interface RequestSpec {
   readonly query?: Readonly<Record<string, QueryValue | undefined>>
   /** Parameters whose order and repetition are significant; appended after `query`. */
   readonly orderedQuery?: readonly QueryPair[]
-  readonly body?: unknown
+  readonly body?: JsonValue
   /**
    * A body already encoded by the caller, sent verbatim under its own media
    * type. Vectorize's upsert takes NDJSON, which is not one JSON document, so

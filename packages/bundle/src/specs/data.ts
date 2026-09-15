@@ -5,7 +5,7 @@
  * a total function that can be unit-tested and mutation-checked without a
  * network or a Cordis context.
  */
-import type { RequestSpec } from '@d4551/dsh-cloudflare-core'
+import type { RequestSpec } from '@d4551/dsh-cloudflare-core/types'
 import { seg } from './_segment.ts'
 
 // --- Workers KV -----------------------------------------------------------
@@ -90,7 +90,7 @@ export function queueListSpec(): RequestSpec {
 }
 
 /** Push one message. */
-export function queueSendSpec(queueId: string, body: unknown): RequestSpec {
+export function queueSendSpec(queueId: string, body: JsonValue): RequestSpec {
   return { method: 'POST', path: `/queues/${seg(queueId)}/messages`, body: { body } }
 }
 

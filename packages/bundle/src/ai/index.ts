@@ -12,7 +12,7 @@
  * own endpoint shape, and config selects the account and gateway — the URL
  * itself is never a configuration field.
  */
-import { nextPageByLength } from '@d4551/dsh-cloudflare-core'
+import { nextPageByLength } from '@d4551/dsh-cloudflare-core/paginate'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import Schema from '@deepseek-ai/schemastery'

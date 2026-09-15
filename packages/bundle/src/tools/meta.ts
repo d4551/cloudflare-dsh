@@ -5,12 +5,11 @@
  * wrap. It is deliberately contained: read-only unless explicitly configured
  * otherwise, subject to a path denylist, and unable to leave the REST root.
  */
-import type { HttpMethod, QueryValue } from '@d4551/dsh-cloudflare-core'
+import type { HttpMethod, JsonValue, QueryValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { buildGenericSpec } from '../specs/meta.ts'
-import type { JsonValue } from './_shared/json.ts'
 import { json, listing } from './_shared/render.ts'
 import { seam } from '../seam.ts'
 

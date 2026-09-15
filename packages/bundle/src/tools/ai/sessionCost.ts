@@ -5,8 +5,8 @@
  * legible: once requests carry a session id in `cf-aig-metadata`, this reads
  * back the cost, cache behaviour and token volume for that exact session.
  */
-import { nextPageQuery } from '@d4551/dsh-cloudflare-core'
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
+import { nextPageQuery } from '@d4551/dsh-cloudflare-core/paginate'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { SESSION_METADATA_KEY } from '../../ai/headers.ts'

@@ -4,13 +4,13 @@
  * Note the REST prefix for gateway management is `/ai-gateway/gateways`
  * (hyphenated), not `/ai/gateways`.
  */
-import type { RequestSpec } from '@d4551/dsh-cloudflare-core'
+import type { JsonValue, RequestSpec } from '@d4551/dsh-cloudflare-core/types'
 import { seg } from './_segment.ts'
 
 // --- Workers AI -----------------------------------------------------------
 
 /** Run a Workers AI model. `model` is a slug like `@cf/meta/llama-3.1-8b-instruct`. */
-export function aiRunSpec(model: string, input: unknown): RequestSpec {
+export function aiRunSpec(model: string, input: JsonValue): RequestSpec {
   return { method: 'POST', path: `/ai/run/${model.split('/').map(seg).join('/')}`, body: input }
 }
 
@@ -265,7 +265,7 @@ export const UNPARSABLE_BEHAVIORS: readonly UnparsableBehavior[] = ['error', 'di
 interface VectorizeVector {
   readonly id: string
   readonly values: readonly number[]
-  readonly metadata?: unknown
+  readonly metadata?: JsonValue
 }
 
 /** Query an index by vector. */
