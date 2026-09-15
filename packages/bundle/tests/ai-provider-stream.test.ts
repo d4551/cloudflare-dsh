@@ -10,8 +10,8 @@
  * empty-response judgement only the provider can make, because only it knows
  * whether any content block ever opened.
  */
-import { brandString } from '@deepseek-ai/dsh-brand'
-import { attributionHeaders } from '@deepseek-ai/dsh-llm'
+import { type Branded, brandString } from '@deepseek-ai/dsh-brand'
+import { attributionHeaders, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   collect,
@@ -81,13 +81,15 @@ describe('stream', () => {
   // harness session, which is what makes per-session cost real.
   it('stamps the harness session id into cf-aig-metadata', async () => {
     const { provider, requests } = makeProvider(async () => sse(TEXT, STOP))
-    await collect(provider.stream(options({ sessionId: brandString('s1') })))
+    await collect(provider.stream(options({ sessionId: brandString<Branded<'SessionId'>>('s1') })))
     expect(requests[0]!.headers.get('cf-aig-metadata')).toBe('{"sessionId":"s1"}')
   })
 
   it('stamps the auxiliary purpose so housekeeping is attributable separately', async () => {
     const { provider, requests } = makeProvider(async () => sse(TEXT, STOP))
-    await collect(provider.stream(options({ sessionId: brandString('s1'), purpose: 'compaction' })))
+    await collect(
+      provider.stream(options({ sessionId: brandString<Branded<'SessionId'>>('s1'), purpose: 'compaction' })),
+    )
     expect(requests[0]!.headers.get('cf-aig-metadata')).toBe('{"sessionId":"s1","purpose":"compaction"}')
   })
 
@@ -266,7 +268,7 @@ describe('stream', () => {
     const transmit = vi.fn<(request: Request) => Promise<Response>>(async () => sse(TEXT, STOP))
     const { provider } = makeProvider(transmit)
     await expect(
-      collect(provider.stream(options({ reasoningEffort: brandString('high') }))),
+      collect(provider.stream(options({ reasoningEffort: brandString<ReasoningEffortId>('high') }))),
     ).rejects.toMatchObject({
       code: UNSUPPORTED_OPTION_CODE,
     })

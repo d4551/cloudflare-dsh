@@ -312,7 +312,7 @@ export function vectorizeDeleteByIdsSpec(indexName: string, ids: readonly string
   return {
     method: 'POST',
     path: `/vectorize/v2/indexes/${seg(indexName)}/delete_by_ids`,
-    body: { ids },
+    body: { ids: [...ids] },
   }
 }
 
@@ -321,6 +321,6 @@ export function vectorizeGetByIdsSpec(indexName: string, ids: readonly string[])
   return {
     method: 'POST',
     path: `/vectorize/v2/indexes/${seg(indexName)}/get_by_ids`,
-    body: { ids },
+    body: { ids: [...ids] },
   }
 }
