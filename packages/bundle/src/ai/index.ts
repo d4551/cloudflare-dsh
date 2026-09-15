@@ -138,10 +138,10 @@ export interface CatalogueModel {
   readonly name?: string
   readonly description?: string
   /**
-   * Cloudflare publishes model facts as `{ property_id, value }` pairs with
-   * string values.
+   * Cloudflare publishes model facts as `{ property_id, value }` pairs; the
+   * values this plugin reads arrive as strings or numbers.
    */
-  readonly properties?: readonly { readonly property_id?: string; readonly value?: string }[]
+  readonly properties?: readonly { readonly property_id?: string; readonly value?: string | number }[]
 }
 
 /**

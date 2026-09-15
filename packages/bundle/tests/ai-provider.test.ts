@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CloudflareAiProvider, readErrorDetail } from '../src/ai/provider.ts'
-import { collect, makeProvider, sse, TEXT, STOP } from './ai-provider-support.ts'
+import { collect, makeProvider, options, sse, TEXT, STOP } from './ai-provider-support.ts'
 
 describe('readErrorDetail', () => {
   it('reads a Cloudflare envelope error', () => {

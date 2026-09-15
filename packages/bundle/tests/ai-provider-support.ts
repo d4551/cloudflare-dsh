@@ -61,6 +61,17 @@ export const FILTERED = JSON.stringify({ choices: [{ delta: {}, finish_reason: '
 /** Usage without any content on the wire. */
 export const USAGE_ONLY = JSON.stringify({ usage: { prompt_tokens: 3, completion_tokens: 0 } })
 
+/** A complete text turn ended by the sentinel rather than by the socket. */
+export const DONE_TURN = `data: ${TEXT}\n\ndata: [DONE]\n\n`
+
+/** The chunk sequence one text turn with a stop finish must produce, exactly. */
+export const EXPECTED_TEXT_TURN = [
+  { type: 'block-start', index: 0, blockType: 'text' },
+  { type: 'text-delta', index: 0, text: 'hi' },
+  { type: 'block-end', index: 0, block: { type: 'text', text: 'hi' } },
+  { type: 'finish', reason: { kind: 'stop' } },
+] as const
+
 /** The finish chunk a content-filtered stream must yield, exactly once. */
 export const CONTENT_FILTER_FINISH = {
   type: 'finish',
@@ -72,3 +83,40 @@ export const CONTENT_FILTER_FINISH = {
     },
   },
 } as const
+
+/**
+ * A response whose body reports whether the provider cancelled it.
+ *
+ * `close` decides whether the body ends on its own or stays open, so one
+ * fixture serves the drained, sentinel-ended and cut-short streams.
+ */
+export function trackedBody(
+  payload: string,
+  close: boolean,
+): { response: Response; cancelled: () => boolean } {
+  let cancelled = false
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(payload))
+      if (close) controller.close()
+    },
+    cancel() {
+      cancelled = true
+    },
+  })
+  return { response: new Response(body, { status: 200 }), cancelled: () => cancelled }
+}
+
+/** A response whose payload arrives split across two transport chunks. */
+export function splitBody(full: string): Response {
+  const split = Math.floor(full.length / 2)
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const enc = new TextEncoder()
+      controller.enqueue(enc.encode(full.slice(0, split)))
+      controller.enqueue(enc.encode(full.slice(split)))
+      controller.close()
+    },
+  })
+  return new Response(body, { status: 200 })
+}
