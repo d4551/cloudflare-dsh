@@ -1,7 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
-
-const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
+import { aliases } from './tests/aliases.ts'
 
 /**
  * The real-browser accessibility lane.
@@ -19,12 +18,7 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 const BROWSER_TEST_TIMEOUT_MS = 60_000
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      '@d4551/dsh-cloudflare-core': r('./packages/core/src/index.ts'),
-      '@d4551/dsh-cloudflare-client': r('./packages/client/src/index.ts'),
-    },
-  },
+  resolve: { alias: aliases },
   test: {
     environment: 'node',
     include: ['packages/*/tests/**/*.browser.test.tsx'],

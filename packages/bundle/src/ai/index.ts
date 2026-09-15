@@ -8,21 +8,34 @@
  * logs and billing can be read back per session (see
  * `cloudflare_aigateway_session_cost`).
  *
- * The gateway's base URL is resolved from the API rather than hardcoded —
- * Cloudflare is the authority on its own endpoint shape, and a hardcoded URL
- * would also be a tunable that config could not change.
+ * The gateway's base URL is resolved from the API: Cloudflare publishes its
+ * own endpoint shape, and config selects the account and gateway — the URL
+ * itself is never a configuration field.
  */
 import { nextPageByLength } from '@d4551/dsh-cloudflare-core'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import Schema from '@deepseek-ai/schemastery'
 import { aiModelsSearchSpec, gatewayUrlSpec } from '../specs/ai.ts'
-import { CloudflareAiAdapter, type ResolvedEndpoint } from './adapter.ts'
+import { CloudflareAiProvider, type ResolvedEndpoint } from './provider.ts'
 import { seam } from '../seam.ts'
 
-export { CloudflareAiAdapter, readErrorDetail } from './adapter.ts'
-export type { CloudflareAiAdapterDeps, ResolvedEndpoint } from './adapter.ts'
-export * from './errors.ts'
+export { CloudflareAiProvider, readErrorDetail } from './provider.ts'
+export type { CloudflareAiProviderDeps, ResolvedEndpoint } from './provider.ts'
+export {
+  CONTENT_FILTER_CODE,
+  PROVIDER_ERROR_CODE,
+  RATE_LIMIT_CODE,
+  TIMEOUT_CODE,
+  UNSUPPORTED_OPTION_CODE,
+  classifyProviderCode,
+  emptyResponse,
+  idleTimeout,
+  joinDetail,
+  providerError,
+  unsupportedOption,
+  type ProviderFailure,
+} from './errors.ts'
 export type { GatewayHeaderOptions, RequestIdentity } from './headers.ts'
 export { buildGatewayHeaders, buildGatewayMetadata } from './headers.ts'
 export type { WireMessage, WireRequest, WireTool } from './request.ts'
@@ -124,8 +137,11 @@ interface GatewayUrlResult {
 export interface CatalogueModel {
   readonly name?: string
   readonly description?: string
-  /** Cloudflare publishes model facts as `{ property_id, value }` pairs, values as strings. */
-  readonly properties?: readonly { readonly property_id?: string; readonly value?: unknown }[]
+  /**
+   * Cloudflare publishes model facts as `{ property_id, value }` pairs with
+   * string values.
+   */
+  readonly properties?: readonly { readonly property_id?: string; readonly value?: string }[]
 }
 
 /**
@@ -259,11 +275,11 @@ export function apply(ctx: Context, config: AiConfig): void {
     return toModelInfo(provider, walk.items)
   }
 
-  const adapter = new CloudflareAiAdapter({
+  const provider = new CloudflareAiProvider({
     resolveEndpoint,
     resolveModel,
     listModels,
-    fetch: (request) => fetch(request),
+    transmit: fetch,
     headerOptions: {
       cacheTtlSeconds: config.cacheTtlSeconds,
       skipCache: config.skipCache,
@@ -286,8 +302,8 @@ export function apply(ctx: Context, config: AiConfig): void {
   })
 
   // The runtime scopes the registration to this plugin's fiber ("disposed with
-  // the fiber"), so unloading the plugin unregisters the adapter. A disposer
+  // the fiber"), so unloading the plugin unregisters the provider. A disposer
   // returned from here would go unused: cordis instantiates a constructible
   // `apply` as a class and reads no effect from its return value.
-  llm.registerAdapter([WORKERS_AI_PROVIDER, AI_GATEWAY_PROVIDER], adapter)
+  llm.registerAdapter([WORKERS_AI_PROVIDER, AI_GATEWAY_PROVIDER], provider)
 }

@@ -60,21 +60,39 @@ const MAX_DECODE_ROUNDS = 4
  *
  * Decoding repeats to a fixed point because one pass is not enough: `%2574`
  * becomes `%74`, which a server decoding again resolves to `t`. A malformed
- * escape is a rejection, never a value that passes through unchecked.
+ * escape is a rejection, never a value that passes through unchecked, so every
+ * `%` is checked to open a two-hex-digit escape before the decode runs — the
+ * decode itself is then total, and the rejection names the original path.
  */
 export function decodePath(path: string): string {
   let current = path
   for (let round = 0; round < MAX_DECODE_ROUNDS; round += 1) {
-    let next: string
-    try {
-      next = decodeURIComponent(current)
-    } catch {
+    if (!hasOnlyCompleteEscapes(current)) {
       throw new TypeError(`path contains a malformed percent-escape: ${JSON.stringify(path)}`)
     }
+    const next = decodeURIComponent(current)
     if (next === current) return current
     current = next
   }
   throw new TypeError(`path is encoded beyond the depth this can validate: ${JSON.stringify(path)}`)
+}
+
+/** One `%` opening a two-hex-digit escape — the only shape a decode accepts. */
+const PERCENT_ESCAPE = /%[0-9a-fA-F]{2}/
+
+/**
+ * Whether every `%` in the text opens a complete escape.
+ *
+ * Checking before decoding keeps the decode itself total: with every `%`
+ * opening a two-hex-digit pair there is no input left the decoder can reject.
+ */
+function hasOnlyCompleteEscapes(text: string): boolean {
+  let at = text.indexOf('%')
+  while (at !== -1) {
+    if (!PERCENT_ESCAPE.test(text.slice(at, at + 3))) return false
+    at = text.indexOf('%', at + 3)
+  }
+  return true
 }
 
 /** The structural rules, applied to one spelling of a path. */
@@ -121,12 +139,10 @@ const REQUIRED_PROTOCOL = 'https:'
  * call.
  */
 export function assertSafeBaseUrl(baseUrl: string): string {
-  let url: URL
-  try {
-    url = new URL(baseUrl)
-  } catch {
+  if (!URL.canParse(baseUrl)) {
     throw new TypeError(`baseUrl must be an absolute URL, got ${JSON.stringify(baseUrl)}`)
   }
+  const url = new URL(baseUrl)
   if (url.protocol !== REQUIRED_PROTOCOL) {
     throw new TypeError(`baseUrl must use ${REQUIRED_PROTOCOL}, got ${JSON.stringify(url.protocol)}`)
   }

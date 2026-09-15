@@ -21,6 +21,7 @@
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "@d4551/dsh-cloudflare-core": ["./packages/core/src/index.ts"],
+      "@d4551/dsh-cloudflare-core/*": ["./packages/core/src/*.ts"],
       "@d4551/dsh-cloudflare-client": ["./packages/client/src/index.ts"]
     },
     "jsx": "react-jsx"

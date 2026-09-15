@@ -1,24 +1,39 @@
 /**
  * `@d4551/dsh-cloudflare-core` — the Cloudflare capability seam.
  *
- * Registers `ctx.cloudflare` for other plugins to consume via
- * `inject: ['cloudflare']`.
+ * This module is the Cordis plugin entry: it registers `ctx.cloudflare` for
+ * other plugins to consume via `inject: ['cloudflare']`. Alongside the entry
+ * declarations it re-exports, by name, the seam surface a consumer of the
+ * service needs — the client, its config schema and the service itself — so a
+ * consumer can import the seam without reaching into module internals. The
+ * remaining modules publish as their own subpaths (`./errors`, `./paginate`,
+ * `./request`, `./types`), so every import names the module that defines what
+ * it imports and no `export *` layer sits anywhere.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { type CloudflareConfig, CloudflareConfig as ConfigSchema } from './config.ts'
 import type { CredentialResolver } from './credentials.ts'
 import { CloudflareService } from './service.ts'
 
-export * from './client.ts'
-export * from './config.ts'
-export * from './credentials.ts'
-export * from './errors.ts'
-export * from './paginate.ts'
-export * from './request.ts'
-export * from './retry.ts'
-export * from './scope.ts'
-export * from './service.ts'
-export * from './types.ts'
+export {
+  TRANSPORT_FAILURE_STATUS,
+  CloudflareClient,
+  readEnvelope,
+  realSleep,
+  statusOfError,
+  type BinaryBody,
+  type CloudflareClientOptions,
+  type EnvelopeRead,
+  type FetchLike,
+} from './client.ts'
+export { CloudflareConfig } from './config.ts'
+export {
+  CloudflareAmbiguousAccountError,
+  CloudflareNoAccountError,
+  CloudflareService,
+  type CloudflareAccount,
+  type CloudflareServiceDeps,
+} from './service.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -55,6 +70,8 @@ export function apply(ctx: Context, config: CloudflareConfig): CloudflareService
   const harness = ctx as HarnessContext
   return new CloudflareService(ctx, config, {
     credentials: harness.credentials,
-    fetch: (request) => fetch(request),
+    // The platform function itself, bound as the transport: no lambda sits
+    // between the seam and the global, and every test substitutes its own.
+    fetch,
   })
 }

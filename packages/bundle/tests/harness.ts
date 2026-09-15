@@ -1,11 +1,6 @@
-/**
- * Test harness: a Cordis context wired with a real CloudflareService and the
- * real tool registry, so tools are driven through the same pipeline the agent
- * loop uses — argument validation, execution, output validation against the
- * declared schema, freezing, rendering — without a network.
- */
 import { createHash } from 'node:crypto'
-import { CloudflareConfig, CloudflareService } from '@d4551/dsh-cloudflare-core'
+import { CloudflareConfig } from '../../core/src/config.ts'
+import { CloudflareService } from '../../core/src/service.ts'
 import { Context } from '@deepseek-ai/cordis'
 import {
   AttachmentError,

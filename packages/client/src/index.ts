@@ -20,6 +20,7 @@
  * contract suite pins instead.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type { JSX } from 'react'
 import { SessionCostChip } from './SessionCostChip.tsx'
 import { SettingsCard } from './SettingsCard.tsx'
 import { en } from './locales/en.ts'
@@ -30,8 +31,8 @@ import {
   SessionCostToolView,
 } from './toolviews/fromToolCall.tsx'
 
-export * from './format.ts'
-export * from './locales/en.ts'
+export { formatCacheRate, formatCost, hasUsage, isValidCredentialRef, type SessionUsage } from './format.ts'
+export { en, type Locale } from './locales/en.ts'
 export { SessionCostChip, type SessionCostChipProps } from './SessionCostChip.tsx'
 export { SettingsCard, type CloudflareSettings, type SettingsCardProps } from './SettingsCard.tsx'
 export {
@@ -41,7 +42,18 @@ export {
 } from './toolviews/AccessibilityTree.tsx'
 export { BrowserRender, type BrowserRenderProps } from './toolviews/BrowserRender.tsx'
 export { D1Result, type D1ResultProps, type D1ResultSet } from './toolviews/D1Result.tsx'
-export * from './toolviews/fromToolCall.tsx'
+export {
+  AccessibilityTreeToolView,
+  BrowserRenderToolView,
+  D1ResultToolView,
+  SessionCostToolView,
+  presentationMetaOf,
+  resultText,
+  settledResult,
+  type ToolCallOwnerProps,
+  type ToolResultBlock,
+  type ToolTextBlock,
+} from './toolviews/fromToolCall.tsx'
 
 /** The slot a registration contributes into. Every registration names one. */
 interface SlotTarget {
@@ -85,7 +97,7 @@ export interface SlotsRuntime {
    * contribution — wrapping the call in another `ctx.effect` would leave one
    * disposal under two owners.
    */
-  register(registration: SlotRegistration, component: unknown): () => void
+  register(registration: SlotRegistration, component: SlotComponent): () => void
   /**
    * Run an effect for each declaration lifetime of a slot: synchronously when
    * the slot is already declared, otherwise when whoever owns it declares it.
@@ -111,15 +123,25 @@ export const TOOL_VIEW_SLOT = 'tool.call.toolview'
 export const SETTINGS_SLOT = 'settings.plugins.tab'
 
 /**
+ * A component handed to a slot registry, as an opaque handle.
+ *
+ * The props belong to the host: they are whatever the slot's own contract
+ * passes, and no type this package could name would make that precise. The
+ * handle therefore claims only what is true of every registered value — a
+ * function component — and takes `never` props, so the one thing the type
+ * forbids is calling the component from here.
+ */
+export type SlotComponent = (props: never) => JSX.Element | null
+
+/**
  * Tool views this package supplies, keyed by wire tool name.
  *
- * The registered component is the adapter, not the presentational component:
- * the slot hands over the call's owner currency, and the adapter turns that
- * into the props the component declares. Registering the component directly —
- * which this list used to do — gave it a `callId`, a `toolName` and a block
- * where it expected a query and its rows.
+ * Each entry registers the owner-facing view `fromToolCall.tsx` derives for a
+ * tool call: it receives the call's owner currency and computes the props its
+ * presentational component declares. The presentational component itself has
+ * props shaped like a query and its rows, which a slot never hands over.
  */
-export const TOOL_VIEWS: ReadonlyArray<{ readonly tool: string; readonly component: unknown }> = [
+export const TOOL_VIEWS: ReadonlyArray<{ readonly tool: string; readonly component: SlotComponent }> = [
   { tool: 'cloudflare_d1_query', component: D1ResultToolView },
   { tool: 'cloudflare_browser_render', component: BrowserRenderToolView },
   { tool: 'cloudflare_browser_accessibility_tree', component: AccessibilityTreeToolView },

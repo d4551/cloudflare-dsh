@@ -14,6 +14,34 @@
       "types": "./lib/index.d.mts",
       "default": "./lib/index.mjs"
     },
+    "./client": {
+      "types": "./lib/client.d.mts",
+      "default": "./lib/client.mjs"
+    },
+    "./config": {
+      "types": "./lib/config.d.mts",
+      "default": "./lib/config.mjs"
+    },
+    "./errors": {
+      "types": "./lib/errors.d.mts",
+      "default": "./lib/errors.mjs"
+    },
+    "./paginate": {
+      "types": "./lib/paginate.d.mts",
+      "default": "./lib/paginate.mjs"
+    },
+    "./request": {
+      "types": "./lib/request.d.mts",
+      "default": "./lib/request.mjs"
+    },
+    "./service": {
+      "types": "./lib/service.d.mts",
+      "default": "./lib/service.mjs"
+    },
+    "./types": {
+      "types": "./lib/types.d.mts",
+      "default": "./lib/types.mjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [

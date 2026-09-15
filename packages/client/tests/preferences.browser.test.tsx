@@ -53,7 +53,11 @@ interface Resized {
  * sideways, and the loss to measure is content clipped out of a box that
  * hides its own overflow — a scroller reaches its content, and a visible
  * overflow spills but keeps it — and a control that can no longer be hit at
- * its centre, which is the same minimum test the focus lane applies.
+ * its centre. Reaching a control below the fold is what scrolling is, so each
+ * control is brought into view before its centre is probed — the same
+ * bring-into-view-then-measure protocol the focus lane applies by tabbing —
+ * and what fails is a centre that resolves to nothing at all or to an element
+ * the control does not contain: something the resize put on top of it.
  */
 async function textAt200Percent(page: Page): Promise<Resized> {
   const figureSize = () =>
@@ -64,21 +68,21 @@ async function textAt200Percent(page: Page): Promise<Resized> {
   })
   const after = await figureSize()
   const laidOut = await page.evaluate(() => {
-    const describe = (node: Element): string => `${node.tagName.toLowerCase()}.${node.className}`
     const clipped = [...document.querySelectorAll<HTMLElement>('main *')]
       .filter((node) => {
         const style = getComputedStyle(node)
         if (style.overflowY !== 'hidden' && style.overflowX !== 'hidden') return false
         return node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1
       })
-      .map(describe)
+      .map((node) => `${node.tagName.toLowerCase()}.${node.className}`)
     const unhittable = [...document.querySelectorAll<HTMLElement>('button, input, [tabindex="0"]')]
       .filter((node) => {
+        node.scrollIntoView({ block: 'center', behavior: 'instant' })
         const box = node.getBoundingClientRect()
         const centre = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
         return centre === null || (centre !== node && !node.contains(centre))
       })
-      .map(describe)
+      .map((node) => `${node.tagName.toLowerCase()}.${node.className}`)
     return { clipped, unhittable }
   })
   return { before, after, clipped: laidOut.clipped, unhittable: laidOut.unhittable }
@@ -147,9 +151,7 @@ describe('reduced transparency', () => {
     await session.send('Emulation.setEmulatedMedia', {
       features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],
     })
-    expect(
-      await page.evaluate(() => matchMedia('(prefers-reduced-transparency: reduce)').matches),
-    ).toBe(true)
+    expect(await page.evaluate(() => matchMedia('(prefers-reduced-transparency: reduce)').matches)).toBe(true)
     const translucent = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>('main *')]
         .map((node) => ({ node, background: getComputedStyle(node).backgroundColor }))

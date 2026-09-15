@@ -8,9 +8,9 @@
  *
  * Obligations visible here rather than delegated:
  *  - every provider request carries the harness's attribution headers, which
- *    the adapter contract requires on every wire request;
- *  - the adapter never retries internally — one call is one provider attempt,
- *    because the harness owns retry policy;
+ *    the `LlmAdapter` contract requires on every wire request;
+ *  - the provider never retries internally — one call is one provider
+ *    attempt, because the harness owns retry policy;
  *  - `options.signal` is honoured, and a stream that goes quiet longer than the
  *    configured budget fails as a timeout rather than hanging the turn;
  *  - a completion that ends with no content block at all is `EMPTY_RESPONSE`,
@@ -25,6 +25,7 @@
 import { LlmAdapter, attributionHeaders } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions,
+  LlmError,
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
@@ -45,16 +46,16 @@ export interface ResolvedEndpoint {
   readonly token: string
 }
 
-/** Collaborators the adapter needs. */
-export interface CloudflareAiAdapterDeps {
+/** Collaborators the provider needs. */
+export interface CloudflareAiProviderDeps {
   /** Resolve the endpoint for one provider route and model. */
   resolveEndpoint(provider: string, model: string, signal?: AbortSignal): Promise<ResolvedEndpoint>
   /** Resolve what the catalogue knows about one exact model. */
   resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>
   /** List the models a route can advertise. */
   listModels(provider: string): Promise<readonly LlmModelInfo[]>
-  /** Injected so the adapter is testable without a network. */
-  fetch(request: Request): Promise<Response>
+  /** The transport, injected so the provider is testable without a network. */
+  transmit(request: Request): Promise<Response>
   /** Gateway behaviour applied to every request. */
   readonly headerOptions: GatewayHeaderOptions
   /** How long a stream may go quiet before it is failed. */
@@ -89,21 +90,19 @@ export function readErrorDetail(status: number, body: string): string {
  * Race a promise against the idle budget.
  *
  * The timer is always cleared, so a slow-but-alive stream never accumulates
- * pending timers.
+ * pending timers: `finally` runs on whichever side of the race settles first.
  */
-async function withIdleTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  let fail!: (error: unknown) => void
+function withIdleTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let fail!: (error: LlmError) => void
   const guard = new Promise<never>((_resolve, reject) => {
     fail = reject
   })
   const timer = setTimeout(() => {
     fail(idleTimeout(ms))
   }, ms)
-  try {
-    return await Promise.race([work, guard])
-  } finally {
+  return Promise.race([work, guard]).finally(() => {
     clearTimeout(timer)
-  }
+  })
 }
 
 /**
@@ -117,6 +116,11 @@ async function withIdleTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
  *
  * `decoder.end()` flushes whatever the last read left buffered, so a provider
  * that omits the trailing blank line still delivers its final event.
+ *
+ * The iterator owns its reader, and its `return` cancels the stream. The
+ * iterator protocol calls `return` whenever the loop ends abruptly — on a
+ * `break`, on a thrown error, on generator termination — so the connection
+ * is released through this one owner on every such path.
  */
 function readEvents(
   reader: ReadableStreamDefaultReader<string>,
@@ -140,14 +144,19 @@ function readEvents(
         ended = done === true
         return this.next()
       },
+      async return(): Promise<IteratorResult<SseEvent, undefined>> {
+        ended = true
+        await reader.cancel()
+        return { done: true, value: undefined }
+      },
     }),
   }
 }
 
-export class CloudflareAiAdapter extends LlmAdapter {
-  private readonly deps: CloudflareAiAdapterDeps
+export class CloudflareAiProvider extends LlmAdapter {
+  private readonly deps: CloudflareAiProviderDeps
 
-  constructor(deps: CloudflareAiAdapterDeps) {
+  constructor(deps: CloudflareAiProviderDeps) {
     super()
     this.deps = deps
   }
@@ -171,7 +180,7 @@ export class CloudflareAiAdapter extends LlmAdapter {
   /**
    * Bind one call to one generation of connection facts.
    *
-   * This adapter is dynamic: the endpoint comes from the account and, on the
+   * This provider is dynamic: the endpoint comes from the account and, on the
    * gateway route, from the API. Resolving it here and handing back a stream
    * bound to it means a settings change between preparation and dispatch can
    * never pair one generation's model metadata with another's endpoint — the
@@ -220,7 +229,7 @@ export class CloudflareAiAdapter extends LlmAdapter {
 
     // `null` is the documented "no signal" value, so the caller's signal is
     // forwarded unconditionally rather than through a branch.
-    const response = await this.deps.fetch(
+    const response = await this.deps.transmit(
       new Request(endpoint.url, {
         method: 'POST',
         headers,
@@ -245,22 +254,14 @@ export class CloudflareAiAdapter extends LlmAdapter {
     // completion that reports tokens and then stops has still said nothing.
     let produced = false
 
-    try {
-      for await (const event of events) {
-        if (event.kind === 'done') break
-        const read = parseJson<WireChunk>(event.data)
-        if (!read.ok) continue
-        for (const chunk of transducer.push(read.value)) {
-          if (chunk.type === 'block-start') produced = true
-          yield chunk
-        }
+    for await (const event of events) {
+      if (event.kind === 'done') break
+      const read = parseJson<WireChunk>(event.data)
+      if (!read.ok) continue
+      for (const chunk of transducer.push(read.value)) {
+        if (chunk.type === 'block-start') produced = true
+        yield chunk
       }
-    } finally {
-      // Cancel rather than merely release the lock: when a consumer abandons
-      // the turn mid-stream, cancelling propagates upstream and frees the
-      // connection, where releasing the lock alone leaves it open. Cancelling
-      // an already-drained stream is a no-op.
-      await reader.cancel()
     }
 
     // The transducer holds the finish back until here, so this is where a

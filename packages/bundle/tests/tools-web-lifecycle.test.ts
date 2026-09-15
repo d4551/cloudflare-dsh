@@ -1,4 +1,5 @@
-import { CloudflareConfig, CloudflareService } from '@d4551/dsh-cloudflare-core'
+import { CloudflareConfig } from '../../core/src/config.ts'
+import { CloudflareService } from '../../core/src/service.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolRuntime } from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
