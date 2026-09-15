@@ -10,6 +10,7 @@
  * that is absent or empty on the last page. The queue listing takes no paging
  * parameters at all.
  */
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
 import { isInteger } from './json.ts'
 
@@ -17,11 +18,12 @@ import { isInteger } from './json.ts'
  * `result_info` as it actually arrives. The core client declares it as
  * `CloudflareResultInfo`, but that is a claim about the wire rather than a
  * guarantee from it, and these helpers exist to check the claim — so they take
- * the fields as `unknown` and every `CloudflareResultInfo` is admissible.
+ * the fields as the JSON the wire carries, and every `CloudflareResultInfo`
+ * is admissible.
  */
 interface WireResultInfo {
-  readonly cursor?: unknown
-  readonly total_count?: unknown
+  readonly cursor?: JsonValue
+  readonly total_count?: JsonValue
 }
 
 /** Keep the literal types of a property spec, as `defineTool` does for the schemas it is handed. */
@@ -134,7 +136,7 @@ export class PageNumberError extends RangeError {
 /** Raised when `result_info` carries a paging field of the wrong type. */
 export class ResultInfoShapeError extends TypeError {
   override readonly name = 'ResultInfoShapeError'
-  constructor(field: string, value: unknown) {
+  constructor(field: string, value: JsonValue) {
     super(
       `result_info.${field} must be ${field === 'cursor' ? 'a string' : 'an integer'}, got ${typeof value}`,
     )

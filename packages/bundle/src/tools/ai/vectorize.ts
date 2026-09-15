@@ -6,6 +6,7 @@
  * `../_shared/render.ts`, so this module stays a thin, declarative layer.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
@@ -18,7 +19,6 @@ import {
   vectorizeWriteSpec,
 } from '../../specs/ai.ts'
 import { EmptyBatchError } from '../_shared/batch.ts'
-import { type JsonValue } from '../_shared/json.ts'
 import { apiRecords, json, listing, plural, text } from '../_shared/render.ts'
 import type { AiToolsConfig } from './config.ts'
 

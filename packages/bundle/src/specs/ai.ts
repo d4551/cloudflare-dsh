@@ -51,10 +51,8 @@ export function gatewayGetSpec(gatewayId: string): RequestSpec {
 }
 
 /**
- * Resolve the gateway's base URL for one provider.
- *
- * Used instead of hardcoding an endpoint, so the adapter always talks to the
- * URL Cloudflare currently advertises.
+ * The gateway's base URL for one provider, as Cloudflare currently advertises
+ * it, so model calls dial the published endpoint.
  */
 export function gatewayUrlSpec(gatewayId: string, provider: string): RequestSpec {
   return { method: 'GET', path: `/ai-gateway/gateways/${seg(gatewayId)}/url/${seg(provider)}` }
@@ -279,7 +277,7 @@ export function vectorizeQuerySpec(
   return {
     method: 'POST',
     path: `/vectorize/v2/indexes/${seg(indexName)}/query`,
-    body: { vector, topK, returnValues, returnMetadata },
+    body: { vector: [...vector], topK, returnValues, returnMetadata },
   }
 }
 

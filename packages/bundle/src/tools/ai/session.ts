@@ -6,9 +6,10 @@
  * Cloudflare's schema does not document how positional filter repeats are
  * paired — a filter the server ignored would bill one session another's cost.
  */
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import { SESSION_METADATA_KEY } from '../../ai/headers.ts'
 import { parseJson } from '../../ai/sse.ts'
-import { isFiniteNumber, isObject, type JsonValue } from '../_shared/json.ts'
+import { isFiniteNumber, isObject } from '../_shared/json.ts'
 
 /** Raised when a log entry carries a field the summary cannot add up. */
 export class GatewayLogShapeError extends TypeError {

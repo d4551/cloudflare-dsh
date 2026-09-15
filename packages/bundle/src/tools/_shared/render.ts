@@ -4,6 +4,7 @@
  * `output.render` runs on session-log replay as well as live, so everything
  * here must be a pure function of its arguments: no I/O, no clock, no random.
  */
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 
 /** Wrap plain text as a single content block. */
@@ -12,7 +13,7 @@ export function text(value: string): ContentBlock[] {
 }
 
 /** Render a value as pretty JSON in a single block. */
-export function json(value: unknown): ContentBlock[] {
+export function json(value: JsonValue): ContentBlock[] {
   return text(JSON.stringify(value, null, 2))
 }
 
@@ -27,7 +28,7 @@ export function plural(count: number, singular: string): string {
  * Keeping the count in the text means the model can act on "how many" without
  * parsing the JSON, while the JSON stays available for programmatic use.
  */
-export function listing(count: number, noun: string, value: unknown, note?: string): ContentBlock[] {
+export function listing(count: number, noun: string, value: JsonValue, note?: string): ContentBlock[] {
   const context = note === undefined ? '' : ` (${note})`
   return text(`${plural(count, noun)}${context}\n${JSON.stringify(value, null, 2)}`)
 }
@@ -76,11 +77,11 @@ export function truncate(value: string, limit: number): string {
  * carries everything — this bounds only what is read. Returned as a string so
  * a presenter can put it under a heading in one block rather than two.
  */
-export function boundedJson(value: unknown, limit: number): string {
+export function boundedJson(value: JsonValue, limit: number): string {
   return truncate(JSON.stringify(value, null, 2), limit)
 }
 
 /** Render a value as bounded pretty JSON in a single block. */
-export function truncatedJson(value: unknown, limit: number): ContentBlock[] {
+export function truncatedJson(value: JsonValue, limit: number): ContentBlock[] {
   return text(boundedJson(value, limit))
 }

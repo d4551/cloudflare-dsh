@@ -2,8 +2,8 @@ import * as aiTools from '../src/tools/ai/index.ts'
 import * as dataTools from '../src/tools/data/index.ts'
 import * as metaTools from '../src/tools/meta.ts'
 import * as webTools from '../src/tools/web.ts'
-import { type JsonValue } from '../src/tools/_shared/json.ts'
-import { PNG_1X1, envelope, makeHarness, type Harness } from './harness.ts'
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
+import { envelope, makeHarness, PNG_1X1, type Harness } from './harness.ts'
 
 export type Fetch = (request: Request) => Promise<Response>
 

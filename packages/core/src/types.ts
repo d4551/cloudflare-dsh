@@ -53,16 +53,11 @@ export type QueryPair = readonly [key: string, value: string | number | boolean]
  *
  * A request body is always serialized with `JSON.stringify`, so it is exactly
  * this shape; a payload that is not one JSON document (Vectorize's NDJSON
- * upsert) travels as `encodedBody` instead. Arrays and index signatures are
- * readonly because a serialized body is immutable once written.
+ * upsert) travels as `encodedBody` instead. The structure mirrors the JSON
+ * value type the harness's tool registry declares for parameters and outputs,
+ * so a body built here is assignable into the tool contract unchanged.
  */
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | readonly JsonValue[]
-  | { readonly [key: string]: JsonValue }
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
 /** A description of one Cloudflare REST call, before dispatch. */
 export interface RequestSpec {

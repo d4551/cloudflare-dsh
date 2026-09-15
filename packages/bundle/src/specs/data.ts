@@ -5,7 +5,7 @@
  * a total function that can be unit-tested and mutation-checked without a
  * network or a Cordis context.
  */
-import type { RequestSpec } from '@d4551/dsh-cloudflare-core/types'
+import type { JsonValue, RequestSpec } from '@d4551/dsh-cloudflare-core/types'
 import { seg } from './_segment.ts'
 
 // --- Workers KV -----------------------------------------------------------
@@ -55,7 +55,7 @@ export function kvBulkDeleteSpec(namespaceId: string, keys: readonly string[]): 
   return {
     method: 'POST',
     path: `/storage/kv/namespaces/${seg(namespaceId)}/bulk/delete`,
-    body: keys,
+    body: [...keys],
   }
 }
 
@@ -75,7 +75,7 @@ export function d1QuerySpec(databaseId: string, sql: string, params: readonly st
   return {
     method: 'POST',
     path: `/d1/database/${seg(databaseId)}/query`,
-    body: { sql, params },
+    body: { sql, params: [...params] },
   }
 }
 

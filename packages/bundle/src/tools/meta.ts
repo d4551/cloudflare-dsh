@@ -29,7 +29,7 @@ function scalarQueryValue(name: string, value: JsonValue): string | number | boo
  *
  * Strings, numbers and booleans serialize as themselves and an array of them
  * repeats the key. `null`, an object or a nested array would go on the wire as
- * text like "[object Object]", so each is refused by name rather than cast.
+ * text like "[object Object]", so each is refused by name.
  */
 export function toQuery(
   raw: Readonly<Record<string, JsonValue>> | undefined,
@@ -104,11 +104,10 @@ export function apply(ctx: Context, config: MetaConfig): void {
       isConcurrencySafe: () => true,
       async execute(_args, exec) {
         const { accounts, truncated } = await cf.listAccounts(exec.signal)
-        // Projected field by field rather than cast: the canonical value is a
-        // programmatic API under PTC, so it is declared here, not inherited
-        // from whatever the REST response happened to carry. `truncated` says
-        // when the page ceiling stopped the walk, so a partial list is never
-        // reported as the whole one.
+        // The output is the programmatic API declared under PTC: each field is
+        // projected explicitly, so the REST response's incidental shape stays
+        // behind the projection. `truncated` says when the page ceiling
+        // stopped the walk, so a partial list is never reported as the whole.
         return {
           accounts: accounts.map((account) => ({ id: account.id, name: account.name })),
           truncated,
@@ -156,8 +155,8 @@ export function apply(ctx: Context, config: MetaConfig): void {
       },
       // The read/write split the schema already enforces, answered per call: a
       // GET or a HEAD changes nothing, so the harness may run it alongside
-      // others. Every other tool answers this with a constant; this is the one
-      // whose safety depends on what it was asked to do.
+      // others. Every other tool answers with a constant; this answer follows
+      // its arguments.
       isConcurrencySafe: (args) => READ_METHODS.includes(args.method),
       async execute(args, exec) {
         const spec = buildGenericSpec(args.method, args.path, toQuery(args.query), args.body, {

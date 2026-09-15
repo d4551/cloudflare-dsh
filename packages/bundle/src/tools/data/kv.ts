@@ -7,6 +7,7 @@
  * `../_shared/render.ts`, so this module stays a thin, declarative layer.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
@@ -17,7 +18,7 @@ import {
   kvValuePath,
 } from '../../specs/data.ts'
 import { EmptyBatchError } from '../_shared/batch.ts'
-import { isInteger, isObject, isStringArray, type JsonValue } from '../_shared/json.ts'
+import { isInteger, isObject, isStringArray } from '../_shared/json.ts'
 import {
   PAGE_OUTCOME_PROPERTIES,
   cursorNote,

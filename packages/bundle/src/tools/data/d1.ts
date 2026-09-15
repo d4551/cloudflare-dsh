@@ -6,11 +6,11 @@
  * `../_shared/render.ts`, so this module stays a thin, declarative layer.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { d1ListSpec, d1QuerySpec } from '../../specs/data.ts'
 import { PAGE_OUTCOME_PROPERTIES, pageNote, pageOutcome, requestedPage } from '../_shared/paging.ts'
-import { type JsonValue } from '../_shared/json.ts'
 import { apiRecords, listing, truncatedJson } from '../_shared/render.ts'
 import type { DataToolsConfig } from './config.ts'
 

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { CloudflareConfig } from '../../core/src/config.ts'
 import { CloudflareService } from '../../core/src/service.ts'
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import { Context } from '@deepseek-ai/cordis'
 import {
   AttachmentError,
@@ -20,7 +21,6 @@ import {
   type ToolFailure,
 } from '@deepseek-ai/dsh-tools'
 import { expect } from 'vitest'
-import type { JsonValue } from '../src/tools/_shared/json.ts'
 
 /** JSON response helper matching the Cloudflare envelope. */
 export function envelope<T>(result: T, resultInfo?: Record<string, number | string>): Response {

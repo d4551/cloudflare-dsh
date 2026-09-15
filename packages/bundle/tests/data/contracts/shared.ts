@@ -1,5 +1,5 @@
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import { expect } from 'vitest'
-import type { JsonValue } from '../../../src/tools/_shared/json.ts'
 import type { Harness } from '../../harness.ts'
 
 /**

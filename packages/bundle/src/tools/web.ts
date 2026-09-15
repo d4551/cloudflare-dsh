@@ -11,8 +11,9 @@
  * the page and the client can show it, while a text-only route is told the
  * image was omitted. A PDF is not a raster image, so the store cannot hold it
  * and a base64 PDF in the session log would be a blob nothing can consume;
- * PDF capture is therefore not offered rather than offered broken.
+ * PDF capture is therefore not offered.
  */
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentId, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -29,7 +30,6 @@ import {
   browserRenderSpec,
   browserScreenshotSpec,
 } from '../specs/web.ts'
-import type { JsonValue } from './_shared/json.ts'
 import { boundedJson, json, text, truncate } from './_shared/render.ts'
 import { seam } from '../seam.ts'
 
