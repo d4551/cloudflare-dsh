@@ -6,7 +6,6 @@
  * back the cost, cache behaviour and token volume for that exact session.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
-import { nextPageQuery } from '@d4551/dsh-cloudflare-core/paginate'
 import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -105,7 +104,7 @@ export function registerSessionCost(ctx: Context, cf: CloudflareService): void {
             ),
             signal: exec.signal,
           },
-          nextPageQuery,
+          (envelope, seen) => cf.nextPage(envelope, seen),
         )
         // The server filter is sent, and every row is re-checked here against
         // the metadata it actually carries. Cloudflare's schema does not

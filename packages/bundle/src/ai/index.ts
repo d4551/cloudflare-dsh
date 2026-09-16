@@ -12,7 +12,6 @@
  * own endpoint shape, and config selects the account and gateway — the URL
  * itself is never a configuration field.
  */
-import { nextPageByLength } from '@d4551/dsh-cloudflare-core/paginate'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import Schema from '@deepseek-ai/schemastery'
@@ -213,7 +212,9 @@ export function apply(ctx: Context, config: AiConfig): void {
         ...gatewayUrlSpec(config.gatewayId, config.gatewayProvider),
         signal,
       })
-      const base = result.url
+      // An endpoint that answers with a null result advertises no base URL,
+      // which is the missing-gateway condition under another spelling.
+      const base = result === null ? undefined : result.url
       if (base === undefined || base === '') {
         throw new MissingGatewayError()
       }
@@ -269,7 +270,7 @@ export function apply(ctx: Context, config: AiConfig): void {
     // rather than a shorter list presented as the whole.
     const walk = await cf.accountListAll<{ name?: string; description?: string }>(
       aiModelsSearchSpec(undefined, undefined, 1, CATALOGUE_LOOKUP_PAGE_SIZE),
-      nextPageByLength(CATALOGUE_LOOKUP_PAGE_SIZE),
+      cf.pageByLength(CATALOGUE_LOOKUP_PAGE_SIZE),
     )
     if (walk.truncated) throw new CatalogueTruncatedError(walk.pages)
     return toModelInfo(provider, walk.items)

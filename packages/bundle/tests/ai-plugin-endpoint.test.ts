@@ -9,12 +9,13 @@ import * as aiPlugin from '../src/ai/index.ts'
 
 /**
  * Consume a stream to its end and report how many chunks it yielded, for the
- * tests that observe the request rather than the chunks.
+ * tests that observe the request rather than the chunks. The chunk types are
+ * collected along the way, so the count is the length of what was seen.
  */
 async function drain(iterable: AsyncIterable<StreamChunk>): Promise<number> {
-  let count = 0
-  for await (const _chunk of iterable) count += 1
-  return count
+  const types: StreamChunk['type'][] = []
+  for await (const { type } of iterable) types.push(type)
+  return types.length
 }
 
 describe('endpoint resolution', () => {
@@ -40,15 +41,15 @@ describe('endpoint resolution', () => {
     })
     vi.stubGlobal('fetch', globalFetch)
     const { registered } = harness(config, apiResponses)
-    let chunks = 0
-    for await (const _chunk of registered[0]!.provider.stream({
+    const types: StreamChunk['type'][] = []
+    for await (const { type } of registered[0]!.provider.stream({
       provider,
       model: '@cf/m',
       messages: [],
     })) {
-      chunks += 1
+      types.push(type)
     }
-    return { outbound, chunks }
+    return { outbound, chunks: types.length }
   }
 
   it('routes workers-ai to the account-scoped OpenAI-compatible path', async () => {
@@ -211,15 +212,15 @@ describe('endpoint resolution', () => {
     const globalFetch = vi.fn<MockFetch>(async () => new Response(never, { status: 200 }))
     vi.stubGlobal('fetch', globalFetch)
     const run = async (): Promise<number> => {
-      let seen = 0
-      for await (const _chunk of registered[0]!.provider.stream({
+      const types: StreamChunk['type'][] = []
+      for await (const { type } of registered[0]!.provider.stream({
         provider: 'cloudflare-workers-ai',
         model: '@cf/m',
         messages: [],
       })) {
-        seen += 1
+        types.push(type)
       }
-      return seen
+      return types.length
     }
     await expect(run()).rejects.toMatchObject({ code: 'TIMEOUT' })
   })
@@ -238,7 +239,7 @@ describe('endpoint resolution', () => {
 
   it('fails loud when the API returns no gateway url', async () => {
     await expect(
-      stream({ gatewayId: 'gw1' }, 'cloudflare-ai-gateway', async () => envelope({})),
+      stream({ gatewayId: 'gw1' }, 'cloudflare-ai-gateway', async () => envelope(null)),
     ).rejects.toThrow(aiPlugin.MissingGatewayError)
   })
 

@@ -8,18 +8,18 @@ import {
   CloudflareNoAccountError,
   CloudflareService,
 } from '../src/service.ts'
-import type { CloudflareEnvelope } from '../src/types.ts'
+import type { CloudflareEnvelope, JsonValue } from '../src/types.ts'
 
 const credentials: CredentialResolver = { resolve: () => 'tok' }
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+function json(envelope: CloudflareEnvelope<JsonValue>, status = 200): Response {
+  return new Response(JSON.stringify(envelope), {
     status,
     headers: { 'content-type': 'application/json' },
   })
 }
 
-function ok<T>(result: T, info?: CloudflareEnvelope['result_info']): CloudflareEnvelope<T> {
+function ok<T extends JsonValue>(result: T, info?: CloudflareEnvelope['result_info']): CloudflareEnvelope<T> {
   return info === undefined
     ? { success: true, errors: [], result }
     : { success: true, errors: [], result, result_info: info }
@@ -221,6 +221,55 @@ describe('CloudflareService scoping', () => {
   })
 })
 
+describe('CloudflareService.safeApiPath', () => {
+  it('contains the path to the api root and pairs it with its decoded spelling', () => {
+    const { service } = build()
+    expect(service.safeApiPath('/accounts/x/%74okens')).toEqual({
+      safe: '/accounts/x/%74okens',
+      decoded: '/accounts/x/tokens',
+    })
+  })
+
+  it('leaves a legitimately encoded segment intact in both spellings', () => {
+    // `seg()` percent-encodes every id, so encoding itself must stay legal.
+    const { service } = build()
+    expect(service.safeApiPath('/accounts/a%2Fb/members')).toEqual({
+      safe: '/accounts/a%2Fb/members',
+      decoded: '/accounts/a/b/members',
+    })
+  })
+
+  it.each([
+    ['another host', 'https://evil.test/x'],
+    ['a protocol-relative url', '//evil.test/x'],
+    ['a traversal out of the api root', '/accounts/../../x'],
+    ['an encoded traversal, which decodes to a real one', '/a/%2e%2e/%2e%2e/x'],
+  ])('refuses %s', (_label, path) => {
+    const { service } = build()
+    expect(() => service.safeApiPath(path)).toThrow(TypeError)
+  })
+})
+
+describe('CloudflareService pagination steppers', () => {
+  const envelope = (result: JsonValue[], info?: CloudflareEnvelope['result_info']) => ok(result, info)
+
+  it('walks by length when the endpoint reports no total', () => {
+    const { service } = build()
+    const stepper = service.pageByLength(2)
+    expect(stepper(envelope(['a', 'b']), 2)).toEqual({ page: 2 })
+    expect(stepper(envelope(['c']), 3)).toBeNull()
+  })
+
+  it('reads the next page query from the envelope result_info', () => {
+    const { service } = build()
+    expect(service.nextPage(envelope([], { page: 1, per_page: 20, total_count: 50 }), 20)).toEqual({
+      page: 2,
+      per_page: 20,
+    })
+    expect(service.nextPage(envelope([]), 0)).toBeNull()
+  })
+})
+
 describe('CloudflareService requests', () => {
   it('prefixes an account-scoped path', async () => {
     const { service, requests } = build({ accountId: 'a9' }, async () => json(ok({ done: true })))
@@ -288,7 +337,7 @@ describe('CloudflareService requests', () => {
       },
       async () => {
         calls += 1
-        return json({ success: false, errors: [], messages: [], result: null }, 500)
+        return json({ success: false, errors: [{ code: 10000, message: 'boom' }], result: null }, 500)
       },
     )
     await expect(service.accountRequest({ method: 'GET', path: '/x' })).rejects.toMatchObject({
@@ -302,7 +351,7 @@ describe('CloudflareService requests', () => {
     let calls = 0
     const { service } = build({ accountId: 'a9', maxRetries: 0 }, async () => {
       calls += 1
-      return json({ success: false, errors: [], messages: [], result: null }, 500)
+      return json({ success: false, errors: [{ code: 10000, message: 'boom' }], result: null }, 500)
     })
     await expect(service.accountRequest({ method: 'GET', path: '/x' })).rejects.toMatchObject({
       name: 'CloudflareError',

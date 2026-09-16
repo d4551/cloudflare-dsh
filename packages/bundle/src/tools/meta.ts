@@ -159,9 +159,15 @@ export function apply(ctx: Context, config: MetaConfig): void {
       // its arguments.
       isConcurrencySafe: (args) => READ_METHODS.includes(args.method),
       async execute(args, exec) {
-        const spec = buildGenericSpec(args.method, args.path, toQuery(args.query), args.body, {
-          denyPathPrefixes: config.denyPathPrefixes,
-        })
+        const spec = buildGenericSpec(
+          args.method,
+          cf.safeApiPath(args.path),
+          toQuery(args.query),
+          args.body,
+          {
+            denyPathPrefixes: config.denyPathPrefixes,
+          },
+        )
         const result = await cf.client.request<JsonValue>({ ...spec, signal: exec.signal })
         return { result }
       },

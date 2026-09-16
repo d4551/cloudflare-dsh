@@ -11,7 +11,14 @@ import { type BinaryBody, CloudflareClient, type FetchLike, realSleep } from './
 import type { CloudflareConfig } from './config.ts'
 import type { CredentialResolver } from './credentials.ts'
 import { CloudflareError } from './errors.ts'
-import { nextPageQuery, type PageStepper, type PageWalk } from './paginate.ts'
+import {
+  nextPageByLength,
+  nextPageQuery,
+  type NextPageQuery,
+  type PageStepper,
+  type PageWalk,
+} from './paginate.ts'
+import { assertSafePath, decodePath } from './request.ts'
 import { makeScope, scopedPath } from './scope.ts'
 import type { CloudflareEnvelope, RequestSpec, Scope } from './types.ts'
 
@@ -133,6 +140,35 @@ export class CloudflareService extends Service {
   /** The account scope, resolving the account id if needed, under the caller's signal. */
   async accountScope(signal?: AbortSignal): Promise<Scope> {
     return makeScope(await this.accountId(signal))
+  }
+
+  /**
+   * The page stepper for endpoints that report no `result_info`: a page
+   * shorter than the size asked for is the only sign the data ran out. The
+   * Workers AI catalogue walks this way.
+   */
+  pageByLength(perPage: number): PageStepper {
+    return nextPageByLength(perPage)
+  }
+
+  /**
+   * The next page query for a page-numbered endpoint, read from the
+   * envelope's `result_info`: null once everything has been seen, or when the
+   * page came back short, or when the endpoint reported nothing to go on.
+   */
+  nextPage(envelope: Pick<CloudflareEnvelope, 'result_info'>, seen: number): NextPageQuery {
+    return nextPageQuery(envelope, seen)
+  }
+
+  /**
+   * The request path contained to the API root, in both spellings the path
+   * denylist must compare: the literal one and the one the server will see
+   * after percent-decoding. Containment is this seam's own guarantee, so the
+   * pair comes from here rather than from a helper a tool would re-run.
+   */
+  safeApiPath(path: string): { readonly safe: string; readonly decoded: string } {
+    const safe = assertSafePath(path)
+    return { safe, decoded: decodePath(safe) }
   }
 
   /** Issue an account-scoped request, resolving the account id first. */
