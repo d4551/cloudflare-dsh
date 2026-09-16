@@ -9,8 +9,9 @@
  * tree carries.
  */
 import { describe, expect, it } from 'vitest'
-import { modules, read } from './base.ts'
+import { scanTree } from './scan.ts'
 import { stackedDocs } from './scanners.ts'
+import { modules } from './support.ts'
 
 describe('no superseded doc blocks in any module the tree carries', () => {
   it('finds the modules this gate holds', () => {
@@ -18,6 +19,6 @@ describe('no superseded doc blocks in any module the tree carries', () => {
   })
 
   it('finds none of them stacked', () => {
-    expect(modules.flatMap((file) => stackedDocs(file, read(file)))).toEqual([])
+    expect(scanTree(modules, stackedDocs)).toEqual([])
   })
 })

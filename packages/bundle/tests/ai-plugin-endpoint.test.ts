@@ -114,6 +114,11 @@ describe('endpoint resolution', () => {
         return () => registered.pop()
       },
     })
+    // Stubbed before the plugin applies: the provider captures the global
+    // transport when it is constructed, so a stub registered afterwards would
+    // never be seen by the calls under test.
+    const globalFetch = vi.fn<MockFetch>(async () => new Response(stop, { status: 200 }))
+    vi.stubGlobal('fetch', globalFetch)
     const service = new CloudflareService(
       ctx,
       CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }),
@@ -121,8 +126,6 @@ describe('endpoint resolution', () => {
     )
     expect(service.name).toBe('cloudflare')
     aiPlugin.apply(ctx, aiPlugin.Config({}))
-    const globalFetch = vi.fn<MockFetch>(async () => new Response(stop, { status: 200 }))
-    vi.stubGlobal('fetch', globalFetch)
     const call = () =>
       drain(registered[0]!.stream({ provider: 'cloudflare-workers-ai', model: '@cf/m', messages: [] }))
     const first = await call()
@@ -207,10 +210,13 @@ describe('endpoint resolution', () => {
   })
 
   it('applies the configured stream idle timeout', async () => {
-    const { registered } = harness({ streamIdleTimeoutMs: 25 })
-    const never = new ReadableStream<Uint8Array>({ start: () => undefined })
-    const globalFetch = vi.fn<MockFetch>(async () => new Response(never, { status: 200 }))
+    // Stubbed before the harness applies the plugin: the provider captures the
+    // global transport when it is constructed.
+    const globalFetch = vi.fn<MockFetch>(
+      async () => new Response(new ReadableStream<Uint8Array>({ start: () => undefined }), { status: 200 }),
+    )
     vi.stubGlobal('fetch', globalFetch)
+    const { registered } = harness({ streamIdleTimeoutMs: 25 })
     const run = async (): Promise<number> => {
       const types: StreamChunk['type'][] = []
       for await (const { type } of registered[0]!.provider.stream({

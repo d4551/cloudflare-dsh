@@ -9,22 +9,23 @@
  * string with itself.
  */
 import { describe, expect, it } from 'vitest'
-import { containing, read, sources, testFiles } from './base.ts'
+import { containing } from './base.ts'
+import { scanTree } from './scan.ts'
 import { inlineCopy } from './scanners.ts'
+import { sources, testFiles } from './support.ts'
+
+/** The client components this gate holds: every `.tsx` the client package ships. */
+const components = sources.filter(
+  (file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'),
+)
 
 describe('no client component carries inline copy', () => {
   it('finds the components this gate holds', () => {
-    const components = sources.filter(
-      (file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'),
-    )
     expect(components.length).toBeGreaterThan(0)
   })
 
   it('finds no inline copy in any of them', () => {
-    const components = sources.filter(
-      (file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'),
-    )
-    expect(components.flatMap((file) => inlineCopy(file, read(file)))).toEqual([])
+    expect(scanTree(components, inlineCopy)).toEqual([])
   })
 })
 

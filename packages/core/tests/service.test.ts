@@ -337,7 +337,7 @@ describe('CloudflareService requests', () => {
       },
       async () => {
         calls += 1
-        return json({ success: false, errors: [{ code: 10000, message: 'boom' }], result: null }, 500)
+        return json({ success: false, errors: [{ code: 42, message: 'boom' }], result: null }, 500)
       },
     )
     await expect(service.accountRequest({ method: 'GET', path: '/x' })).rejects.toMatchObject({
@@ -351,7 +351,7 @@ describe('CloudflareService requests', () => {
     let calls = 0
     const { service } = build({ accountId: 'a9', maxRetries: 0 }, async () => {
       calls += 1
-      return json({ success: false, errors: [{ code: 10000, message: 'boom' }], result: null }, 500)
+      return json({ success: false, errors: [{ code: 42, message: 'boom' }], result: null }, 500)
     })
     await expect(service.accountRequest({ method: 'GET', path: '/x' })).rejects.toMatchObject({
       name: 'CloudflareError',

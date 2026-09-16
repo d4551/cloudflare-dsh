@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import * as toolsModule from '../src/tools/meta.ts'
+import { describe } from 'vitest'
+import { contractSuite } from './contract.ts'
+import type { ToolContract } from './data/contracts/shared.ts'
 import { envelope, makeHarness } from './harness.ts'
+import * as toolsModule from '../src/tools/meta.ts'
 
 /**
  * The model-facing contract for every tool in this module.
@@ -10,7 +12,7 @@ import { envelope, makeHarness } from './harness.ts'
  * are pinned explicitly rather than left to drift. Written out in full on
  * purpose: changing one has to be a deliberate edit visible in review.
  */
-const CONTRACT: Record<string, { description: string; parameters: unknown; output: unknown }> = {
+const CONTRACT: Record<string, ToolContract> = {
   cloudflare_account_list: {
     description: 'List the Cloudflare accounts this API token can access.',
     parameters: {
@@ -88,21 +90,8 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
 }
 
 describe('meta tool contract', () => {
-  const h = makeHarness(toolsModule, async () => envelope(null))
-
-  it('registers exactly the contracted tools', () => {
-    expect(h.names().toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
-  })
-
-  it.each(Object.keys(CONTRACT))('%s exposes its contracted description', (name) => {
-    expect(h.tool(name).description).toBe(CONTRACT[name]!.description)
-  })
-
-  it.each(Object.keys(CONTRACT))('%s exposes its contracted parameter schema', (name) => {
-    expect(h.tool(name).parameters).toStrictEqual(CONTRACT[name]!.parameters)
-  })
-
-  it.each(Object.keys(CONTRACT))('%s exposes its contracted output schema', (name) => {
-    expect(h.tool(name).output.schema).toStrictEqual(CONTRACT[name]!.output)
-  })
+  contractSuite(
+    makeHarness(toolsModule, async () => envelope(null)),
+    [['meta', CONTRACT]],
+  )
 })

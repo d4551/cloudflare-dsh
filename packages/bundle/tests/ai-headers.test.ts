@@ -130,8 +130,8 @@ describe('buildGatewayHeaders', () => {
   it.each(['cf-aig-max-attempts', 'cf-aig-retry-delay', 'cf-aig-backoff'])(
     'never sends %s, which would make the gateway retry behind the harness',
     (header) => {
-      // One adapter call must be one provider attempt. A gateway-side retry is
-      // billed and logged as a separate request the harness never asked for.
+      // One provider call must be one attempt: a gateway-side retry is billed
+      // and logged as a separate request the harness never asked for.
       const all = buildGatewayHeaders(
         { sessionId: 's1' },
         {

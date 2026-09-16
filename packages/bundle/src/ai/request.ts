@@ -11,7 +11,7 @@
  * Every content block kind has a stated fate here. Text is sent. Tool calls and
  * tool results round-trip. Images are projected to the harness's deterministic
  * text through its own helper: inlining them would need the attachment store's
- * bytes, which this adapter is not wired to, and Cloudflare's OpenAI-compatible
+ * bytes, which never reach this route, and Cloudflare's OpenAI-compatible
  * endpoint accepts only data URLs for images in any case. Reasoning is the
  * model's earlier thinking; OpenAI-compatible reasoning APIs refuse it in input,
  * so it is left out by that rule rather than dropped by accident.
@@ -38,7 +38,16 @@ export interface WireMessage {
 /** One tool exposed to the provider. */
 export interface WireTool {
   readonly type: 'function'
-  readonly function: { readonly name: string; readonly description: string; readonly parameters: unknown }
+  readonly function: {
+    readonly name: string
+    readonly description: string
+    /**
+     * The harness's own JSON Schema for the arguments, carried through
+     * unchanged: this route forwards it to the provider verbatim, so the field
+     * is typed as the harness declares it rather than restated here.
+     */
+    readonly parameters: ToolSchema['parameters']
+  }
 }
 
 /** The request body sent to the provider. */
@@ -113,7 +122,7 @@ export function toWireTools(tools: readonly ToolSchema[]): WireTool[] {
  *
  * Any `GenerateOptions` field this route cannot express is rejected rather than
  * dropped: the harness is explicit that silently ignoring an option is not an
- * acceptable adapter behaviour.
+ * acceptable behaviour.
  */
 export function buildWireRequest(options: GenerateOptions): WireRequest {
   if (options.reasoningEffort !== undefined) {

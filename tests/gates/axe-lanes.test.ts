@@ -9,7 +9,8 @@
  * under `tests/`, so a literal would make the gate find its own definition.
  */
 import { describe, expect, it } from 'vitest'
-import { containing, matching, read, testFiles } from './base.ts'
+import { containing, matching, read } from './base.ts'
+import { testFiles } from './support.ts'
 
 describe('accessibility cannot be filtered', () => {
   it.each([

@@ -11,7 +11,7 @@
 import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { CLOUDFLARE_MCP_SERVERS } from '../../packages/bundle/src/mcp/index.ts'
-import { read, root } from './support.ts'
+import { read, root } from './base.ts'
 
 /**
  * Budget for collecting a whole vitest suite as a subprocess. Collecting over a

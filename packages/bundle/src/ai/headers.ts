@@ -32,7 +32,7 @@ const PURPOSE_METADATA_KEY = 'purpose'
  */
 export const MAX_METADATA_ENTRIES = 5
 
-/** Gateway behaviour this adapter can request per call. */
+/** Gateway behaviour this provider can request per call. */
 export interface GatewayHeaderOptions {
   /** Seconds to cache an identical request; 0 disables caching. */
   readonly cacheTtlSeconds?: number | undefined
@@ -140,8 +140,8 @@ export function buildGatewayHeaders(
     headers['cf-aig-request-timeout'] = String(gatewayTimeout)
   }
   // `cf-aig-max-attempts`, `cf-aig-retry-delay` and `cf-aig-backoff` are
-  // deliberately never sent. They make the gateway retry on the adapter's
-  // behalf, which would break the harness contract that one adapter call is one
+  // deliberately never sent. They make the gateway retry on the provider's
+  // behalf, which would break the harness contract that one provider call is one
   // provider attempt — the harness owns retry policy, and a hidden second
   // attempt would be billed and logged as a separate request.
   return headers

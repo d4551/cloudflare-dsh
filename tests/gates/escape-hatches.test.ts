@@ -8,8 +8,9 @@
  * a cast in a vitest config escapes the packages' own gates.
  */
 import { describe, expect, it } from 'vitest'
-import { modules, read } from './base.ts'
+import { scanTree } from './scan.ts'
 import { looseTypes } from './scanners.ts'
+import { modules } from './support.ts'
 
 describe('no loose types in any module the tree carries', () => {
   it('finds the modules this gate holds', () => {
@@ -17,6 +18,6 @@ describe('no loose types in any module the tree carries', () => {
   })
 
   it('finds none of them loose', () => {
-    expect(modules.flatMap((file) => looseTypes(file, read(file)))).toEqual([])
+    expect(scanTree(modules, looseTypes)).toEqual([])
   })
 })

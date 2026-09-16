@@ -1,6 +1,21 @@
+/**
+ * The provider's registered surface: the delegation it performs, the error
+ * detail it reads back, and the hooks the harness asks it about around a call.
+ *
+ * The wire half of the same provider — what one model call puts on the wire and
+ * what comes back as chunks — is held by `ai-provider-stream.test.ts`; the
+ * module this suite imports is the entry the package publishes, so the
+ * re-export itself is asserted here too.
+ */
 import { describe, expect, it } from 'vitest'
-import { CloudflareAiProvider, readErrorDetail } from '../src/ai/provider.ts'
-import { collect, makeProvider, options, sse, TEXT, STOP } from './ai-provider-support.ts'
+import {
+  AI_GATEWAY_PROVIDER,
+  CloudflareAiProvider,
+  WORKERS_AI_PROVIDER,
+  readErrorDetail,
+} from '../src/ai/index.ts'
+import * as providerModule from '../src/ai/provider.ts'
+import { MODEL, STOP, TEXT, collect, makeProvider, options, sse } from './ai-provider-support.ts'
 
 describe('readErrorDetail', () => {
   it('reads a Cloudflare envelope error', () => {
@@ -117,5 +132,37 @@ describe('provider identity', () => {
   it('is an instance of the provider class the harness registers', () => {
     const { provider } = makeProvider(async () => sse(TEXT, STOP))
     expect(provider).toBeInstanceOf(CloudflareAiProvider)
+  })
+})
+
+describe('the retry policy of a registered route', () => {
+  // One provider call is one attempt: the harness owns retry, and a second
+  // attempt arranged behind it would be billed and logged twice. Cloudflare
+  // publishes no route-owned policy beyond the `retry-after` a rate-limited
+  // failure already carries, so none is declared and the harness defaults apply.
+  it('declares none, for either route', () => {
+    const { provider } = makeProvider()
+    expect(provider.providerRetryPolicy(WORKERS_AI_PROVIDER)).toBeUndefined()
+    expect(provider.providerRetryPolicy(AI_GATEWAY_PROVIDER)).toBeUndefined()
+  })
+})
+
+describe('the image price of a registered route', () => {
+  // Cloudflare prices vision input per token, not per image, so there is no
+  // per-image price to declare and the token meter keeps its own estimate.
+  it('declares none, for either route', () => {
+    const { provider } = makeProvider()
+    expect(provider.imageRequestPricing(WORKERS_AI_PROVIDER, MODEL)).toBeUndefined()
+    expect(provider.imageRequestPricing(AI_GATEWAY_PROVIDER, MODEL)).toBeUndefined()
+  })
+})
+
+describe('the published surface', () => {
+  // `./ai` is the entry the package publishes, so a host mounting the plugin
+  // imports the provider class and the error reader from it rather than from
+  // the module that defines them; the two must be the same objects.
+  it('re-exports the live provider class and the live error reader', () => {
+    expect(CloudflareAiProvider).toBe(providerModule.CloudflareAiProvider)
+    expect(readErrorDetail).toBe(providerModule.readErrorDetail)
   })
 })

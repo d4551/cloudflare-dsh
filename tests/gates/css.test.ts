@@ -7,7 +7,7 @@
  * trusted on the stylesheet.
  */
 import { describe, expect, it } from 'vitest'
-import { read } from './support.ts'
+import { read } from './base.ts'
 
 /**
  * A colour literal, assembled so this file carries no raw one.

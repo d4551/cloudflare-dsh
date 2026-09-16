@@ -2,10 +2,10 @@
  * OpenAI-compatible SSE events to harness `StreamChunk`s.
  *
  * This is a pure state machine with no I/O, no clock and no randomness, which
- * is deliberate: the adapter's whole contract lives here — block-index
+ * is deliberate: the provider's whole chunk contract lives here — block-index
  * allocation, argument accumulation, `usage`-before-`finish` ordering — so it
  * can be exercised exhaustively from arrays of fixture events. The I/O shell in
- * `adapter.ts` stays thin enough to hold no logic worth testing indirectly.
+ * `provider.ts` stays thin enough to hold no logic worth testing indirectly.
  *
  * Contract obligations implemented here:
  *  - block indices are allocated in first-seen order and reused for every
@@ -58,7 +58,7 @@ export interface WireChunk {
  * Map a provider finish reason onto the harness vocabulary.
  *
  * Every reason has a stated meaning. A completion the provider withheld under
- * its content policy, or ended for a reason this adapter does not know, is an
+ * its content policy, or ended for a reason this provider does not know, is an
  * `error` finish naming that reason — not a `stop` the loop would read as a
  * successful answer.
  */
@@ -82,7 +82,7 @@ export function mapFinishReason(reason: string): FinishReason {
       return {
         kind: 'error',
         failure: {
-          message: `the provider ended the completion for a reason this adapter does not recognise: ${reason}`,
+          message: `the provider ended the completion with an unrecognised finish reason: ${reason}`,
           code: PROVIDER_ERROR_CODE,
         },
       }
@@ -142,9 +142,9 @@ export class StreamTransducer {
   /**
    * Materialise an open block as its finished content block.
    *
-   * An exhaustive switch rather than a chain with a fallback: a block type that
-   * is not handled should be a visible failure, not silently rendered as a
-   * tool call.
+   * The switch covers `OpenBlock['type']` completely, so the arm for a type
+   * added without a case here is a compile error rather than a block silently
+   * rendered as something else.
    */
   private static finish(block: OpenBlock): ContentBlock {
     switch (block.type) {
@@ -279,7 +279,7 @@ export class StreamTransducer {
     return [...this.closeAll(), { type: 'finish', reason: { kind: 'stop' } }]
   }
 
-  /** The reason the provider closed with, once it has; the adapter judges an empty completion by it. */
+  /** The reason the provider closed with, once it has; the provider judges an empty completion by it. */
   get finishReason(): FinishReason | undefined {
     return this.closedReason
   }

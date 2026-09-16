@@ -246,8 +246,8 @@ describe('buildWireRequest', () => {
     expect('tools' in buildWireRequest(options({ tools: [] }))).toBe(false)
   })
 
-  // The harness is explicit that an adapter must reject an option it cannot
-  // express rather than silently dropping it.
+  // The harness is explicit: an option that cannot be expressed is rejected,
+  // not silently dropped.
   it('rejects reasoningEffort rather than dropping it', () => {
     const withEffort = { ...options(), reasoningEffort: ReasoningEffortId('high') }
     expect(() => buildWireRequest(withEffort)).toThrow(

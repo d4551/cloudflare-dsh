@@ -1,7 +1,16 @@
+/**
+ * The chunk state machine: what one stream of wire events becomes.
+ *
+ * Every case here drives a real `StreamTransducer` from fixture events and
+ * asserts the exact chunk sequence, because the ordering guarantees —
+ * `usage` before `finish`, nothing after `finish`, blocks closed in index
+ * order — are what the harness's turn loop depends on. The two pure value
+ * mappings the same module exports are held by `ai-transducer-mapping.test.ts`.
+ */
 import { describe, expect, it } from 'vitest'
-import { StreamTransducer, mapFinishReason, mapUsage, type WireChunk } from '../src/ai/transducer.ts'
+import { StreamTransducer, type WireChunk, type WireToolCallDelta } from '../src/ai/transducer.ts'
 
-/** Feed a whole stream and collect every chunk, as the adapter shell would. */
+/** Feed a whole stream and collect every chunk, as the provider shell would. */
 function run(events: readonly WireChunk[], close = true) {
   const t = new StreamTransducer()
   const out = events.flatMap((e) => t.push(e))
@@ -10,86 +19,6 @@ function run(events: readonly WireChunk[], close = true) {
 
 const text = (s: string): WireChunk => ({ choices: [{ delta: { content: s } }] })
 const done = (reason = 'stop'): WireChunk => ({ choices: [{ delta: {}, finish_reason: reason }] })
-
-describe('mapFinishReason', () => {
-  it('maps tool_calls', () => {
-    expect(mapFinishReason('tool_calls')).toEqual({ kind: 'tool-calls' })
-  })
-
-  it('maps length to max-tokens', () => {
-    expect(mapFinishReason('length')).toEqual({ kind: 'max-tokens' })
-  })
-
-  it('maps stop', () => {
-    expect(mapFinishReason('stop')).toEqual({ kind: 'stop' })
-  })
-
-  it('maps a content filter to an error finish that names the policy', () => {
-    expect(mapFinishReason('content_filter')).toEqual({
-      kind: 'error',
-      failure: {
-        message: 'the provider withheld the completion under its content policy',
-        code: 'CONTENT_FILTER',
-      },
-    })
-  })
-
-  it('maps a reason it does not know to an error finish that quotes it', () => {
-    expect(mapFinishReason('eos_token')).toEqual({
-      kind: 'error',
-      failure: {
-        message: 'the provider ended the completion for a reason this adapter does not recognise: eos_token',
-        code: 'PROVIDER_ERROR',
-      },
-    })
-  })
-})
-
-describe('mapUsage', () => {
-  it('reports zeros for an empty usage object', () => {
-    expect(mapUsage({})).toStrictEqual({ inputTokens: 0, outputTokens: 0 })
-  })
-
-  it('maps prompt and completion tokens', () => {
-    expect(mapUsage({ prompt_tokens: 10, completion_tokens: 4 })).toStrictEqual({
-      inputTokens: 10,
-      outputTokens: 4,
-    })
-  })
-
-  it('subtracts cached tokens so the counts stay disjoint', () => {
-    expect(
-      mapUsage({ prompt_tokens: 10, completion_tokens: 1, prompt_tokens_details: { cached_tokens: 4 } }),
-    ).toStrictEqual({ inputTokens: 6, outputTokens: 1, cacheReadTokens: 4 })
-  })
-
-  it('never reports negative input when a provider over-reports cache hits', () => {
-    expect(mapUsage({ prompt_tokens: 2, prompt_tokens_details: { cached_tokens: 9 } }).inputTokens).toBe(0)
-  })
-
-  it('omits cacheReadTokens when nothing was cached', () => {
-    expect(mapUsage({ prompt_tokens: 3, prompt_tokens_details: { cached_tokens: 0 } })).toStrictEqual({
-      inputTokens: 3,
-      outputTokens: 0,
-    })
-  })
-
-  it('preserves a provider total when given', () => {
-    expect(mapUsage({ prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 }).totalTokens).toBe(3)
-  })
-
-  it('omits the total when the provider did not report one', () => {
-    expect(mapUsage({ prompt_tokens: 1 }).totalTokens).toBeUndefined()
-  })
-
-  it('carries reasoning tokens when reported', () => {
-    expect(mapUsage({ completion_tokens_details: { reasoning_tokens: 7 } }).reasoningTokens).toBe(7)
-  })
-
-  it('omits reasoning tokens when not reported', () => {
-    expect(mapUsage({}).reasoningTokens).toBeUndefined()
-  })
-})
 
 describe('text streaming', () => {
   it('opens a block, streams deltas, then closes and finishes', () => {
@@ -175,12 +104,12 @@ describe('reasoning streaming', () => {
 
   it('closes reasoning and text in index order', () => {
     const chunks = run([{ choices: [{ delta: { reasoning_content: 'r' } }] }, text('t'), done()])
-    const ends = chunks.filter((c) => c.type === 'block-end')
-    expect(ends.map((c) => (c as { index: number }).index)).toEqual([0, 1])
+    expect(chunks.flatMap((c) => (c.type === 'block-end' ? [c.index] : []))).toEqual([0, 1])
   })
 })
 
-const call = (over: Record<string, unknown>): WireChunk => ({
+/** One tool-call fragment at wire index 0, carrying the fields a case supplies. */
+const call = (over: Omit<Partial<WireToolCallDelta>, 'index'>): WireChunk => ({
   choices: [{ delta: { tool_calls: [{ index: 0, ...over }] } }],
 })
 
@@ -245,9 +174,7 @@ describe('tool-call streaming', () => {
       [call({ id: 'c1', function: { arguments: 'a' } }), call({ function: { arguments: 'b' } })],
       false,
     )
-    expect(
-      chunks.filter((c) => c.type === 'tool-call-delta').map((c) => (c as { index: number }).index),
-    ).toEqual([0, 0])
+    expect(chunks.flatMap((c) => (c.type === 'tool-call-delta' ? [c.index] : []))).toEqual([0, 0])
   })
 
   // An empty ToolCallId could not be correlated with the result the loop sends

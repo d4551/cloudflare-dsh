@@ -1,4 +1,4 @@
-import type { ToolContract } from '../../data/contracts/shared.ts'
+import { pagedOutput, type ToolContract } from '../../data/contracts/shared.ts'
 
 /** The contracted surface of the AI Gateway administration tools. */
 export const GATEWAY_CONTRACT: Record<string, ToolContract> = {
@@ -75,39 +75,7 @@ export const GATEWAY_CONTRACT: Record<string, ToolContract> = {
         },
       },
     },
-    output: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        gateways: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: true,
-          },
-          description: 'Gateway records as the API returns them.',
-        },
-        page: {
-          type: 'integer',
-          description: 'The page this is.',
-        },
-        perPage: {
-          type: 'integer',
-          description: 'Items requested per page.',
-        },
-        total: {
-          oneOf: [{ type: 'integer' }, { type: 'null' }],
-          description: 'Items the API says exist in all; null when it did not say.',
-        },
-        complete: {
-          type: 'boolean',
-          description:
-            'Whether this page is the last: certain when the total is known, inferred from a short page otherwise.',
-        },
-      },
-      required: ['gateways', 'page', 'perPage', 'total', 'complete'],
-      description: 'One page of gateways, and where it sits in the whole.',
-    },
+    output: pagedOutput('gateways', 'Gateway records', 'gateways'),
   },
   cloudflare_aigateway_log_body: {
     description: 'Fetch the stored request or response body for one AI Gateway log entry.',

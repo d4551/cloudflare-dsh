@@ -8,19 +8,12 @@
  * reach.
  */
 import { describe, expect, it } from 'vitest'
-import {
-  type ConfigValue,
-  type OxlintConfig,
-  type OxfmtConfig,
-  type PackageJson,
-  containing,
-  json,
-  read,
-  sources,
-} from './base.ts'
+import { containing, json, read } from './base.ts'
+import type { Json, OxfmtConfig, OxlintConfig, PackageJson } from './repo.ts'
+import { sources } from './support.ts'
 
 /** A rule entry's severity, whether written bare or beside its options. */
-const severityOf = (value: ConfigValue): ConfigValue | undefined => (Array.isArray(value) ? value[0] : value)
+const severityOf = (value: Json): Json | undefined => (Array.isArray(value) ? value[0] : value)
 
 /** An exact package version, the only spelling a pin can take. */
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/

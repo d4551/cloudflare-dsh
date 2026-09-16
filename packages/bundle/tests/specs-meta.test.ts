@@ -47,14 +47,12 @@ describe('buildGenericSpec', () => {
 
     it.each([
       ['a decoded spelling of the same resource', pair('/accounts/x/%74okens', '/accounts/x/tokens')],
-      [
-        'a twice-decoded spelling of the same resource',
-        pair('/accounts/x/%2574okens', '/accounts/x/%74okens'),
-      ],
+      ['a twice-decoded spelling of the same resource', pair('/accounts/x/%2574okens', '/accounts/x/tokens')],
       ['a mixed-case escape', pair('/accounts/x/%74oken%73', '/accounts/x/tokens')],
     ])('blocks %s', (_label, paths) => {
-      // The server percent-decodes before it routes, so the decoded spelling
-      // has to reach the denylist next to the literal one.
+      // The server percent-decodes to a fixed point before it routes, so the
+      // fully-decoded spelling has to reach the denylist next to the literal
+      // one — `safeApiPath` produces exactly that pair.
       expect(() => buildGenericSpec('GET', paths, undefined, undefined, DENIED)).toThrow(
         CloudflareApiDeniedError,
       )

@@ -15,7 +15,7 @@ import {
   isQuotaExceededError,
 } from '@deepseek-ai/dsh-llm'
 
-/** Code for a request the adapter cannot express against this provider. */
+/** Code for a request this provider cannot express. */
 export const UNSUPPORTED_OPTION_CODE = 'UNSUPPORTED_OPTION'
 /** Code for a stream that went quiet for longer than the idle budget. */
 export const TIMEOUT_CODE = 'TIMEOUT'

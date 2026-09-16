@@ -1,27 +1,30 @@
 /**
- * Parsing and positioning for the gates that read a syntax tree.
+ * Running a scanner over a tree.
  *
- * The gates read the tree rather than the text, so a gate cannot be fooled by
- * a comment or a string that quotes the pattern it forbids. Parsing comes from
- * oxc-parser, the native parser the repository's linter and formatter run on.
+ * A source-scanning gate is one line — read every file in a list, run one
+ * scanner over each, report what it found — and that line was written out in
+ * each gate that needed it. `scanTree` is that line, once, so a gate states
+ * which tree and which scanner rather than restating how to walk one.
+ *
+ * The scanners themselves live in `scanners.ts`; the parser they read through
+ * lives in `../parse.ts`, which is the only module that calls `parseSync`.
  */
-import { parseSync, type Comment, type Program } from 'oxc-parser'
+import { read } from './base.ts'
 
-/** One parsed module, with the text positions resolve against. */
-export interface Source {
-  readonly name: string
-  readonly text: string
-  readonly program: Program
-  readonly comments: readonly Comment[]
-}
+/** One scanner's finding for one module: `path:line message`, assembled by the scanner. */
+export type Finding = string
 
 /**
- * Parse one module. A module that does not parse is a defect in the tree, not
- * a pass for the gate, so the first parse error fails the scan out loud.
+ * Every finding one scanner makes across a tree.
+ *
+ * The list is walked in order and each scanner is handed the file's text, so a
+ * gate that names its tree and its scanner gets the whole result. A scanner
+ * that throws on a module the parser rejects fails the gate rather than
+ * silently skipping that module.
  */
-export function parseSource(name: string, text: string): Source {
-  const parsed = parseSync(name, text)
-  const failure = parsed.errors[0]
-  if (failure !== undefined) throw new Error(`${name}: ${failure.message}`)
-  return { name, text, program: parsed.program, comments: parsed.comments }
+export function scanTree(
+  files: readonly string[],
+  scanner: (name: string, text: string) => readonly Finding[],
+): Finding[] {
+  return files.flatMap((file) => scanner(file, read(file)))
 }

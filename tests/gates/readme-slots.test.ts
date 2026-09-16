@@ -8,12 +8,12 @@
  */
 import { Visitor } from 'oxc-parser'
 import { describe, expect, it } from 'vitest'
-import { parseSource } from './scan.ts'
-import { read } from './support.ts'
+import { parseModule } from '../parse.ts'
+import { read } from './base.ts'
 
 /** Every slot the client package names, read from its `*_SLOT` constants. */
 export function slotsIn(file: string, text: string): string[] {
-  const source = parseSource(file, text)
+  const source = parseModule(file, text)
   const found: string[] = []
   const visitor = new Visitor({
     VariableDeclarator: (node) => {

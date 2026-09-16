@@ -8,6 +8,12 @@
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { CloudflareAiProvider, type CloudflareAiProviderDeps } from '../src/ai/provider.ts'
 
+/** The route every fixture provider is registered for. */
+const WORKERS_AI_ROUTE = 'cloudflare-workers-ai'
+
+/** The model id every fixture calls. */
+export const MODEL = '@cf/m'
+
 /** Build an SSE response body from wire chunk payloads. */
 export function sse(...payloads: string[]): Response {
   return new Response(payloads.map((p) => `data: ${p}\n\n`).join(''), {
@@ -16,16 +22,28 @@ export function sse(...payloads: string[]): Response {
   })
 }
 
+/**
+ * The transport a fixture gets when the behaviour under test never reaches the
+ * wire.
+ *
+ * Reaching it fails loudly rather than answering: a suite asserting what a
+ * request carries cannot pass by way of a request that was made and stubbed
+ * away.
+ */
+const noRequest = async (): Promise<Response> => {
+  throw new Error('this fixture is for behaviour that issues no request')
+}
+
 /** A provider wired to a recording transport, overridable per test. */
 export function makeProvider(
-  fetchImpl: (request: Request) => Promise<Response>,
+  fetchImpl: (request: Request) => Promise<Response> = noRequest,
   over: Partial<CloudflareAiProviderDeps> = {},
 ): { provider: CloudflareAiProvider; requests: Request[] } {
   const requests: Request[] = []
   const provider = new CloudflareAiProvider({
     resolveEndpoint: async () => ({ url: 'https://gw.test/v1/chat/completions', token: 'tok' }),
     resolveModel: async (providerName, model) => ({ provider: providerName, id: model, name: model }),
-    listModels: async () => [{ provider: 'cloudflare-workers-ai', id: '@cf/m', name: '@cf/m' }],
+    listModels: async () => [{ provider: WORKERS_AI_ROUTE, id: MODEL, name: MODEL }],
     transmit: async (request) => {
       requests.push(request)
       return fetchImpl(request)
@@ -39,7 +57,7 @@ export function makeProvider(
 
 /** Generate options for the fixture model, overridable per test. */
 export function options(over: Partial<GenerateOptions> = {}): GenerateOptions {
-  return { provider: 'cloudflare-workers-ai', model: '@cf/m', messages: [], ...over }
+  return { provider: WORKERS_AI_ROUTE, model: MODEL, messages: [], ...over }
 }
 
 /** Drain one stream into an array, the way a harness turn consumes it. */

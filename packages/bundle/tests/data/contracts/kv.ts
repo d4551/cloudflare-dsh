@@ -1,4 +1,4 @@
-import type { ToolContract } from './shared.ts'
+import { pagedOutput, type ToolContract } from './shared.ts'
 
 /** The contracted surface of the Workers KV tools. */
 export const KV_CONTRACT: Record<string, ToolContract> = {
@@ -139,39 +139,7 @@ export const KV_CONTRACT: Record<string, ToolContract> = {
         },
       },
     },
-    output: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        namespaces: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: true,
-          },
-          description: 'Namespace records as the API returns them.',
-        },
-        page: {
-          type: 'integer',
-          description: 'The page this is.',
-        },
-        perPage: {
-          type: 'integer',
-          description: 'Items requested per page.',
-        },
-        total: {
-          oneOf: [{ type: 'integer' }, { type: 'null' }],
-          description: 'Items the API says exist in all; null when it did not say.',
-        },
-        complete: {
-          type: 'boolean',
-          description:
-            'Whether this page is the last: certain when the total is known, inferred from a short page otherwise.',
-        },
-      },
-      required: ['namespaces', 'page', 'perPage', 'total', 'complete'],
-      description: 'One page of KV namespaces, and where it sits in the whole.',
-    },
+    output: pagedOutput('namespaces', 'Namespace records', 'KV namespaces'),
   },
   cloudflare_kv_put: {
     description: 'Write one or more key/value pairs to a Workers KV namespace. Values are stored as text.',

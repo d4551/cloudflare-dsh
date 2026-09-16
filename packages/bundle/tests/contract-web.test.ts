@@ -1,6 +1,42 @@
-import { describe, expect, it } from 'vitest'
-import * as toolsModule from '../src/tools/web.ts'
+import { describe } from 'vitest'
+import { contractSuite } from './contract.ts'
+import type { ToolContract } from './data/contracts/shared.ts'
 import { envelope, makeHarness } from './harness.ts'
+import * as toolsModule from '../src/tools/web.ts'
+
+/**
+ * The resource types Cloudflare's Browser Rendering API lets a caller block.
+ *
+ * One fact, so it is written once: all three browser tools expose the same
+ * option, and a type added to the API's list belongs in all three.
+ */
+const REJECT_RESOURCE_TYPES = {
+  type: 'array',
+  description: 'Resource types to block while the page loads, for example image or script.',
+  items: {
+    type: 'string',
+    enum: [
+      'document',
+      'stylesheet',
+      'image',
+      'media',
+      'font',
+      'script',
+      'texttrack',
+      'xhr',
+      'fetch',
+      'prefetch',
+      'eventsource',
+      'websocket',
+      'manifest',
+      'signedexchange',
+      'ping',
+      'cspviolationreport',
+      'preflight',
+      'other',
+    ],
+  },
+}
 
 /**
  * The model-facing contract for every tool in this module.
@@ -10,7 +46,7 @@ import { envelope, makeHarness } from './harness.ts'
  * are pinned explicitly rather than left to drift. Written out in full on
  * purpose: changing one has to be a deliberate edit visible in review.
  */
-const CONTRACT: Record<string, { description: string; parameters: unknown; output: unknown }> = {
+const CONTRACT: Record<string, ToolContract> = {
   cloudflare_browser_accessibility_tree: {
     description:
       'Fetch the accessibility tree for a web page using Cloudflare Browser Rendering. Returns the roles, names and structure a screen reader would expose, which is what WCAG review needs.',
@@ -29,33 +65,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           type: 'string',
           description: 'Wait for this CSS selector before inspecting.',
         },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: {
-            type: 'string',
-            enum: [
-              'document',
-              'stylesheet',
-              'image',
-              'media',
-              'font',
-              'script',
-              'texttrack',
-              'xhr',
-              'fetch',
-              'prefetch',
-              'eventsource',
-              'websocket',
-              'manifest',
-              'signedexchange',
-              'ping',
-              'cspviolationreport',
-              'preflight',
-              'other',
-            ],
-          },
-        },
+        rejectResourceTypes: REJECT_RESOURCE_TYPES,
       },
       required: ['url'],
     },
@@ -98,33 +108,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           type: 'string',
           description: 'Wait for this CSS selector before capturing.',
         },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: {
-            type: 'string',
-            enum: [
-              'document',
-              'stylesheet',
-              'image',
-              'media',
-              'font',
-              'script',
-              'texttrack',
-              'xhr',
-              'fetch',
-              'prefetch',
-              'eventsource',
-              'websocket',
-              'manifest',
-              'signedexchange',
-              'ping',
-              'cspviolationreport',
-              'preflight',
-              'other',
-            ],
-          },
-        },
+        rejectResourceTypes: REJECT_RESOURCE_TYPES,
       },
       required: ['url', 'format'],
     },
@@ -177,33 +161,7 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
           type: 'string',
           description: 'Wait for this CSS selector before capturing.',
         },
-        rejectResourceTypes: {
-          type: 'array',
-          description: 'Resource types to block while the page loads, for example image or script.',
-          items: {
-            type: 'string',
-            enum: [
-              'document',
-              'stylesheet',
-              'image',
-              'media',
-              'font',
-              'script',
-              'texttrack',
-              'xhr',
-              'fetch',
-              'prefetch',
-              'eventsource',
-              'websocket',
-              'manifest',
-              'signedexchange',
-              'ping',
-              'cspviolationreport',
-              'preflight',
-              'other',
-            ],
-          },
-        },
+        rejectResourceTypes: REJECT_RESOURCE_TYPES,
       },
       required: ['url'],
     },
@@ -244,21 +202,8 @@ const CONTRACT: Record<string, { description: string; parameters: unknown; outpu
 }
 
 describe('web tool contract', () => {
-  const h = makeHarness(toolsModule, async () => envelope(null))
-
-  it('registers exactly the contracted tools', () => {
-    expect(h.names().toSorted()).toEqual(Object.keys(CONTRACT).toSorted())
-  })
-
-  it.each(Object.keys(CONTRACT))('%s exposes its contracted description', (name) => {
-    expect(h.tool(name).description).toBe(CONTRACT[name]!.description)
-  })
-
-  it.each(Object.keys(CONTRACT))('%s exposes its contracted parameter schema', (name) => {
-    expect(h.tool(name).parameters).toStrictEqual(CONTRACT[name]!.parameters)
-  })
-
-  it.each(Object.keys(CONTRACT))('%s exposes its contracted output schema', (name) => {
-    expect(h.tool(name).output.schema).toStrictEqual(CONTRACT[name]!.output)
-  })
+  contractSuite(
+    makeHarness(toolsModule, async () => envelope(null)),
+    [['web', CONTRACT]],
+  )
 })

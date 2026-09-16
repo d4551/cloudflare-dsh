@@ -10,7 +10,8 @@
  * text it forbids, and therefore needs no exemption for itself.
  */
 import { describe, expect, it } from 'vitest'
-import { code, containing, matching, read, sources, tests, tracked } from './gates/support.ts'
+import { containing, matching, read, tracked } from './gates/base.ts'
+import { code, sources, testFiles } from './gates/support.ts'
 
 describe('the lists every scan in this suite starts from', () => {
   /**
@@ -24,7 +25,7 @@ describe('the lists every scan in this suite starts from', () => {
    * A floor would drift with the tree. Naming files each list must contain
    * proves it is populated and that its filter still matches the shape the list
    * is named for — a `sources` that stopped matching `src` would be empty, and
-   * a `tests` that stopped seeing helpers would be missing `axe.ts`.
+   * a `testFiles` that stopped seeing helpers would be missing `axe.ts`.
    */
   const ROOTS: ReadonlyArray<{ name: string; list: readonly string[]; required: readonly string[] }> = [
     {
@@ -38,8 +39,8 @@ describe('the lists every scan in this suite starts from', () => {
       required: ['package.json', 'vitest.config.ts', '.github/workflows/ci.yml', 'knip.json'],
     },
     {
-      name: 'tests',
-      list: tests,
+      name: 'testFiles',
+      list: testFiles,
       required: [
         'tests/invariants.test.ts',
         'tests/gates/support.ts',
@@ -123,7 +124,7 @@ describe('no test evasions', () => {
     ['clock construction', `new Da${'te('}`],
     ['performance clock', `performance.${'now('}`],
   ])('no %s appears in a test file', (_label, needle) => {
-    expect(containing(tests, needle)).toEqual([])
+    expect(containing(testFiles, needle)).toEqual([])
   })
 })
 
@@ -135,7 +136,7 @@ describe('no assertion that anything at all satisfies', () => {
     // wired. This is the defined-only assertion above under another name, and
     // it was here 23 times. Matched as a pattern because the formatter wraps
     // the long ones.
-    expect(matching(tests, new RegExp(`toBeInstance${'Of'}\\(\\s*HTML`, 'u'))).toEqual([])
+    expect(matching(testFiles, new RegExp(`toBeInstance${'Of'}\\(\\s*HTML`, 'u'))).toEqual([])
   })
 })
 
@@ -144,6 +145,6 @@ describe('the gates read the tree they police', () => {
     // The gate modules parse with oxc-parser; a module whose syntax that
     // parser rejects would fail the gate with a parse error rather than pass
     // silently, which this pins by naming the parser's own entry point.
-    expect(read('tests/gates/scan.ts')).toContain('parseSync')
+    expect(read('tests/parse.ts')).toContain('parseSync')
   })
 })
