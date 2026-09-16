@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { containing, matching, read, tracked } from './gates/base.ts'
-import { code, sources, testFiles } from './gates/support.ts'
+import { code, modules, sources, testFiles } from './gates/support.ts'
 
 describe('the lists every scan in this suite starts from', () => {
   /**
@@ -26,6 +26,11 @@ describe('the lists every scan in this suite starts from', () => {
    * proves it is populated and that its filter still matches the shape the list
    * is named for — a `sources` that stopped matching `src` would be empty, and
    * a `testFiles` that stopped seeing helpers would be missing `axe.ts`.
+   *
+   * Every list here is the one `support.ts` derives, imported rather than
+   * re-derived: a second filter with the same shape is a second definition of
+   * what the word means, and a gate could then scan a tree its neighbour
+   * cannot see.
    */
   const ROOTS: ReadonlyArray<{ name: string; list: readonly string[]; required: readonly string[] }> = [
     {
@@ -55,7 +60,7 @@ describe('the lists every scan in this suite starts from', () => {
     },
     {
       name: 'modules',
-      list: code.filter((file) => /\.tsx?$/.test(file)),
+      list: modules,
       required: [
         'vitest.a11y.config.ts',
         'scripts/verify-mutation-files.ts',

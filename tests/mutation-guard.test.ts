@@ -117,7 +117,19 @@ describe('escapedFiles', () => {
     [runtime]: 'export const b = 2\n',
     [typeOnly]: 'export interface T {\n  x: number\n}\n',
   }
-  const read = (path: string): string => texts[path] ?? ''
+
+  /**
+   * The fixture's text for one path, refusing a path it does not carry.
+   *
+   * A default of `''` would read as an empty module — which `isTypeOnly` calls
+   * no type-only file, so a case that walked outside the fixture would pass or
+   * fail for a reason the case never stated.
+   */
+  const read = (path: string): string => {
+    const text = texts[path]
+    if (text === undefined) throw new Error(`the fixture carries no text for ${path}`)
+    return text
+  }
 
   it('names a runtime-code source the report never mutated', () => {
     expect(escapedFiles(reportOf(mutated, []), [mutated, runtime, typeOnly], read)).toEqual([runtime])

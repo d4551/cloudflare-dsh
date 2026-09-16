@@ -27,17 +27,17 @@
   "devDependencies": {
     "@stryker-mutator/core": "10.0.0",
     "@stryker-mutator/vitest-runner": "10.0.0",
-    "@types/bun": "^1.4.2",
-    "@types/node": "^22.19.0",
-    "@vitest/coverage-v8": "4.1.11",
+    "@types/bun": "1.4.2",
+    "@types/node": "22.20.3",
+    "@vitest/coverage-v8": "5.0.1",
     "knip": "6.35.1",
-    "oxc-parser": "0.149.0",
-    "oxc-transform": "0.149.0",
-    "oxfmt": "0.67.0",
-    "oxlint": "1.82.0",
+    "oxc-parser": "0.150.0",
+    "oxc-transform": "0.150.0",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
     "publint": "0.3.24",
-    "tsdown": "^0.23.0",
+    "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.1"
   }
 }

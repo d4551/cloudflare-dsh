@@ -8,11 +8,21 @@
  * A named `<figure>`, not a `<section>`: a named section is a `region`
  * landmark, and two tool calls against the same page would then ship two
  * landmarks with one name.
+ *
+ * `AxNode` is a type alias rather than an interface, which is what lets a node
+ * be carried inside the projection record the tool publishes: an interface
+ * carries no implicit index signature, so a value declared as one cannot be
+ * passed where a wire value is expected.
  */
 import { en } from '../locales/en.ts'
 
-/** One accessibility node, as Browser Rendering returns it. */
-export interface AxNode {
+/**
+ * One accessibility node, as Browser Rendering returns it.
+ *
+ * Every field is optional: a node that names nothing is still a node, and this
+ * view says so rather than dropping it.
+ */
+export type AxNode = {
   readonly role?: string
   readonly name?: string
   readonly children?: readonly AxNode[]

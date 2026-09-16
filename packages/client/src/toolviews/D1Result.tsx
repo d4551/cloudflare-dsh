@@ -11,14 +11,17 @@
  * `region` landmark, and tool views repeat: two runs of the same query would
  * put two identically named landmarks on the page, which is what the assembled
  * scan reported. A result card is not a landmark of the application.
+ *
+ * The two shapes below are type aliases rather than interfaces, and that is
+ * load-bearing rather than stylistic: an interface carries no implicit index
+ * signature, so a value declared as one cannot be handed over where a wire value
+ * is expected — and a result set is, because it travels inside the projection
+ * record `cloudflare_d1_query` publishes. A row is a wire record for the same
+ * reason: the columns are read by name, whatever type each one holds.
  */
 import { useId } from 'react'
 import { en } from '../locales/en.ts'
-
-/** One D1 result set, as the query endpoint returns it. */
-export interface D1ResultSet {
-  readonly results?: readonly Record<string, unknown>[]
-}
+import type { WireObject, WireValue } from '../wire.ts'
 
 /**
  * Rows one card renders before it stops.
@@ -30,6 +33,12 @@ export interface D1ResultSet {
  */
 const MAX_ROWS = 100
 
+/** One row: the columns the query selected, read off the wire by name. */
+type D1Row = WireObject
+
+/** One result set, as the query endpoint returns it. */
+export type D1ResultSet = { readonly results?: readonly D1Row[] | undefined }
+
 /** Props for the result view. */
 export interface D1ResultProps {
   readonly sql: string
@@ -37,7 +46,7 @@ export interface D1ResultProps {
 }
 
 /** Column names, in first-seen order across every row. */
-export function columnsOf(rows: readonly Record<string, unknown>[]): string[] {
+export function columnsOf(rows: readonly D1Row[]): string[] {
   const seen: string[] = []
   for (const row of rows) {
     for (const key of Object.keys(row)) {
@@ -48,7 +57,7 @@ export function columnsOf(rows: readonly Record<string, unknown>[]): string[] {
 }
 
 /** Render one cell value as text. */
-export function cellText(value: unknown): string {
+export function cellText(value: WireValue): string {
   if (value === null || value === undefined) return ''
   if (typeof value === 'string') return value
   return JSON.stringify(value)

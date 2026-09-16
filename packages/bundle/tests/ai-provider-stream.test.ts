@@ -11,7 +11,7 @@
  * whether any content block ever opened.
  */
 import { type Branded, brandString } from '@deepseek-ai/dsh-brand'
-import { attributionHeaders, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { EMPTY_RESPONSE_CODE, attributionHeaders, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   collect,
@@ -25,6 +25,8 @@ import {
   splitBody,
   STOP,
   TEXT,
+  TEXT_EVENT,
+  TEXT_TURN,
   trackedBody,
   USAGE_ONLY,
 } from './ai-provider-support.ts'
@@ -127,7 +129,7 @@ describe('stream', () => {
   })
 
   it('handles a payload split across transport chunks', async () => {
-    const { provider } = makeProvider(async () => splitBody(`data: ${TEXT}\n\ndata: ${STOP}\n\n`))
+    const { provider } = makeProvider(async () => splitBody(TEXT_TURN))
     const chunks = await collect(provider.stream(options()))
     expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
     expect(chunks.some((c) => c.type === 'text-delta')).toBe(true)
@@ -143,10 +145,10 @@ describe('stream', () => {
   it('ignores anything the provider sends after [DONE]', async () => {
     const trailing = JSON.stringify({ choices: [{ delta: { content: 'after' } }] })
     const { provider } = makeProvider(
-      async () => new Response(`data: ${TEXT}\n\ndata: [DONE]\n\ndata: ${trailing}\n\n`, { status: 200 }),
+      async () => new Response(`${DONE_TURN}data: ${trailing}\n\n`, { status: 200 }),
     )
     const chunks = await collect(provider.stream(options()))
-    const texts = chunks.filter((c) => c.type === 'text-delta').map((c) => (c as { text: string }).text)
+    const texts = chunks.filter((c) => c.type === 'text-delta').map((c) => c.text)
     expect(texts).toEqual(['hi'])
   })
 
@@ -156,7 +158,7 @@ describe('stream', () => {
     // finishes, but as 'stop'.
     const length = JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })
     const { provider } = makeProvider(
-      async () => new Response(`data: ${TEXT}\n\ndata: ${length}`, { status: 200 }),
+      async () => new Response(`${TEXT_EVENT}data: ${length}`, { status: 200 }),
     )
     const chunks = await collect(provider.stream(options()))
     expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'max-tokens' } })
@@ -178,7 +180,7 @@ describe('stream', () => {
 
   it('skips a malformed frame and continues the stream', async () => {
     const { provider } = makeProvider(
-      async () => new Response(`data: {oops\n\ndata: ${TEXT}\n\ndata: ${STOP}\n\n`, { status: 200 }),
+      async () => new Response(`data: {oops\n\n${TEXT_TURN}`, { status: 200 }),
     )
     const chunks = await collect(provider.stream(options()))
     expect(chunks.some((c) => c.type === 'text-delta')).toBe(true)
@@ -209,7 +211,9 @@ describe('stream', () => {
     ['a 200 whose stream carries no events', async () => new Response('', { status: 200 })],
   ])('classifies %s as an empty response', async (_label, respond) => {
     const { provider } = makeProvider(respond)
-    await expect(collect(provider.stream(options()))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+    await expect(collect(provider.stream(options()))).rejects.toMatchObject({
+      code: EMPTY_RESPONSE_CODE,
+    })
   })
 
   it('yields an error finish for a content filter, after the content that arrived', async () => {
@@ -224,7 +228,7 @@ describe('stream', () => {
   })
 
   it('fails as a timeout when the stream goes quiet', async () => {
-    const { response } = trackedBody(`data: ${TEXT}\n\n`, false)
+    const { response } = trackedBody(TEXT_EVENT, false)
     const { provider } = makeProvider(async () => response, { streamIdleTimeoutMs: 30 })
     await expect(collect(provider.stream(options()))).rejects.toMatchObject({ code: TIMEOUT_CODE })
   })
@@ -232,7 +236,7 @@ describe('stream', () => {
   // Abandoning a turn mid-stream must free the connection, not leave the
   // provider response hanging open.
   it('cancels the upstream body when the consumer abandons the stream', async () => {
-    const { response, cancelled } = trackedBody(`data: ${TEXT}\n\n`, false)
+    const { response, cancelled } = trackedBody(TEXT_EVENT, false)
     const { provider } = makeProvider(async () => response)
     for await (const chunk of provider.stream(options())) {
       if (chunk.type === 'text-delta') break
@@ -242,12 +246,17 @@ describe('stream', () => {
     expect(cancelled()).toBe(true)
   })
 
-  it('cancels the upstream body once a completed stream is drained', async () => {
-    const { response, cancelled } = trackedBody(`data: ${TEXT}\n\ndata: ${STOP}\n\n`, true)
+  // The other half of the same release contract: a provider that released the
+  // connection after each event would cut a live turn short, and one that never
+  // released it would leave the response open when the consumer stops reading.
+  it('holds the upstream body open while the turn is still being read, then releases it on return', async () => {
+    const { response, cancelled } = trackedBody(TEXT_TURN, false)
     const { provider } = makeProvider(async () => response)
-    const chunks = await collect(provider.stream(options()))
-    expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
+    const turn = provider.stream(options())[Symbol.asyncIterator]()
+    await expect(turn.next()).resolves.toMatchObject({ value: { type: 'block-start' } })
     expect(cancelled()).toBe(false)
+    await expect(turn.return?.()).resolves.toMatchObject({ done: true })
+    expect(cancelled()).toBe(true)
   })
 
   // One provider call is one attempt: retry policy belongs to the harness,
@@ -296,7 +305,7 @@ describe('idle timer hygiene', () => {
     // a stream that merely completed would prove nothing about failure.
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode(`data: ${TEXT}\n\n`))
+        controller.enqueue(new TextEncoder().encode(TEXT_EVENT))
         controller.error(new Error('connection reset'))
       },
     })

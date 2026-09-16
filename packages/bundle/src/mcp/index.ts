@@ -31,92 +31,93 @@ export interface CloudflareMcpServer {
  * this list names servers as Cloudflare publishes them rather than as the
  * product is called this quarter.
  */
+/** One hosted server, as Cloudflare publishes it. */
+function hosted(serverName: string, url: string, summary: string): CloudflareMcpServer {
+  return { serverName, url, summary }
+}
+
 export const CLOUDFLARE_MCP_SERVERS: readonly CloudflareMcpServer[] = [
-  {
-    serverName: 'cloudflare-code-mode',
-    url: 'https://mcp.cloudflare.com/mcp',
-    summary: 'Broad access across the Cloudflare API through code execution.',
-  },
-  {
-    serverName: 'cloudflare-docs',
-    url: 'https://docs.mcp.cloudflare.com/mcp',
-    summary: 'Up-to-date reference information on Cloudflare.',
-  },
-  {
-    serverName: 'cloudflare-bindings',
-    url: 'https://bindings.mcp.cloudflare.com/mcp',
-    summary: 'Build Workers applications with storage, AI and compute primitives.',
-  },
-  {
-    serverName: 'cloudflare-builds',
-    url: 'https://builds.mcp.cloudflare.com/mcp',
-    summary: 'Insight into and management of Workers Builds.',
-  },
-  {
-    serverName: 'cloudflare-observability',
-    url: 'https://observability.mcp.cloudflare.com/mcp',
-    summary: 'Debug an application from its logs and analytics.',
-  },
-  {
-    serverName: 'cloudflare-containers',
-    url: 'https://containers.mcp.cloudflare.com/mcp',
-    summary: 'Spin up a sandbox development environment.',
-  },
-  {
-    serverName: 'cloudflare-browser',
-    url: 'https://browser.mcp.cloudflare.com/mcp',
-    summary: 'Fetch pages, convert them to markdown and take screenshots.',
-  },
-  {
-    serverName: 'cloudflare-logpush',
-    url: 'https://logs.mcp.cloudflare.com/mcp',
-    summary: 'Summaries of Logpush job health.',
-  },
-  {
-    serverName: 'cloudflare-ai-gateway',
-    url: 'https://ai-gateway.mcp.cloudflare.com/mcp',
-    summary: 'Search gateway logs and read the prompts and responses behind them.',
-  },
-  {
-    serverName: 'cloudflare-autorag',
-    url: 'https://autorag.mcp.cloudflare.com/mcp',
-    summary: 'Search and query the account’s AutoRAG instances.',
-  },
-  {
-    serverName: 'cloudflare-audit-logs',
-    url: 'https://auditlogs.mcp.cloudflare.com/mcp',
-    summary: 'Query audit logs and generate reports for review.',
-  },
-  {
-    serverName: 'cloudflare-dns-analytics',
-    url: 'https://dns-analytics.mcp.cloudflare.com/mcp',
-    summary: 'Optimise DNS performance and debug the current setup.',
-  },
-  {
-    serverName: 'cloudflare-dex',
-    url: 'https://dex.mcp.cloudflare.com/mcp',
-    summary: 'Digital Experience Monitoring insight into critical applications.',
-  },
-  {
-    serverName: 'cloudflare-casb',
-    url: 'https://casb.mcp.cloudflare.com/mcp',
-    summary: 'Identify SaaS security misconfigurations across users and data.',
-  },
-  {
-    serverName: 'cloudflare-radar',
-    url: 'https://radar.mcp.cloudflare.com/mcp',
-    summary: 'Explore Cloudflare Radar internet insights.',
-  },
-  {
-    serverName: 'cloudflare-blog',
-    url: 'https://blog.mcp.cloudflare.com/mcp',
-    summary: 'Search and read posts from the Cloudflare Blog.',
-  },
-  {
-    serverName: 'cloudflare-demo-day',
-    url: 'https://demo-day.mcp.cloudflare.com/mcp',
-    summary: 'A minimal Cloudflare MCP server, published as a demonstration.',
-  },
+  hosted(
+    'cloudflare-code-mode',
+    'https://mcp.cloudflare.com/mcp',
+    'Broad access across the Cloudflare API through code execution.',
+  ),
+  hosted(
+    'cloudflare-docs',
+    'https://docs.mcp.cloudflare.com/mcp',
+    'Up-to-date reference information on Cloudflare.',
+  ),
+  hosted(
+    'cloudflare-bindings',
+    'https://bindings.mcp.cloudflare.com/mcp',
+    'Build Workers applications with storage, AI and compute primitives.',
+  ),
+  hosted(
+    'cloudflare-builds',
+    'https://builds.mcp.cloudflare.com/mcp',
+    'Insight into and management of Workers Builds.',
+  ),
+  hosted(
+    'cloudflare-observability',
+    'https://observability.mcp.cloudflare.com/mcp',
+    'Debug an application from its logs and analytics.',
+  ),
+  hosted(
+    'cloudflare-containers',
+    'https://containers.mcp.cloudflare.com/mcp',
+    'Spin up a sandbox development environment.',
+  ),
+  hosted(
+    'cloudflare-browser',
+    'https://browser.mcp.cloudflare.com/mcp',
+    'Fetch pages, convert them to markdown and take screenshots.',
+  ),
+  hosted('cloudflare-logpush', 'https://logs.mcp.cloudflare.com/mcp', 'Summaries of Logpush job health.'),
+  hosted(
+    'cloudflare-ai-gateway',
+    'https://ai-gateway.mcp.cloudflare.com/mcp',
+    'Search gateway logs and read the prompts and responses behind them.',
+  ),
+  hosted(
+    'cloudflare-autorag',
+    'https://autorag.mcp.cloudflare.com/mcp',
+    'Search and query the account’s AutoRAG instances.',
+  ),
+  hosted(
+    'cloudflare-audit-logs',
+    'https://auditlogs.mcp.cloudflare.com/mcp',
+    'Query audit logs and generate reports for review.',
+  ),
+  hosted(
+    'cloudflare-dns-analytics',
+    'https://dns-analytics.mcp.cloudflare.com/mcp',
+    'Optimise DNS performance and debug the current setup.',
+  ),
+  hosted(
+    'cloudflare-dex',
+    'https://dex.mcp.cloudflare.com/mcp',
+    'Digital Experience Monitoring insight into critical applications.',
+  ),
+  hosted(
+    'cloudflare-casb',
+    'https://casb.mcp.cloudflare.com/mcp',
+    'Identify SaaS security misconfigurations across users and data.',
+  ),
+  hosted(
+    'cloudflare-radar',
+    'https://radar.mcp.cloudflare.com/mcp',
+    'Explore Cloudflare Radar internet insights.',
+  ),
+  hosted(
+    'cloudflare-blog',
+    'https://blog.mcp.cloudflare.com/mcp',
+    'Search and read posts from the Cloudflare Blog.',
+  ),
+  hosted(
+    'cloudflare-demo-day',
+    'https://demo-day.mcp.cloudflare.com/mcp',
+    'A minimal Cloudflare MCP server, published as a demonstration.',
+  ),
 ]
 
 /** A patch row that mounts one MCP server through the harness's MCP client. */

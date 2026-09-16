@@ -6,7 +6,6 @@
  * `../_shared/render.ts`, so this module stays a thin, declarative layer.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
-import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
@@ -19,6 +18,7 @@ import {
   vectorizeWriteSpec,
 } from '../../specs/ai.ts'
 import { EmptyBatchError } from '../_shared/batch.ts'
+import { apiRecordsOf } from '../_shared/json.ts'
 import { apiRecords, json, listing, plural, text } from '../_shared/render.ts'
 import type { AiToolsConfig } from './config.ts'
 
@@ -42,10 +42,12 @@ export function registerVectorize(ctx: Context, cf: CloudflareService, config: A
       },
       isConcurrencySafe: () => true,
       async execute(_args, exec) {
-        const indexes = await cf.accountRequest<Record<string, JsonValue>[]>({
-          ...vectorizeIndexListSpec(),
-          signal: exec.signal,
-        })
+        const indexes = apiRecordsOf(
+          await cf.accountRequest({
+            ...vectorizeIndexListSpec(),
+            signal: exec.signal,
+          }),
+        )
         return { indexes }
       },
     }),
@@ -85,7 +87,7 @@ export function registerVectorize(ctx: Context, cf: CloudflareService, config: A
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const matches = await cf.accountRequest<JsonValue>({
+        const matches = await cf.accountRequest({
           ...vectorizeQuerySpec(
             args.indexName,
             args.vector,
@@ -159,7 +161,7 @@ export function registerVectorize(ctx: Context, cf: CloudflareService, config: A
       async execute(args, exec) {
         const vectors = args.vectors
         if (vectors.length === 0) throw new EmptyBatchError('vectors')
-        const mutation = await cf.accountRequest<JsonValue>({
+        const mutation = await cf.accountRequest({
           ...vectorizeWriteSpec(
             args.indexName,
             args.mode ?? 'upsert',
@@ -208,7 +210,7 @@ export function registerVectorize(ctx: Context, cf: CloudflareService, config: A
       async execute(args, exec) {
         const ids = args.ids
         if (ids.length === 0) throw new EmptyBatchError('ids')
-        const mutation = await cf.accountRequest<JsonValue>({
+        const mutation = await cf.accountRequest({
           ...vectorizeDeleteByIdsSpec(args.indexName, ids),
           signal: exec.signal,
         })
@@ -249,7 +251,7 @@ export function registerVectorize(ctx: Context, cf: CloudflareService, config: A
       async execute(args, exec) {
         const ids = args.ids
         if (ids.length === 0) throw new EmptyBatchError('ids')
-        const vectors = await cf.accountRequest<JsonValue>({
+        const vectors = await cf.accountRequest({
           ...vectorizeGetByIdsSpec(args.indexName, ids),
           signal: exec.signal,
         })

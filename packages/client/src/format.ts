@@ -5,8 +5,15 @@
  * directly, and so the components stay declarative.
  */
 
-/** A session's gateway usage, as `cloudflare_aigateway_session_cost` returns it. */
-export interface SessionUsage {
+/**
+ * A session's gateway usage, as `cloudflare_aigateway_session_cost` returns it.
+ *
+ * A type alias rather than an interface, which is load-bearing rather than
+ * stylistic: an interface carries no implicit index signature, so a value
+ * declared as one cannot be handed over where a wire value is expected — and
+ * this one is, as the projection that tool publishes for its view.
+ */
+export type SessionUsage = {
   readonly requests: number
   readonly cost: number
   readonly tokensIn: number

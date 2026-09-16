@@ -33,6 +33,7 @@ import {
 
 export { formatCacheRate, formatCost, hasUsage, isValidCredentialRef, type SessionUsage } from './format.ts'
 export { en, type Locale } from './locales/en.ts'
+export { type WireObject, type WireValue } from './wire.ts'
 export { SessionCostChip, type SessionCostChipProps } from './SessionCostChip.tsx'
 export { SettingsCard, type CloudflareSettings, type SettingsCardProps } from './SettingsCard.tsx'
 export {

@@ -5,13 +5,23 @@
  * deliberately thin: URL building, header assembly, error classification,
  * retry policy and pagination all live in pure modules it calls. `fetch` is a
  * constructor parameter so the whole class is testable without a network.
+ *
+ * What an endpoint puts in `result` is not something this client can know, so
+ * it does not claim to: every read returns the parsed `JsonValue` and a caller
+ * that wants a narrower shape reads it through a predicate of its own. That is
+ * the only place the claim can honestly be made — a client that accepted a type
+ * argument here would be relaying an assertion nobody checked, which is how an
+ * unchecked response becomes a typed value one call later.
  */
 import { type CredentialResolver, requireCredential } from './credentials.ts'
 import { CloudflareError, classifyFailure } from './errors.ts'
-import { paginate, type NextPageQuery, type PageWalk } from './paginate.ts'
+import { isJsonObject, parseJsonValue } from './json.ts'
+import { paginate, type NextPageQuery, type PageStepper, type PageWalk } from './paginate.ts'
 import { DEFAULT_BASE_URL, assertSafeBaseUrl, buildRequest } from './request.ts'
 import { type RetryPolicy, runWithRetry } from './retry.ts'
-import type { CloudflareEnvelope, QueryValue, RequestSpec } from './types.ts'
+import type { CloudflareEnvelope, JsonValue, QueryValue, RequestSpec } from './types.ts'
+
+export { type ParsedJson, parseJsonValue } from './json.ts'
 
 /** The `fetch` shape the client needs. */
 export type FetchLike = (request: Request) => Promise<Response>
@@ -31,15 +41,19 @@ export interface CloudflareClientOptions {
 }
 
 /**
- * Recover the HTTP status behind a thrown value, for the retry policy.
+ * Recover the HTTP status behind a rejected attempt, for the retry policy.
  *
  * A transport failure — a reset connection, a DNS blip — arrives as a bare
  * `TypeError` from `fetch` with no status at all. It is the commonest transient
  * failure there is, so it maps onto a retryable status rather than being
  * treated as a permanent error. An `AbortError` is the caller's decision and
  * must never be retried.
+ *
+ * The reason is generic because a rejection reason is: `instanceof` is what
+ * establishes each shape read below, and anything else classifies as
+ * non-retryable rather than being assumed into a narrower type.
  */
-export function statusOfError(error: unknown): number {
+export function statusOfError<Reason>(error: Reason): number {
   if (error instanceof CloudflareError) return error.status
   if (error instanceof TypeError) return TRANSPORT_FAILURE_STATUS
   // `AbortSignal.timeout` aborts with a `TimeoutError`; a caller cancelling
@@ -79,19 +93,41 @@ export interface BinaryBody {
  * confused with a successfully parsed empty result. The body travels with that
  * state: it is the only detail such a failure has.
  */
-export type EnvelopeRead<T> =
-  | { readonly ok: true; readonly envelope: CloudflareEnvelope<T> }
+export type EnvelopeRead =
+  | { readonly ok: true; readonly envelope: CloudflareEnvelope<JsonValue> }
   | { readonly ok: false; readonly body: string }
+
+/**
+ * Whether a parsed value is a Cloudflare envelope.
+ *
+ * The frame is checked member by member — `success` a boolean, `errors` a list
+ * of `{code, message}` entries, `result` present — so what the client hands on
+ * is a shape it read rather than a shape it declared. `result` stays a
+ * `JsonValue`, because the envelope says nothing about what an endpoint puts
+ * there.
+ */
+function isEnvelopeFrame(value: JsonValue): value is CloudflareEnvelope<JsonValue> {
+  if (!isJsonObject(value)) return false
+  const errors = value['errors']
+  if (typeof value['success'] !== 'boolean' || !Array.isArray(errors)) return false
+  if (!Object.hasOwn(value, 'result')) return false
+  return errors.every(
+    (entry) =>
+      isJsonObject(entry) && typeof entry['code'] === 'number' && typeof entry['message'] === 'string',
+  )
+}
 
 /**
  * Parse a response body as a Cloudflare envelope.
  *
  * An empty or non-JSON body (an edge error page, say) becomes `{ok: false}`
  * carrying the text, rather than a `SyntaxError` thrown from deep inside the
- * client.
+ * client. A JSON body that is not an envelope fails the same way, so a
+ * misrouted endpoint is reported as a body the caller can read rather than
+ * silently accepted as a success.
  */
-export async function readEnvelope<T>(response: Response): Promise<EnvelopeRead<T>> {
-  return parseEnvelope<T>(await response.text())
+export async function readEnvelope(response: Response): Promise<EnvelopeRead> {
+  return parseEnvelope(await response.text())
 }
 
 /**
@@ -101,11 +137,32 @@ export async function readEnvelope<T>(response: Response): Promise<EnvelopeRead<
  * needs the body whether or not it parsed — can classify a failure from the
  * same envelope rather than from the status alone.
  */
-function parseEnvelope<T>(text: string): EnvelopeRead<T> {
-  try {
-    return { ok: true, envelope: JSON.parse(text) as CloudflareEnvelope<T> }
-  } catch {
-    return { ok: false, body: text }
+function parseEnvelope(text: string): EnvelopeRead {
+  const read = parseJsonValue(text)
+  if (!read.ok || !isEnvelopeFrame(read.value)) return { ok: false, body: text }
+  return { ok: true, envelope: read.value }
+}
+
+/**
+ * The same envelope with its `result` established as a list.
+ *
+ * A page walk can only walk a list, so an endpoint answering a list request
+ * with a scalar is malformed rather than empty. The narrowing is done by
+ * reading the value, and the envelope is rebuilt around the list that was
+ * found — nothing here asserts a shape the parse did not produce.
+ */
+function listEnvelope(
+  envelope: CloudflareEnvelope<JsonValue>,
+): CloudflareEnvelope<readonly JsonValue[]> | undefined {
+  const { result } = envelope
+  return Array.isArray(result) ? { ...envelope, result } : undefined
+}
+
+/** The error a list endpoint's non-list answer is reported as. */
+export class CloudflareMalformedListError extends CloudflareError {
+  override readonly name = 'CloudflareMalformedListError'
+  constructor() {
+    super('the endpoint answered a list request with a result that is not a list', 0)
   }
 }
 
@@ -160,11 +217,11 @@ export class CloudflareClient {
    * Shared by `request` and `requestEnvelope` so both apply exactly the same
    * failure rules.
    */
-  async #send<T>(spec: RequestSpec): Promise<CloudflareEnvelope<T>> {
+  async #send(spec: RequestSpec): Promise<CloudflareEnvelope<JsonValue>> {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
     const response = await this.#transmit(this.#buildRequest(spec, token))
-    const read = await readEnvelope<T>(response)
+    const read = await readEnvelope(response)
     const retryAfter = response.headers.get('retry-after')
 
     if (!read.ok) {
@@ -198,9 +255,14 @@ export class CloudflareClient {
     })
   }
 
-  /** Issue a request, retrying transient failures per the configured policy. */
-  async request<T>(spec: RequestSpec): Promise<T> {
-    const envelope = await this.#withRetry(() => this.#send<T>(spec))
+  /**
+   * Issue a request and hand back the envelope's `result`.
+   *
+   * The value is a `JsonValue`: a caller that needs a narrower shape reads it
+   * through a predicate, which is where the shape is actually established.
+   */
+  async request(spec: RequestSpec): Promise<JsonValue> {
+    const envelope = await this.#withRetry(() => this.#send(spec))
     return envelope.result
   }
 
@@ -221,7 +283,7 @@ export class CloudflareClient {
     const token = await requireCredential(this.#options.credentials, ref)
     const response = await this.#transmit(this.#buildRequest(spec, token))
     const body = await response.text()
-    if (!response.ok) throw this.#rawFailure(response, body, ref)
+    if (!response.ok) throw await this.#rawFailure(response, body, ref)
     return body
   }
 
@@ -241,7 +303,7 @@ export class CloudflareClient {
     const ref = this.#options.apiTokenRef
     const token = await requireCredential(this.#options.credentials, ref)
     const response = await this.#transmit(this.#buildRequest(spec, token))
-    if (!response.ok) throw this.#rawFailure(response, await response.text(), ref)
+    if (!response.ok) throw await this.#rawFailure(response, await response.text(), ref)
     return {
       bytes: new Uint8Array(await response.arrayBuffer()),
       contentType: response.headers.get('content-type'),
@@ -255,8 +317,8 @@ export class CloudflareClient {
    * carries the Cloudflare code — which outranks the status class, so a 10000
    * here is an auth failure rather than whatever the status implies.
    */
-  #rawFailure(response: Response, body: string, ref: string): CloudflareError {
-    const read = parseEnvelope(body)
+  async #rawFailure(response: Response, body: string, ref: string): Promise<CloudflareError> {
+    const read = await parseEnvelope(body)
     return classifyFailure({
       status: response.status,
       credentialRef: ref,
@@ -266,8 +328,8 @@ export class CloudflareClient {
   }
 
   /** Issue a request and return the whole envelope, for pagination callers. */
-  async requestEnvelope<T>(spec: RequestSpec): Promise<CloudflareEnvelope<T>> {
-    return this.#withRetry(() => this.#send<T>(spec))
+  async requestEnvelope(spec: RequestSpec): Promise<CloudflareEnvelope<JsonValue>> {
+    return this.#withRetry(() => this.#send(spec))
   }
 
   /**
@@ -276,16 +338,16 @@ export class CloudflareClient {
    *
    * Returns the walk's outcome with the items: stopping at the page ceiling is
    * not the same as running out of data, and a caller that cannot tell them
-   * apart reports a partial result as a total.
+   * apart reports a partial result as a total. Items are `JsonValue` for the
+   * same reason a single read is.
    */
-  async listAll<T>(
-    spec: RequestSpec,
-    step: (envelope: CloudflareEnvelope<readonly unknown[]>, seen: number) => NextPageQuery,
-  ): Promise<PageWalk<T>> {
-    return paginate<T>(
-      (query) => {
+  async listAll(spec: RequestSpec, step: PageStepper): Promise<PageWalk<JsonValue>> {
+    return paginate<JsonValue>(
+      async (query) => {
         const merged: Record<string, QueryValue | undefined> = { ...spec.query, ...query }
-        return this.requestEnvelope<readonly T[]>({ ...spec, query: merged })
+        const page = listEnvelope(await this.requestEnvelope({ ...spec, query: merged }))
+        if (page === undefined) throw new CloudflareMalformedListError()
+        return page
       },
       step,
       this.#options.maxPages,

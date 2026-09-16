@@ -18,7 +18,7 @@ import {
   kvValuePath,
 } from '../../specs/data.ts'
 import { EmptyBatchError } from '../_shared/batch.ts'
-import { isInteger, isObject, isStringArray } from '../_shared/json.ts'
+import { apiRecordsOf, isInteger, isObject, isStringArray } from '../_shared/json.ts'
 import {
   PAGE_OUTCOME_PROPERTIES,
   cursorNote,
@@ -114,13 +114,14 @@ export function registerKv(ctx: Context, cf: CloudflareService, config: DataTool
       async execute(args, exec) {
         const page = requestedPage(args.page)
         const perPage = args.perPage ?? config.pageSize
-        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+        const envelope = await cf.accountRequestEnvelope({
           ...kvNamespaceListSpec(page, perPage),
           signal: exec.signal,
         })
+        const namespaces = apiRecordsOf(envelope.result)
         return {
-          namespaces: envelope.result,
-          ...pageOutcome(envelope.result_info, page, perPage, envelope.result.length),
+          namespaces,
+          ...pageOutcome(envelope.result_info, page, perPage, namespaces.length),
         }
       },
     }),
@@ -162,11 +163,11 @@ export function registerKv(ctx: Context, cf: CloudflareService, config: DataTool
         // The envelope, not just its result: `result_info.cursor` is the paging
         // state this tool exists to hand back. The API ends a listing by
         // omitting the cursor (or sending an empty one).
-        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+        const envelope = await cf.accountRequestEnvelope({
           ...kvListKeysSpec(args.namespaceId, args.prefix, args.limit ?? config.keyListLimit, args.cursor),
           signal: exec.signal,
         })
-        return { keys: envelope.result, ...cursorOutcome(envelope.result_info) }
+        return { keys: apiRecordsOf(envelope.result), ...cursorOutcome(envelope.result_info) }
       },
     }),
   )

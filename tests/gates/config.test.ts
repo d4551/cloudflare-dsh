@@ -1,21 +1,24 @@
 /**
- * The configuration gates: coverage, linting, formatting, pinning, manifests.
+ * The configuration gates: coverage, mutation, pinning, manifests, and what
+ * the type checker and the unused-code scanner are allowed to see.
  *
  * Each gate a tool carries can be narrowed by editing the tool's config, and
  * every other gate stays green while the metric shrinks. These read the
  * configuration files themselves and hold them to what the page states.
+ *
+ * The linter's and the formatter's own configuration is gated in
+ * `probe.test.ts`; the two files used to carry a copy of those gates each.
  */
 import { describe, expect, it } from 'vitest'
 import { containing, json, read, tracked } from './base.ts'
-import type {
-  Json,
-  KnipConfig,
-  OxfmtConfig,
-  OxlintConfig,
-  PackageJson,
-  StrykerConfig,
-  TsConfig,
-  TsConfigBase,
+import {
+  EXACT_VERSION,
+  type KnipConfig,
+  type PackageJson,
+  type StrykerConfig,
+  type StrykerRunner,
+  type TsConfig,
+  type TsConfigBase,
 } from './repo.ts'
 import { sources } from './support.ts'
 
@@ -75,109 +78,6 @@ describe('coverage cannot be softened', () => {
   })
 })
 
-/** A rule entry's severity, whether written bare or beside its options. */
-const severityOf = (value: Json): Json => (Array.isArray(value) ? (value[0] ?? '') : value)
-
-describe('linting cannot be softened', () => {
-  it('grades every enabled category as an error', () => {
-    const { categories } = json<OxlintConfig>('.oxlintrc.json')
-    expect(Object.entries(categories).filter(([, level]) => level !== 'error')).toEqual([])
-  })
-
-  it('keeps every category that must be graded, so none can be dropped', () => {
-    // Asserting only that present categories are errors is checkable by
-    // omission: deleting one leaves an empty filter and a green gate.
-    expect(Object.keys(json<OxlintConfig>('.oxlintrc.json').categories).toSorted()).toEqual([
-      'correctness',
-      'perf',
-      'suspicious',
-    ])
-  })
-
-  it('fails the build on a warning', () => {
-    expect(json<PackageJson>('package.json').scripts.lint).toContain('--deny-warnings')
-  })
-
-  it('runs exactly these plugins, so dropping one is a visible edit', () => {
-    // The formatter's ignore list was gated and the linter's plugin list was
-    // not, so `typescript` could have been removed with every gate green.
-    // `jsx-a11y` is the static half of the accessibility bar; `import`,
-    // `promise` and `vitest` each found a real defect the day they went on.
-    expect(json<OxlintConfig>('.oxlintrc.json').plugins.toSorted()).toEqual([
-      'import',
-      'jsx-a11y',
-      'oxc',
-      'promise',
-      'typescript',
-      'unicorn',
-      'vitest',
-    ])
-  })
-
-  it('ignores only what git ignores, so no source can be excused from the lint', () => {
-    const gitignored = new Set(
-      read('.gitignore')
-        .split('\n')
-        .filter((line) => line.endsWith('/'))
-        .map((line) => line.slice(0, -1)),
-    )
-    // As a filter over the whole list rather than an assertion per entry: a
-    // loop over an empty list asserts nothing and passes.
-    const patterns = json<OxlintConfig>('.oxlintrc.json').ignorePatterns ?? []
-    expect(patterns.filter((pattern) => !gitignored.has(pattern))).toEqual([])
-  })
-
-  it('configures rules and never softens one', () => {
-    // A rule entry may teach a rule something true about this codebase; it may
-    // not lower a severity. Every entry is checked to be an error, whether it
-    // is written as a bare severity or as a severity with options — so `off`
-    // and `warn` cannot appear, and a `rules` block cannot become the place a
-    // finding goes to be silenced.
-    const rules = Object.entries(json<OxlintConfig>('.oxlintrc.json').rules ?? {})
-    expect(rules.filter(([, value]) => severityOf(value ?? '') !== 'error').map(([id]) => id)).toEqual([])
-  })
-
-  it('overrides exactly these rules, each for a reason the tree can show', () => {
-    // Named, so a new override is a reviewed edit rather than a quiet one.
-    // Each of these teaches a rule a fact about this codebase that it has no
-    // way to know: a scrollable figure is a legitimate focus stop and axe
-    // requires it to be one, the axe helper is an assertion helper, and
-    // Vitest's `expect` genuinely takes a message as its second argument.
-    expect(Object.keys(json<OxlintConfig>('.oxlintrc.json').rules ?? {}).toSorted()).toEqual([
-      'jsx-a11y/no-noninteractive-tabindex',
-      'vitest/expect-expect',
-      'vitest/valid-expect',
-    ])
-  })
-})
-
-describe('formatting cannot drift', () => {
-  // A formatter run across the tree once rewrote 23 files while every other
-  // gate stayed green. A canonical style is only a rule if something fails
-  // when a file departs from it.
-  it('checks formatting rather than applying it', () => {
-    expect(json<PackageJson>('package.json').scripts['format:check']).toBe('oxfmt --check')
-  })
-
-  it('ignores only what git ignores, so no source can be excused from the check', () => {
-    const gitignored = read('.gitignore')
-      .split('\n')
-      .filter((line) => line.endsWith('/'))
-      .map((line) => line.slice(0, -1))
-    for (const pattern of json<OxfmtConfig>('.oxfmtrc.json').ignorePatterns ?? []) {
-      expect(gitignored).toContain(pattern)
-    }
-  })
-
-  it('has no per-file overrides', () => {
-    expect(json<OxfmtConfig>('.oxfmtrc.json').overrides).toBeUndefined()
-  })
-
-  it('pins the formatter exactly, since a new version can change what canonical means', () => {
-    expect(json<PackageJson>('package.json').devDependencies['oxfmt']).toMatch(/^\d+\.\d+\.\d+$/)
-  })
-})
-
 describe('the runner and the mutator are pinned', () => {
   // A range here is not a version bump, it is a silent change of what the
   // mutation score means. On Vitest 5 the Stryker vitest runner's per-test
@@ -187,7 +87,7 @@ describe('the runner and the mutator are pinned', () => {
   it.each(['vitest', '@vitest/coverage-v8', '@stryker-mutator/core', '@stryker-mutator/vitest-runner'])(
     'pins %s to an exact version',
     (name) => {
-      expect(json<PackageJson>('package.json').devDependencies[name]).toMatch(/^\d+\.\d+\.\d+$/)
+      expect(json<PackageJson>('package.json').devDependencies[name]).toMatch(EXACT_VERSION)
     },
   )
 
@@ -220,7 +120,7 @@ describe('the types describe the runtime the manifests require', () => {
     // that floor does not have. They are one number, so the gate reads it once
     // and requires the other to match rather than pinning both.
     const floor = /\^(\d+\.\d+\.\d+)/u.exec(json<PackageJson>('package.json').engines.node)?.[1]
-    expect(floor).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(floor).toMatch(EXACT_VERSION)
     expect(json<PackageJson>('package.json').devDependencies['@types/node']).toBe(`^${String(floor)}`)
   })
 })

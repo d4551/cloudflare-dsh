@@ -25,6 +25,18 @@ export const testFiles = code.filter((file) => /(^|\/)tests\//.test(file))
 export const sources = code.filter((file) => /^packages\/[^/]+\/src\//.test(file))
 
 /**
+ * Every component the client package ships: the `.tsx` files under its `src`.
+ *
+ * The components are what a claim about the client's markup is a claim about,
+ * so the two gates that hold one — no inline copy, and no size the stylesheet
+ * does not own — read the same list rather than each deciding what a component
+ * is.
+ */
+export const clientComponents = sources.filter(
+  (file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'),
+)
+
+/**
  * Every TypeScript module in the tree, not only those under `src` and `tests`.
  *
  * The gate configuration is itself TypeScript — the vitest configs, the tsdown

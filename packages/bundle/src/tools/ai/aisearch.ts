@@ -41,7 +41,7 @@ export function registerAiSearch(ctx: Context, cf: CloudflareService, config: Ai
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const results = await cf.accountRequest<JsonValue>({
+        const results = await cf.accountRequest({
           ...aiSearchSearchSpec(args.instanceId, args.query, args.maxResults ?? config.searchMaxResults),
           signal: exec.signal,
         })
@@ -76,7 +76,7 @@ export function registerAiSearch(ctx: Context, cf: CloudflareService, config: Ai
       },
       timeoutMs: config.inferenceTimeoutMs,
       async execute(args, exec) {
-        const answer = await cf.accountRequest<JsonValue>({
+        const answer = await cf.accountRequest({
           ...aiSearchChatSpec(args.instanceId, args.query, args.model),
           signal: exec.signal,
           timeoutMs: config.inferenceTimeoutMs,
@@ -105,7 +105,7 @@ export function registerAiSearch(ctx: Context, cf: CloudflareService, config: Ai
         render: (_args, value) => json(value.job),
       },
       async execute(args, exec) {
-        const job = await cf.accountRequest<JsonValue>({
+        const job = await cf.accountRequest({
           ...aiSearchSyncSpec(args.instanceId),
           signal: exec.signal,
         })

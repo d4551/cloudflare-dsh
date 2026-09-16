@@ -5,7 +5,7 @@
  * last envelope, what query goes on the next request, if any" — a pure step
  * function the async generator drives.
  */
-import type { CloudflareEnvelope, QueryValue } from './types.ts'
+import type { CloudflareEnvelope, JsonValue, QueryValue } from './types.ts'
 
 /** The query overlay for the next page, or null when the walk is complete. */
 export type NextPageQuery = Readonly<Record<string, QueryValue>> | null
@@ -51,7 +51,7 @@ export interface PageWalk<T> {
 }
 
 /** Chooses the next overlay from the envelope just received. */
-export type PageStepper = (envelope: CloudflareEnvelope<readonly unknown[]>, seen: number) => NextPageQuery
+export type PageStepper = (envelope: CloudflareEnvelope<readonly JsonValue[]>, seen: number) => NextPageQuery
 
 /**
  * Next step for a page-numbered endpoint that reports no `result_info`, such

@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CloudflareError, CloudflareRateLimitError } from '../src/errors.ts'
-import { type RetryPolicy, backoffDelayMs, nextDelayMs, runWithRetry, shouldRetry } from '../src/retry.ts'
+import {
+  type AttemptError,
+  type RetryPolicy,
+  backoffDelayMs,
+  nextDelayMs,
+  runWithRetry,
+  shouldRetry,
+} from '../src/retry.ts'
 
 const policy: RetryPolicy = { maxRetries: 3, baseDelayMs: 100, maxDelayMs: 5000 }
 
@@ -10,7 +17,7 @@ const policy: RetryPolicy = { maxRetries: 3, baseDelayMs: 100, maxDelayMs: 5000 
  */
 type Sleep = (ms: number) => Promise<void>
 type Attempt<T> = () => Promise<T>
-const statusOf = (e: unknown) => (e instanceof CloudflareError ? e.status : 0)
+const statusOf = (error: AttemptError): number => (error instanceof CloudflareError ? error.status : 0)
 
 describe('shouldRetry', () => {
   it('retries a 500 while attempts remain', () => {
@@ -81,16 +88,16 @@ describe('nextDelayMs', () => {
     expect(nextDelayMs(new CloudflareError('boom', 500), 0, policy, 1)).toBe(100)
   })
 
-  it('falls back to backoff for a non-error value', () => {
-    expect(nextDelayMs('nope', 0, policy, 1)).toBe(100)
+  it('falls back to backoff for a transport failure', () => {
+    expect(nextDelayMs(new TypeError('fetch failed'), 0, policy, 1)).toBe(100)
   })
 })
 
 describe('runWithRetry', () => {
-  const deps = { sleep: async () => {}, random: () => 1 }
+  const deps = { sleep: () => Promise.resolve(), random: () => 1 }
 
   it('returns the first successful result without sleeping', async () => {
-    const sleep = vi.fn<Sleep>(async () => {})
+    const sleep = vi.fn<Sleep>(() => Promise.resolve())
     const attempt = vi.fn<Attempt<string>>(async () => 'ok')
     await expect(runWithRetry(attempt, statusOf, policy, { ...deps, sleep })).resolves.toBe('ok')
     expect(attempt).toHaveBeenCalledTimes(1)
@@ -136,7 +143,7 @@ describe('runWithRetry', () => {
   })
 
   it('waits between attempts using the computed delay', async () => {
-    const sleep = vi.fn<Sleep>(async () => {})
+    const sleep = vi.fn<Sleep>(() => Promise.resolve())
     let calls = 0
     const attempt = async () => {
       calls += 1

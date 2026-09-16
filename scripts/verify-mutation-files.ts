@@ -56,8 +56,7 @@ function files(dir: string): string[] {
 const sources = (dir: string): string[] => files(dir).filter((path) => /\.tsx?$/.test(path))
 
 function fail(finding: string, remedy: string): never {
-  console.error(finding)
-  console.error(remedy)
+  process.stderr.write(`${finding}\n${remedy}\n`)
   process.exit(1)
 }
 
@@ -105,6 +104,6 @@ if (escaped.length > 0) {
     'A file with runtime code must be mutated. Look for a `const` assertion around it.',
   )
 }
-console.log(
-  `Every source file with runtime code was mutated (${Object.keys(report.files).length} instrumented).`,
+process.stdout.write(
+  `Every source file with runtime code was mutated (${Object.keys(report.files).length} instrumented).\n`,
 )

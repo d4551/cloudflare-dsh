@@ -4,19 +4,42 @@
  * A gate that passes because it never looked is the defect. These hold the
  * workflow that runs every other gate, the lanes that cannot be filtered, and
  * the purity rules the README states about the source.
+ *
+ * The accessibility-invocation rules that used to be a second copy here live in
+ * `axe-lanes.test.ts`, which is where the lane that cannot narrow itself
+ * belongs; the two copies asserted the same twenty facts about the same files.
  */
 import { describe, expect, it } from 'vitest'
-import { containing, json, matching, read } from './base.ts'
+import { json, read } from './base.ts'
 import type { PackageJson, StrykerConfig, StrykerRunner } from './repo.ts'
-import { sources, testFiles } from './support.ts'
+import { codeUses } from './scanners.ts'
+import { sources } from './support.ts'
 
 /**
- * Source modules whose text matches a capability pattern, in path order.
+ * The capability the network is reached through, in both of its spellings: the
+ * platform's own `fetch` and the `FetchLike` type the client declares for the
+ * transport injected in its place.
  *
- * A further module naming a capability is a new site for it, which is what
- * these gates exist to notice.
+ * A bare reference to the global counts as much as a call: handing `fetch` to
+ * an injected transport is the network reaching the module just as much as
+ * calling it. The pattern was once `\bfetch\s*\(`, which read the call and read
+ * right past `transmit: fetch` — the bundle's one I/O wiring — so the list it
+ * "proved" was shorter than the truth. Widening it to a bare word then named
+ * four modules that reach nothing: a doc line about what `fetch` would do, a
+ * description string asking which body to fetch, and a Chrome resource type
+ * spelled `'fetch'`. The scanner reads code, so both faults are gone.
  */
-const usersOf = (pattern: RegExp): string[] => sources.filter((file) => pattern.test(read(file))).toSorted()
+const NETWORK = /\bfetch\b|\bFetchLike\b/u
+
+/**
+ * Source modules whose code names a capability, in path order.
+ *
+ * Prose is not code: a comment saying a module never calls a clock, or a string
+ * that happens to contain the word, is not a site for the capability. A further
+ * module naming one in code is, which is what these gates exist to notice.
+ */
+const usersOf = (pattern: RegExp): string[] =>
+  sources.filter((file) => codeUses(file, read(file), pattern).length > 0).toSorted()
 
 /** One job's block, from its name to the next job at the same indent. */
 const ciJob = (name: string): string => {
@@ -27,6 +50,33 @@ const ciJob = (name: string): string => {
   const next = rest.slice(1).search(/\n {2}\w[\w-]*:\n/u)
   return next === -1 ? rest : rest.slice(0, next + 1)
 }
+
+/** One module that reaches the network, and the code in it that says so. */
+interface NetworkReach {
+  readonly module: string
+  readonly code: string
+}
+
+/**
+ * Every source module that reaches the network, and the line in it that does.
+ *
+ * Each row was read in the module it names: the bundle's provider entry hands
+ * the platform function in as the transport, the client declares the transport
+ * type and holds one, the package entry passes the global through, and the
+ * service takes that transport as a dependency. The `code` column is what makes
+ * a row checkable rather than asserted — it is searched for in the module's
+ * code, so a row citing a comment or a string finds nothing.
+ */
+const NETWORK_REACH: readonly NetworkReach[] = [
+  { module: 'packages/bundle/src/ai/index.ts', code: 'transmit: fetch' },
+  { module: 'packages/core/src/client.ts', code: 'export type FetchLike = ' },
+  { module: 'packages/core/src/index.ts', code: 'fetch,' },
+  { module: 'packages/core/src/service.ts', code: 'readonly fetch: FetchLike' },
+]
+
+/** A pattern matching one code snippet literally, so a row can be searched for. */
+const literal = (snippet: string): RegExp =>
+  new RegExp(snippet.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u')
 
 describe('the pure/impure split holds', () => {
   // Three rules the README states about purity, none of which anything checked
@@ -42,130 +92,17 @@ describe('the pure/impure split holds', () => {
   })
 
   it('reaches the network from these modules and no others', () => {
-    // A bare reference to the global counts as much as a call: handing `fetch`
-    // to an injected transport is the network reaching the module just as much
-    // as calling it. The pattern was once `\bfetch\s*\(`, which read the call
-    // and read right past `transmit: fetch` — the bundle's one I/O wiring — so
-    // the list it "proved" was shorter than the truth. `client.ts`,
-    // `service.ts` and `index.ts` name their injected transport by type, and
-    // the bundle's provider entry hands the global in, so all three spellings
-    // have to match.
-    expect(usersOf(/\bfetch\b|\bFetchLike\b/u)).toEqual([
-      'packages/bundle/src/ai/index.ts',
-      'packages/core/src/client.ts',
-      'packages/core/src/index.ts',
-      'packages/core/src/service.ts',
-    ])
-  })
-})
-
-describe('accessibility cannot be filtered', () => {
-  it.each([
-    ['tag scope', `with${'Tags('}`],
-    ['rule narrowing', `with${'Rules('}`],
-    ['rule disabling', `disable${'Rules('}`],
-    ['inline rule overrides', `rul${'es: {'}`],
-    // The five above were the only ones listed, and none of them is how axe is
-    // actually narrowed: one option scopes a run to a weaker conformance
-    // target, another throws away everything the assertion reads, two builder
-    // methods do by configuration what the banned calls do by name, and the
-    // reconfiguration entry point disables rules through an array, which the
-    // object needle above does not match. Each needle is assembled, since this
-    // file is itself scanned.
-    ['conformance scoping', `run${'Only'}`],
-    ['result narrowing', `result${'Types'}`],
-    ['rule reconfiguration', `axe.con${'figure'}`],
-    ['array rule overrides', `rul${'es: ['}`],
-  ])('no %s is used in any test', (_label, needle) => {
-    expect(containing(testFiles, needle)).toEqual([])
+    expect(usersOf(NETWORK)).toEqual(NETWORK_REACH.map((row) => row.module))
   })
 
-  // The builder's scoping methods, matched as a call rather than as a bare
-  // substring, which cannot tell one from a spread of a local fixture that
-  // happens to share the name. The only thing that distinguishes the spread is
-  // the dot before it, so that is the whole of what is excluded — anything
-  // else, including a call the formatter has wrapped onto its own line, still
-  // matches. An earlier version of this required a word character before the
-  // dot and would have missed exactly that wrapped call.
-  it.each([
-    ['selector exclusion', `exc${'lude'}`],
-    ['selector scoping', `inc${'lude'}`],
-    ['builder options', `opt${'ions'}`],
-  ])('calls no %s method on an axe builder', (_label, method) => {
-    expect(matching(testFiles, new RegExp(`(?<!\\.)\\.${method}\\(`, 'u'))).toEqual([])
-  })
-
-  it('scans every surface with the whole rule set', () => {
-    expect(read('packages/client/tests/a11y.browser.test.tsx')).toContain(
-      'new AxeBuilder({ page }).analyze()',
-    )
-  })
-
-  it('gives the jsdom helper no way to take options, since that is where a filter would hide', () => {
-    // The helper's own comment says an options parameter is where a rule
-    // disable would sit. A comment is not a gate: the call is pinned to its
-    // single argument, and the helper to its single parameter.
-    const helper = read('packages/client/tests/axe.ts')
-    expect(helper).toContain('axe.run(container)')
-    expect(helper).toContain('async function runAxe(container: Element): Promise<AxeResults>')
-  })
-
-  it.each([
-    // Each of these was absent while the lane's own doc claimed it, or while
-    // the gate read only the outcome that happened to be empty.
-    ['scans the client as a host assembles it', 'ASSEMBLED'],
-    ['fails on what axe leaves for review, not only on what it fails', 'results.incomplete'],
-    ['walks the page by keyboard', `keyboard.press('Tab')`],
-    ['reads the focus ring the stylesheet declares', 'computed.outlineStyle'],
-  ])('%s', (_label, needle) => {
-    expect(read('packages/client/tests/a11y.browser.test.tsx')).toContain(needle)
-  })
-
-  it('assembles that page as a host does, from one render rather than a join', () => {
-    // Rendering each surface separately and concatenating restarts `useId`, so
-    // the page would carry id collisions no host could produce and the scan
-    // would be reporting on a fixture rather than on the client.
-    expect(read('packages/client/tests/surfaces.tsx')).toContain(
-      'export const ASSEMBLED = renderToStaticMarkup(',
-    )
-  })
-
-  it.each([
-    // The viewport lane is the only place these are observable, and every one
-    // of them found a defect the first time it ran.
-    ['lays the client out at 320 CSS pixels, the reflow criterion’s own width', 'width: 320'],
-    [
-      'measures a rendered control rather than trusting the declared minimum',
-      'getBoundingClientRect().width',
-    ],
-    ['applies the text-spacing overrides', 'letter-spacing:0.12em'],
-    ['asks what `hidden` computes to, which jsdom cannot', `getComputedStyle(node).display !== 'none'`],
-    ['runs with the forced-colours mode active', `forcedColors: 'active'`],
-    ['bounds how much document a large result produces', "querySelectorAll('main *').length"],
-  ])('%s', (_label, needle) => {
-    expect(read('packages/client/tests/viewport.browser.test.tsx')).toContain(needle)
-  })
-
-  it.each([
-    // Static markup has no React attached, so a toggle that never toggles and a
-    // form that never submits produce markup identical to ones that work. Only
-    // this lane can tell them apart.
-    ['mounts the real components with the real React', 'createRoot('],
-    ['records the callback a host supplies, so an assertion can see it was reached', 'savedCalls'],
-  ])('%s', (_label, needle) => {
-    expect(read('packages/client/tests/e2e-entry.tsx')).toContain(needle)
-  })
-
-  it.each([
-    ['bundles the source it claims to exercise rather than a committed copy', 'rolldown('],
-    ['operates the client by keyboard as well as by pointer', `keyboard.press('Enter')`],
-  ])('%s', (_label, needle) => {
-    expect(read('packages/client/tests/e2e.browser.test.tsx')).toContain(needle)
-  })
-
-  it('runs the browser lane rather than leaving those tests unrun', () => {
-    expect(read('vitest.a11y.config.ts')).toContain("include: ['packages/*/tests/**/*.browser.test.tsx']")
-    expect(read('.github/workflows/ci.yml')).toContain('bun run test:a11y')
+  it('reaches it through the code each of those modules is named for', () => {
+    // One labelled expectation per row, so a failure names the module whose
+    // cite went stale. The cite is code rather than prose or a string, which is
+    // what the scanner exists to tell apart: a row naming a comment finds
+    // nothing here.
+    for (const { module, code } of NETWORK_REACH) {
+      expect(codeUses(module, read(module), literal(code)), module).not.toEqual([])
+    }
   })
 })
 

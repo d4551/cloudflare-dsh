@@ -12,18 +12,15 @@ import { describe, expect, it } from 'vitest'
 import { containing } from './base.ts'
 import { scanTree } from './scan.ts'
 import { inlineCopy } from './scanners.ts'
-import { sources, testFiles } from './support.ts'
-
-/** The client components this gate holds: every `.tsx` the client package ships. */
-const components = sources.filter((file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'))
+import { clientComponents, testFiles } from './support.ts'
 
 describe('no client component carries inline copy', () => {
   it('finds the components this gate holds', () => {
-    expect(components.length).toBeGreaterThan(0)
+    expect(clientComponents.length).toBeGreaterThan(0)
   })
 
   it('finds no inline copy in any of them', () => {
-    expect(scanTree(components, inlineCopy)).toEqual([])
+    expect(scanTree(clientComponents, inlineCopy)).toEqual([])
   })
 })
 

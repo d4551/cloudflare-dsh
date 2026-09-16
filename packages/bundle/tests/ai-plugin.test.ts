@@ -1,15 +1,11 @@
 import { CloudflareConfig, CloudflareService } from '@d4551/dsh-cloudflare-core'
-import type { FetchLike as MockFetch } from '@d4551/dsh-cloudflare-core'
+import type { FetchLike } from '@d4551/dsh-cloudflare-core'
 import { Context } from '@deepseek-ai/cordis'
 import { LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it, vi } from 'vitest'
-import { envelope, harness } from './ai-plugin-support.ts'
 import * as aiPlugin from '../src/ai/index.ts'
-
-/** The context shape once the real llm runtime is plugged in. */
-interface LlmRuntimeContext extends Context {
-  llm: LlmRuntime
-}
+import { harness } from './ai-plugin-support.ts'
+import { envelope } from './harness.ts'
 
 describe('plugin shape', () => {
   it('declares its name and injections', () => {
@@ -51,7 +47,7 @@ describe('lifecycle', () => {
     // Runs against the real llm runtime: a registration lives on the calling
     // plugin's fiber, so unloading the plugin unregisters its provider.
     const ctx = new Context()
-    await ctx.plugin(LlmRuntime)
+    const runtime = new LlmRuntime(ctx)
     const credentials = { resolve: () => 'tok' }
     ctx.provide('credentials', credentials)
     const service = new CloudflareService(
@@ -63,7 +59,7 @@ describe('lifecycle', () => {
       },
     )
     expect(service.name).toBe('cloudflare')
-    const providers = () => (ctx as LlmRuntimeContext).llm.listProviders().map((info) => info.id)
+    const providers = () => runtime.listProviders().map((info) => info.id)
 
     const fiber = await ctx.plugin(aiPlugin, {})
     expect(providers()).toEqual(expect.arrayContaining(['cloudflare-workers-ai', 'cloudflare-ai-gateway']))
@@ -286,7 +282,7 @@ describe('listModels', () => {
   })
 
   it('uses the configured list without querying the catalogue', async () => {
-    const fetchImpl = vi.fn<MockFetch>(async () => envelope([]))
+    const fetchImpl = vi.fn<FetchLike>(async () => envelope([]))
     const { registered } = harness({ models: ['@cf/pinned'] }, fetchImpl)
     await expect(registered[0]!.provider.listModels('cloudflare-workers-ai')).resolves.toEqual([
       {

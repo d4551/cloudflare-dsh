@@ -11,18 +11,15 @@
  */
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
-import { CloudflareAiProvider, readErrorDetail } from '../src/ai/provider.ts'
+import { readErrorDetail } from '../src/ai/provider.ts'
+import { makeProvider } from './ai-provider-support.ts'
 
 describe('registered base', () => {
+  // The fixture factory builds the class under test, so the assertion is on
+  // that class rather than on a second construction of it: a provider that
+  // stopped extending the runtime base would fail here.
   it('extends LlmAdapter, the base the harness runtime registers', () => {
-    const provider = new CloudflareAiProvider({
-      resolveEndpoint: async () => ({ url: 'https://gw.test/v1/chat/completions', token: 'tok' }),
-      resolveModel: async (providerName, model) => ({ provider: providerName, id: model, name: model }),
-      listModels: async () => [],
-      transmit: async () => new Response(null, { status: 500 }),
-      headerOptions: {},
-      streamIdleTimeoutMs: 5000,
-    })
+    const { provider } = makeProvider()
     expect(provider).toBeInstanceOf(LlmAdapter)
   })
 })

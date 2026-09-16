@@ -6,10 +6,10 @@
  * `../_shared/render.ts`, so this module stays a thin, declarative layer.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
-import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { d1ListSpec, d1QuerySpec } from '../../specs/data.ts'
+import { apiRecordsOf } from '../_shared/json.ts'
 import { PAGE_OUTCOME_PROPERTIES, pageNote, pageOutcome, requestedPage } from '../_shared/paging.ts'
 import { apiRecords, listing, truncatedJson } from '../_shared/render.ts'
 import type { DataToolsConfig } from './config.ts'
@@ -41,13 +41,14 @@ export function registerD1(ctx: Context, cf: CloudflareService, config: DataTool
       async execute(args, exec) {
         const page = requestedPage(args.page)
         const perPage = args.perPage ?? config.pageSize
-        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+        const envelope = await cf.accountRequestEnvelope({
           ...d1ListSpec(page, perPage),
           signal: exec.signal,
         })
+        const databases = apiRecordsOf(envelope.result)
         return {
-          databases: envelope.result,
-          ...pageOutcome(envelope.result_info, page, perPage, envelope.result.length),
+          databases,
+          ...pageOutcome(envelope.result_info, page, perPage, databases.length),
         }
       },
     }),
@@ -85,7 +86,7 @@ export function registerD1(ctx: Context, cf: CloudflareService, config: DataTool
         presentationMeta: (args, value) => ({ sql: args.sql, resultSets: value.results }),
       },
       async execute(args, exec) {
-        const results = await cf.accountRequest<JsonValue>({
+        const results = await cf.accountRequest({
           ...d1QuerySpec(args.databaseId, args.sql, args.params ?? []),
           signal: exec.signal,
         })

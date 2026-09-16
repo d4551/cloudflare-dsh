@@ -1,11 +1,18 @@
-import { CloudflareConfig, CloudflareService } from '@d4551/dsh-cloudflare-core'
-import type { FetchLike as MockFetch } from '@d4551/dsh-cloudflare-core'
-import { Context } from '@deepseek-ai/cordis'
-import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+/**
+ * Where the plugin sends a model call, and what it stamps on the request while
+ * doing it.
+ *
+ * The provider's own behaviour with a resolved endpoint is held by
+ * `ai-provider-stream.test.ts`; this suite drives the plugin end to end, so the
+ * endpoint comes from the configuration and the account the way a host's would.
+ */
+import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { CloudflareAiProvider } from '../src/ai/provider.ts'
-import { envelope, harness } from './ai-plugin-support.ts'
+import { TIMEOUT_CODE } from '../src/ai/errors.ts'
 import * as aiPlugin from '../src/ai/index.ts'
+import { MODEL, TEXT_TURN } from './ai-provider-support.ts'
+import { harness, stubTransport } from './ai-plugin-support.ts'
+import { envelope } from './harness.ts'
 
 /**
  * Consume a stream to its end and report how many chunks it yielded, for the
@@ -18,6 +25,11 @@ async function drain(iterable: AsyncIterable<StreamChunk>): Promise<number> {
   return types.length
 }
 
+/** The options one fixture call is made with. */
+function callOptions(provider: string): GenerateOptions {
+  return { provider, model: MODEL, messages: [] }
+}
+
 describe('endpoint resolution', () => {
   // The stubbed transport is unconditionally unstubbed after each test, so a
   // failure mid-test cannot leak a stub into the next one.
@@ -25,31 +37,17 @@ describe('endpoint resolution', () => {
     vi.unstubAllGlobals()
   })
 
-  // A minimal completion with content: a finish alone is EMPTY_RESPONSE.
-  const stop = `data: ${JSON.stringify({ choices: [{ delta: { content: 'hi' } }] })}\n\ndata: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`
-
   /** Drive one stream so the provider resolves an endpoint and issues a call. */
   async function stream(
     config: Partial<aiPlugin.AiConfig>,
     provider: string,
     apiResponses: (r: Request) => Promise<Response>,
   ): Promise<{ outbound: Request[]; chunks: number }> {
-    const outbound: Request[] = []
-    const globalFetch = vi.fn<MockFetch>(async (request: Request) => {
-      outbound.push(request)
-      return new Response(stop, { status: 200 })
-    })
-    vi.stubGlobal('fetch', globalFetch)
+    // A minimal turn with content: a finish alone is an empty response.
+    const transport = stubTransport(async () => new Response(TEXT_TURN, { status: 200 }))
     const { registered } = harness(config, apiResponses)
-    const types: StreamChunk['type'][] = []
-    for await (const { type } of registered[0]!.provider.stream({
-      provider,
-      model: '@cf/m',
-      messages: [],
-    })) {
-      types.push(type)
-    }
-    return { outbound, chunks: types.length }
+    const chunks = await drain(registered[0]!.provider.stream(callOptions(provider)))
+    return { outbound: transport.requests, chunks }
   }
 
   it('routes workers-ai to the account-scoped OpenAI-compatible path', async () => {
@@ -79,22 +77,18 @@ describe('endpoint resolution', () => {
   // a REST round trip per model call.
   it('reads the gateway url once per plugin instance', async () => {
     const apiRequests: Request[] = []
-    const globalFetch = vi.fn<MockFetch>(async () => new Response(stop, { status: 200 }))
-    vi.stubGlobal('fetch', globalFetch)
+    const transport = stubTransport(async () => new Response(TEXT_TURN, { status: 200 }))
     const { registered } = harness({ gatewayId: 'gw1' }, async (r) => {
       apiRequests.push(r)
       return envelope({ url: 'https://gateway.example/base' })
     })
-    const call = () =>
-      drain(
-        registered[0]!.provider.stream({ provider: 'cloudflare-ai-gateway', model: '@cf/m', messages: [] }),
-      )
+    const call = () => drain(registered[0]!.provider.stream(callOptions('cloudflare-ai-gateway')))
     const first = await call()
     const second = await call()
     expect(first).toBeGreaterThan(0)
     expect(second).toBe(first)
     expect(apiRequests.filter((r) => r.url.includes('/url/'))).toHaveLength(1)
-    expect(globalFetch).toHaveBeenCalledTimes(2)
+    expect(transport.mock).toHaveBeenCalledTimes(2)
   })
 
   it('resolves the token afresh for every call even though the url is remembered', async () => {
@@ -105,29 +99,12 @@ describe('endpoint resolution', () => {
         return 'tok'
       },
     }
-    const ctx = new Context()
-    ctx.provide('credentials', credentials)
-    const registered: CloudflareAiProvider[] = []
-    ctx.provide('llm', {
-      registerAdapter(_providers: string[], provider: CloudflareAiProvider) {
-        registered.push(provider)
-        return () => registered.pop()
-      },
-    })
     // Stubbed before the plugin applies: the provider captures the global
     // transport when it is constructed, so a stub registered afterwards would
     // never be seen by the calls under test.
-    const globalFetch = vi.fn<MockFetch>(async () => new Response(stop, { status: 200 }))
-    vi.stubGlobal('fetch', globalFetch)
-    const service = new CloudflareService(
-      ctx,
-      CloudflareConfig({ accountId: 'a1', baseUrl: 'https://api.test/v4' }),
-      { credentials, fetch: async () => envelope(null) },
-    )
-    expect(service.name).toBe('cloudflare')
-    aiPlugin.apply(ctx, aiPlugin.Config({}))
-    const call = () =>
-      drain(registered[0]!.stream({ provider: 'cloudflare-workers-ai', model: '@cf/m', messages: [] }))
+    stubTransport(async () => new Response(TEXT_TURN, { status: 200 }))
+    const { registered } = harness({}, async () => envelope(null), {}, credentials)
+    const call = () => drain(registered[0]!.provider.stream(callOptions('cloudflare-workers-ai')))
     const first = await call()
     const second = await call()
     expect(first).toBeGreaterThan(0)
@@ -212,23 +189,12 @@ describe('endpoint resolution', () => {
   it('applies the configured stream idle timeout', async () => {
     // Stubbed before the harness applies the plugin: the provider captures the
     // global transport when it is constructed.
-    const globalFetch = vi.fn<MockFetch>(
+    stubTransport(
       async () => new Response(new ReadableStream<Uint8Array>({ start: () => undefined }), { status: 200 }),
     )
-    vi.stubGlobal('fetch', globalFetch)
     const { registered } = harness({ streamIdleTimeoutMs: 25 })
-    const run = async (): Promise<number> => {
-      const types: StreamChunk['type'][] = []
-      for await (const { type } of registered[0]!.provider.stream({
-        provider: 'cloudflare-workers-ai',
-        model: '@cf/m',
-        messages: [],
-      })) {
-        types.push(type)
-      }
-      return types.length
-    }
-    await expect(run()).rejects.toMatchObject({ code: 'TIMEOUT' })
+    const run = drain(registered[0]!.provider.stream(callOptions('cloudflare-workers-ai')))
+    await expect(run).rejects.toMatchObject({ code: TIMEOUT_CODE })
   })
 
   it('fails loud when the gateway route has no gateway configured', async () => {
@@ -257,19 +223,12 @@ describe('endpoint resolution', () => {
 
   it('asks the API for the configured gateway provider', async () => {
     const apiRequests: Request[] = []
-    const globalFetch = vi.fn<MockFetch>(async () => new Response(stop, { status: 200 }))
-    vi.stubGlobal('fetch', globalFetch)
+    stubTransport(async () => new Response(TEXT_TURN, { status: 200 }))
     const { registered } = harness({ gatewayId: 'gw1', gatewayProvider: 'openai' }, async (r) => {
       apiRequests.push(r)
       return envelope({ url: 'https://gateway.example/base' })
     })
-    const chunks = await drain(
-      registered[0]!.provider.stream({
-        provider: 'cloudflare-ai-gateway',
-        model: '@cf/m',
-        messages: [],
-      }),
-    )
+    const chunks = await drain(registered[0]!.provider.stream(callOptions('cloudflare-ai-gateway')))
     expect(chunks).toBeGreaterThan(0)
     expect(apiRequests[0]!.url).toBe('https://api.test/v4/accounts/a1/ai-gateway/gateways/gw1/url/openai')
   })

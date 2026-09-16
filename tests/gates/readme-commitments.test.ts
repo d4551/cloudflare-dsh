@@ -29,8 +29,28 @@ const COLLECTION_TIMEOUT_MS = 120_000
  */
 const WORKER_MARKERS = ['VITEST', 'VITEST_MODE', 'VITEST_POOL_ID', 'VITEST_WORKER_ID'] as const
 
+/**
+ * A collected title with each placeholder standing for the case that filled it.
+ *
+ * A parameterised test is collected as the title it was written with — `gives
+ * %s a programmatic label` — while a run prints one name per case, and the page
+ * cites the printed name, which is the only one a reader can search for. So a
+ * citation is checked against the title itself and against each title with its
+ * placeholders standing for whatever filled them: `%s` and friends for a case
+ * tuple, and `${…}` for a title built from the case's own fields. A title with
+ * no placeholder yields a matcher for itself and nothing else.
+ */
+const collectable = (title: string): RegExp =>
+  new RegExp(
+    `^${title
+      .split(/(?:%[sdifjo#]|\$\{[^}]*\}|\$[A-Za-z_][\w.]*)/u)
+      .map((part) => part.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&'))
+      .join('.+')}$`,
+    'u',
+  )
+
 /** Every test name vitest collects for one config, as `describe > it`. */
-function collected(config: string): string[] {
+function collected(config: string): RegExp[] {
   const listed = JSON.parse(
     execFileSync(
       'env',
@@ -47,7 +67,7 @@ function collected(config: string): string[] {
       { cwd: root(''), encoding: 'utf8' },
     ),
   ) as readonly { readonly name: string }[]
-  return listed.map((test) => test.name)
+  return listed.map((test) => collectable(test.name))
 }
 
 /**
@@ -106,15 +126,15 @@ describe('the accessibility commitments', () => {
     // All three lanes: a commitment may be held in the unit suite, in Chromium,
     // or — for the criteria axe has no rule for — by a gate that computes the
     // answer from the shipped stylesheet.
-    const running = new Set([
+    const running = [
       ...collected('vitest.config.ts'),
       ...collected('vitest.a11y.config.ts'),
       ...collected('vitest.invariants.config.ts'),
-    ])
+    ]
     expect(
       commitments()
         .flatMap((row) => row.tests)
-        .filter((test) => !running.has(test)),
+        .filter((test) => !running.some((collected_) => collected_.test(test))),
     ).toEqual([])
   })
 })

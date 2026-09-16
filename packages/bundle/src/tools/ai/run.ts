@@ -6,7 +6,6 @@
  * `../_shared/render.ts`, so this module stays a thin, declarative layer.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
-import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { aiModelSchemaSpec, aiModelsSearchSpec, aiRunSpec } from '../../specs/ai.ts'
@@ -17,7 +16,7 @@ import {
   pageOutcome,
   requestedPage,
 } from '../_shared/paging.ts'
-import { isObject } from '../_shared/json.ts'
+import { apiRecordsOf, isObject } from '../_shared/json.ts'
 import { json, listing } from '../_shared/render.ts'
 import type { AiToolsConfig } from './config.ts'
 import { AiRunStreamError } from './stream.ts'
@@ -58,7 +57,7 @@ export function registerWorkersAi(ctx: Context, cf: CloudflareService, config: A
         // A streamed response is SSE, not the envelope this tool reads; refusing
         // it names the alternative instead of failing on the body shape.
         if (isObject(args.input) && args.input.stream === true) throw new AiRunStreamError()
-        const output = await cf.accountRequest<JsonValue>({
+        const output = await cf.accountRequest({
           ...aiRunSpec(args.model, args.input),
           signal: exec.signal,
           timeoutMs: config.inferenceTimeoutMs,
@@ -100,13 +99,14 @@ export function registerWorkersAi(ctx: Context, cf: CloudflareService, config: A
       async execute(args, exec) {
         const page = requestedPage(args.page)
         const perPage = args.perPage ?? config.pageSize
-        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+        const envelope = await cf.accountRequestEnvelope({
           ...aiModelsSearchSpec(args.search, args.task, page, perPage),
           signal: exec.signal,
         })
+        const models = apiRecordsOf(envelope.result)
         return {
-          models: envelope.result,
-          ...pageOutcome(envelope.result_info, page, perPage, envelope.result.length),
+          models,
+          ...pageOutcome(envelope.result_info, page, perPage, models.length),
         }
       },
     }),
@@ -136,7 +136,7 @@ export function registerWorkersAi(ctx: Context, cf: CloudflareService, config: A
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const schema = await cf.accountRequest<JsonValue>({
+        const schema = await cf.accountRequest({
           ...aiModelSchemaSpec(args.model),
           signal: exec.signal,
         })

@@ -7,7 +7,7 @@
  * the gate modules assert it on snippets and on the tree.
  */
 import type { Node } from 'oxc-parser'
-import { parseModule, walk } from '../parse.ts'
+import { parseModule, walk, type ParsedModule } from '../parse.ts'
 
 /**
  * Attributes whose value a user reads or hears.
@@ -147,4 +147,59 @@ export function stackedDocs(name: string, text: string): string[] {
     }
   }
   return [...found]
+}
+
+/**
+ * A module's text with everything that is not code blanked out.
+ *
+ * A capability is a fact about code, not about the characters a file happens to
+ * carry: a doc line reading "never call `new Date`" names no clock, a
+ * resource-type string `'fetch'` reaches no network, and the words between two
+ * tags are copy rather than an expression. Comments, the contents of string,
+ * template and regular-expression literals, and JSX text are replaced by
+ * spaces — one space per character, so every offset still resolves to the line
+ * it did — and a pattern is then matched against what is left.
+ */
+function codeOnly(module: ParsedModule): string {
+  const blanked: { readonly start: number; readonly end: number }[] = [...module.comments]
+  walk(module.program, (node) => {
+    if (node.type === 'Literal' || node.type === 'JSXText') blanked.push(node)
+    // The quasis are read from their parent rather than walked to, so the
+    // blanking does not depend on the parser offering them as nodes.
+    if (node.type === 'TemplateLiteral') {
+      for (const quasi of node.quasis) blanked.push(quasi)
+    }
+    return undefined
+  })
+  const parts: string[] = []
+  let at = 0
+  for (const range of blanked.toSorted((left, right) => left.start - right.start)) {
+    if (range.start < at) continue
+    parts.push(module.text.slice(at, range.start), ' '.repeat(range.end - range.start))
+    at = range.end
+  }
+  parts.push(module.text.slice(at))
+  return parts.join('')
+}
+
+/**
+ * The code in a module that names a capability, as `path:line match`.
+ *
+ * Every scanner here reads the tree because a text search cannot tell code from
+ * prose. This one needs that distinction for a capability spelled in ordinary
+ * words — `fetch`, `new Date`, `Math.random` — where a text search reads the
+ * word in a comment, or inside a string enumerating a browser's resource
+ * types, as a use. The pattern is matched against the module's code with the
+ * prose blanked out, so a module is named for what it does rather than for
+ * what its comments, its strings or its copy happen to say.
+ */
+export function codeUses(name: string, text: string, pattern: RegExp): string[] {
+  const module = parseModule(name, text)
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`
+  const found: string[] = []
+  for (const match of codeOnly(module).matchAll(new RegExp(pattern.source, flags))) {
+    if (match.index === undefined) continue
+    found.push(`${name}:${module.lineAt(match.index)} ${match[0]}`)
+  }
+  return found
 }

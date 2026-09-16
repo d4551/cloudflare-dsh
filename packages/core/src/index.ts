@@ -50,10 +50,16 @@ export const inject = ['credentials']
 /** Configuration schema. Cordis validates against this before `apply` runs. */
 export const Config = ConfigSchema
 
-/** The context shape this plugin needs from the harness. */
-interface HarnessContext extends Context {
-  credentials: CredentialResolver
-}
+/**
+ * The context shape this plugin needs from the harness.
+ *
+ * `inject: ['credentials']` is what makes the resolver present, and Cordis
+ * expresses that at runtime rather than in the type of `Context`. Spelling the
+ * requirement in the parameter type is what removes the cast that used to stand
+ * here: a caller that hands over a context without the resolver is refused by
+ * the compiler, which is the same statement `inject` makes at runtime.
+ */
+export type HarnessContext = Context & { readonly credentials: CredentialResolver }
 
 /**
  * Register the Cloudflare service.
@@ -66,10 +72,9 @@ interface HarnessContext extends Context {
  * The instance is returned for the benefit of direct callers and tests; Cordis
  * itself ignores the return value.
  */
-export function apply(ctx: Context, config: CloudflareConfig): CloudflareService {
-  const harness = ctx as HarnessContext
+export function apply(ctx: HarnessContext, config: CloudflareConfig): CloudflareService {
   return new CloudflareService(ctx, config, {
-    credentials: harness.credentials,
+    credentials: ctx.credentials,
     // The platform function itself, bound as the transport: no lambda sits
     // between the seam and the global, and every test substitutes its own.
     fetch,

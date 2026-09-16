@@ -1,11 +1,12 @@
 /**
- * Shared fixtures for the Cloudflare AI provider suites.
+ * Shared fixtures for the Cloudflare AI suites.
  *
  * One source for the stub transport, the base options and the wire payloads,
  * so the behavioural suites assert against the same fixtures instead of two
  * copies drifting.
  */
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
+import { CONTENT_FILTER_CODE } from '../src/ai/errors.ts'
 import { CloudflareAiProvider, type CloudflareAiProviderDeps } from '../src/ai/provider.ts'
 
 /** The route every fixture provider is registered for. */
@@ -79,8 +80,14 @@ export const FILTERED = JSON.stringify({ choices: [{ delta: {}, finish_reason: '
 /** Usage without any content on the wire. */
 export const USAGE_ONLY = JSON.stringify({ usage: { prompt_tokens: 3, completion_tokens: 0 } })
 
+/** The one text event, as the provider writes it on the wire. */
+export const TEXT_EVENT = `data: ${TEXT}\n\n`
+
+/** One text turn ended by the stop the provider reports, not by the socket. */
+export const TEXT_TURN = `${TEXT_EVENT}data: ${STOP}\n\n`
+
 /** A complete text turn ended by the sentinel rather than by the socket. */
-export const DONE_TURN = `data: ${TEXT}\n\ndata: [DONE]\n\n`
+export const DONE_TURN = `${TEXT_EVENT}data: [DONE]\n\n`
 
 /** The chunk sequence one text turn with a stop finish must produce, exactly. */
 export const EXPECTED_TEXT_TURN = [
@@ -97,7 +104,7 @@ export const CONTENT_FILTER_FINISH = {
     kind: 'error',
     failure: {
       message: 'the provider withheld the completion under its content policy',
-      code: 'CONTENT_FILTER',
+      code: CONTENT_FILTER_CODE,
     },
   },
 } as const

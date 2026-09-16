@@ -1,5 +1,5 @@
 # Zero-code path: route the harness's own model calls through an AI Gateway
-# using the provider adapter DSH already ships.
+# using the model provider DSH already ships.
 #
 # Merge this into $DSH_HOME/settings.yaml. Resolve <BASE_URL> once with:
 #   cloudflare_aigateway_list                 -> find your gateway id

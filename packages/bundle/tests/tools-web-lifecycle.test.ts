@@ -6,22 +6,19 @@ import { describe, expect, it } from 'vitest'
 import * as webTools from '../src/tools/web.ts'
 import { envelope, makeHarness } from './harness.ts'
 
-interface ToolsContext extends Context {
-  tools: ToolRuntime
-}
-
 describe('lifecycle', () => {
   it('registers with the real tool runtime and is released when the fiber unloads', async () => {
     // The registry records each registration as an effect on the calling
     // plugin's fiber; this proves that guarantee end to end for a tool plugin,
-    // which the recording fake cannot show.
+    // which the recording fake cannot show. Constructing the runtime registers
+    // it as `tools` on the context, the way `makeHarness` builds it.
     const ctx = new Context()
     ctx.provide('systemPrompt', {
       section: () => () => '',
       getSectionOrder: () => 0,
       tools: () => () => [],
     })
-    await ctx.plugin(ToolRuntime)
+    const tools = new ToolRuntime(ctx)
     const credentials = { resolve: () => 'tok' }
     ctx.provide('credentials', credentials)
     const service = new CloudflareService(
@@ -33,7 +30,6 @@ describe('lifecycle', () => {
       },
     )
     expect(service.name).toBe('cloudflare')
-    const tools = (ctx as ToolsContext).tools
 
     const fiber = await ctx.plugin(webTools)
     expect(tools.get('cloudflare_browser_render')?.name).toBe('cloudflare_browser_render')

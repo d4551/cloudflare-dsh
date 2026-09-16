@@ -1,16 +1,19 @@
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
-import { ReasoningEffortId, textOnlyImageText } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, GenerateOptions, Message, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
+import { MessageId, ReasoningEffortId, ToolCallId, textOnlyImageText } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
 import { UNSUPPORTED_OPTION_CODE } from '../src/ai/errors.ts'
 import { buildWireRequest, textOf, toWireMessages, toWireTools } from '../src/ai/request.ts'
+import { options } from './ai-provider-support.ts'
 
+/** One message for the mapper to read; only its role and content reach the wire. */
 function message(role: Message['role'], content: ContentBlock[]): Message {
-  return { id: 'm1' as Message['id'], role, content, source: {} as Message['source'] }
-}
-
-function options(over: Partial<GenerateOptions> = {}): GenerateOptions {
-  return { provider: 'cloudflare-workers-ai', model: '@cf/m', messages: [], ...over }
+  return {
+    id: MessageId('m1'),
+    role,
+    content,
+    source: { kind: 'plugin', plugin: 'cloudflare-llm' },
+  }
 }
 
 describe('textOf', () => {
@@ -27,7 +30,7 @@ describe('textOf', () => {
     expect(
       textOf([
         { type: 'text', text: 'a' },
-        { type: 'tool-call', id: 'c' as ToolCallId, name: 'f', arguments: '{}' },
+        { type: 'tool-call', id: ToolCallId('c'), name: 'f', arguments: '{}' },
       ]),
     ).toBe('a')
   })
@@ -55,7 +58,7 @@ describe('toWireMessages', () => {
       toWireMessages(
         message('assistant', [
           { type: 'text', text: 'calling' },
-          { type: 'tool-call', id: 'c1' as ToolCallId, name: 'search', arguments: '{"q":"x"}' },
+          { type: 'tool-call', id: ToolCallId('c1'), name: 'search', arguments: '{"q":"x"}' },
         ]),
       ),
     ).toEqual([
@@ -70,8 +73,8 @@ describe('toWireMessages', () => {
   it('maps several tool calls in one assistant message', () => {
     const wire = toWireMessages(
       message('assistant', [
-        { type: 'tool-call', id: 'a' as ToolCallId, name: 'f', arguments: '{}' },
-        { type: 'tool-call', id: 'b' as ToolCallId, name: 'g', arguments: '[]' },
+        { type: 'tool-call', id: ToolCallId('a'), name: 'f', arguments: '{}' },
+        { type: 'tool-call', id: ToolCallId('b'), name: 'g', arguments: '[]' },
       ]),
     )
     expect(wire[0]!.tool_calls).toHaveLength(2)
@@ -81,7 +84,7 @@ describe('toWireMessages', () => {
     expect(
       toWireMessages(
         message('user', [
-          { type: 'tool-result', toolCallId: 'c1' as ToolCallId, content: [{ type: 'text', text: 'done' }] },
+          { type: 'tool-result', toolCallId: ToolCallId('c1'), content: [{ type: 'text', text: 'done' }] },
         ]),
       ),
     ).toEqual([{ role: 'tool', tool_call_id: 'c1', content: 'done' }])
@@ -91,8 +94,8 @@ describe('toWireMessages', () => {
     expect(
       toWireMessages(
         message('user', [
-          { type: 'tool-result', toolCallId: 'a' as ToolCallId, content: [] },
-          { type: 'tool-result', toolCallId: 'b' as ToolCallId, content: [] },
+          { type: 'tool-result', toolCallId: ToolCallId('a'), content: [] },
+          { type: 'tool-result', toolCallId: ToolCallId('b'), content: [] },
         ]),
       ),
     ).toHaveLength(2)
@@ -102,7 +105,7 @@ describe('toWireMessages', () => {
     expect(
       toWireMessages(
         message('user', [
-          { type: 'tool-result', toolCallId: 'a' as ToolCallId, content: [{ type: 'text', text: 'done' }] },
+          { type: 'tool-result', toolCallId: ToolCallId('a'), content: [{ type: 'text', text: 'done' }] },
           { type: 'text', text: 'and one more thing' },
         ]),
       ),
@@ -118,7 +121,7 @@ describe('toWireMessages', () => {
         message('user', [
           {
             type: 'tool-result',
-            toolCallId: 'a' as ToolCallId,
+            toolCallId: ToolCallId('a'),
             content: [{ type: 'text', text: 'Error: no such table' }],
             isError: true,
           },
@@ -141,8 +144,8 @@ describe('toWireMessages', () => {
   it('prefers the tool-result mapping when a message carries both', () => {
     const wire = toWireMessages(
       message('user', [
-        { type: 'tool-result', toolCallId: 'a' as ToolCallId, content: [] },
-        { type: 'tool-call', id: 'b' as ToolCallId, name: 'f', arguments: '{}' },
+        { type: 'tool-result', toolCallId: ToolCallId('a'), content: [] },
+        { type: 'tool-call', id: ToolCallId('b'), name: 'f', arguments: '{}' },
       ]),
     )
     expect(wire).toEqual([{ role: 'tool', tool_call_id: 'a', content: '' }])

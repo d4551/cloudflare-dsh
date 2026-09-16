@@ -7,7 +7,6 @@
  * `../_shared/render.ts`, so this module stays a thin, declarative layer.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
-import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
@@ -33,6 +32,7 @@ import {
   shortPageOutcome,
 } from '../_shared/paging.ts'
 import { apiRecords, json, listing } from '../_shared/render.ts'
+import { apiRecordOf, apiRecordsOf } from '../_shared/json.ts'
 import type { AiToolsConfig } from './config.ts'
 
 /** Billing views the cost tool exposes. */
@@ -65,13 +65,14 @@ export function registerGateway(ctx: Context, cf: CloudflareService, config: AiT
       async execute(args, exec) {
         const page = requestedPage(args.page)
         const perPage = args.perPage ?? config.pageSize
-        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+        const envelope = await cf.accountRequestEnvelope({
           ...gatewayListSpec(page, perPage),
           signal: exec.signal,
         })
+        const gateways = apiRecordsOf(envelope.result)
         return {
-          gateways: envelope.result,
-          ...pageOutcome(envelope.result_info, page, perPage, envelope.result.length),
+          gateways,
+          ...pageOutcome(envelope.result_info, page, perPage, gateways.length),
         }
       },
     }),
@@ -100,10 +101,12 @@ export function registerGateway(ctx: Context, cf: CloudflareService, config: AiT
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const gateway = await cf.accountRequest<Record<string, JsonValue>>({
-          ...gatewayGetSpec(args.gatewayId),
-          signal: exec.signal,
-        })
+        const gateway = apiRecordOf(
+          await cf.accountRequest({
+            ...gatewayGetSpec(args.gatewayId),
+            signal: exec.signal,
+          }),
+        )
         return { gateway }
       },
     }),
@@ -155,10 +158,12 @@ export function registerGateway(ctx: Context, cf: CloudflareService, config: AiT
         // refused it.
         const page = requestedPage(args.page)
         const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
-        const logs = await cf.accountRequest<Record<string, JsonValue>[]>({
-          ...gatewayLogsSpec(args.gatewayId, page, perPage, args.filters ?? []),
-          signal: exec.signal,
-        })
+        const logs = apiRecordsOf(
+          await cf.accountRequest({
+            ...gatewayLogsSpec(args.gatewayId, page, perPage, args.filters ?? []),
+            signal: exec.signal,
+          }),
+        )
         return { logs, ...shortPageOutcome(page, perPage, logs.length) }
       },
     }),
@@ -195,7 +200,7 @@ export function registerGateway(ctx: Context, cf: CloudflareService, config: AiT
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const body = await cf.accountRequest<JsonValue>({
+        const body = await cf.accountRequest({
           ...gatewayLogBodySpec(args.gatewayId, args.logId, args.part),
           signal: exec.signal,
         })
@@ -222,10 +227,12 @@ export function registerGateway(ctx: Context, cf: CloudflareService, config: AiT
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const routes = await cf.accountRequest<Record<string, JsonValue>[]>({
-          ...gatewayRouteListSpec(args.gatewayId),
-          signal: exec.signal,
-        })
+        const routes = apiRecordsOf(
+          await cf.accountRequest({
+            ...gatewayRouteListSpec(args.gatewayId),
+            signal: exec.signal,
+          }),
+        )
         return { routes }
       },
     }),
@@ -267,7 +274,7 @@ export function registerGateway(ctx: Context, cf: CloudflareService, config: AiT
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const billing = await cf.accountRequest<JsonValue>({
+        const billing = await cf.accountRequest({
           ...gatewayBillingSpec(args.view),
           signal: exec.signal,
         })

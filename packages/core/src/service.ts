@@ -20,12 +20,24 @@ import {
 } from './paginate.ts'
 import { assertSafePath, decodePath } from './request.ts'
 import { makeScope, scopedPath } from './scope.ts'
-import type { CloudflareEnvelope, RequestSpec, Scope } from './types.ts'
+import type { CloudflareEnvelope, JsonValue, RequestSpec, Scope } from './types.ts'
 
 /** One account as returned by `GET /accounts`. */
 export interface CloudflareAccount {
   readonly id: string
   readonly name: string
+}
+
+/**
+ * Whether a parsed item is an account.
+ *
+ * The list endpoint's element shape is read here rather than declared at the
+ * client, because this is the only place that knows what `/accounts` puts in
+ * each entry.
+ */
+function isCloudflareAccount(value: JsonValue): value is CloudflareAccount {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  return typeof value['id'] === 'string' && typeof value['name'] === 'string'
 }
 
 /** Collaborators the service needs beyond its config. */
@@ -64,6 +76,14 @@ export class CloudflareNoAccountError extends CloudflareError {
         'Set `accountId` in the plugin config.',
       404,
     )
+  }
+}
+
+/** Raised when the accounts endpoint answers with an entry that is not an account. */
+export class CloudflareMalformedAccountError extends CloudflareError {
+  override readonly name = 'CloudflareMalformedAccountError'
+  constructor() {
+    super('the accounts endpoint returned an entry without an id and a name', 0)
   }
 }
 
@@ -110,11 +130,16 @@ export class CloudflareService extends Service {
     // `/accounts` is page-numbered, not cursor-paginated. Walking it with the
     // cursor stepper stopped after the first page, and the walk was reported as
     // "every account the token can see".
-    const walk = await this.client.listAll<CloudflareAccount>(
+    const walk = await this.client.listAll(
       { method: 'GET', path: '/accounts', query: { per_page: ACCOUNTS_MAX_PAGE_SIZE }, signal },
       nextPageQuery,
     )
-    return { accounts: walk.items, truncated: walk.truncated }
+    const accounts = walk.items.filter(isCloudflareAccount)
+    // An entry that is not an account would otherwise be dropped in silence,
+    // and a shortened list is exactly what makes a second account invisible —
+    // which the ambiguity check below exists to catch.
+    if (accounts.length !== walk.items.length) throw new CloudflareMalformedAccountError()
+    return { accounts, truncated: walk.truncated }
   }
 
   /**
@@ -172,9 +197,9 @@ export class CloudflareService extends Service {
   }
 
   /** Issue an account-scoped request, resolving the account id first. */
-  async accountRequest<T>(spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<T> {
+  async accountRequest(spec: Omit<RequestSpec, 'path'> & { path: string }): Promise<JsonValue> {
     const scope = await this.accountScope(spec.signal)
-    return this.client.request<T>({ ...spec, path: scopedPath(scope, spec.path) })
+    return this.client.request({ ...spec, path: scopedPath(scope, spec.path) })
   }
 
   /**
@@ -183,11 +208,11 @@ export class CloudflareService extends Service {
    * `result_info` is where a paged endpoint reports its cursor. `accountRequest`
    * returns only `result`, so a tool that hands its caller a cursor comes here.
    */
-  async accountRequestEnvelope<T>(
+  async accountRequestEnvelope(
     spec: Omit<RequestSpec, 'path'> & { path: string },
-  ): Promise<CloudflareEnvelope<T>> {
+  ): Promise<CloudflareEnvelope<JsonValue>> {
     const scope = await this.accountScope(spec.signal)
-    return this.client.requestEnvelope<T>({ ...spec, path: scopedPath(scope, spec.path) })
+    return this.client.requestEnvelope({ ...spec, path: scopedPath(scope, spec.path) })
   }
 
   /**
@@ -216,11 +241,11 @@ export class CloudflareService extends Service {
    * Returns the walk's outcome with the items, so a caller can tell a complete
    * result from one the page ceiling cut short.
    */
-  async accountListAll<T>(
+  async accountListAll(
     spec: Omit<RequestSpec, 'path'> & { path: string },
     step: PageStepper,
-  ): Promise<PageWalk<T>> {
+  ): Promise<PageWalk<JsonValue>> {
     const scope = await this.accountScope(spec.signal)
-    return this.client.listAll<T>({ ...spec, path: scopedPath(scope, spec.path) }, step)
+    return this.client.listAll({ ...spec, path: scopedPath(scope, spec.path) }, step)
   }
 }

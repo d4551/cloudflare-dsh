@@ -15,13 +15,31 @@ import { describe, expect, it } from 'vitest'
 
 const root = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
+/**
+ * One entry in a manifest's `exports` map: the file itself, or the condition
+ * naming it. Both spellings are published, and a resolver has to read both.
+ */
+type ExportTarget = string | { readonly default: string }
+
 interface Manifest {
-  name: string
-  version: string
-  exports: Record<string, unknown>
-  dependencies?: Record<string, string>
-  peerDependencies?: Record<string, string>
-  dsh?: { bundle?: { patch?: string }; client?: boolean }
+  readonly name: string
+  readonly version: string
+  readonly exports: Readonly<Record<string, ExportTarget>>
+  readonly dependencies?: Readonly<Record<string, string>>
+  readonly peerDependencies?: Readonly<Record<string, string>>
+  readonly dsh?: { readonly bundle?: { readonly patch?: string }; readonly client?: boolean }
+}
+
+/**
+ * A built plugin entry, as much of it as a loader reads before mounting it.
+ *
+ * `apply` is declared uncallable on purpose: this suite asks whether the entry
+ * exports one, and never calls it — the real signature is the framework's.
+ */
+interface BuiltPlugin {
+  readonly name?: string
+  readonly inject?: readonly string[]
+  readonly apply?: (...args: never[]) => void
 }
 
 function manifest(pkg: string): Manifest {
@@ -30,9 +48,11 @@ function manifest(pkg: string): Manifest {
 
 /** Resolve one export subpath to a file, the way Node would. */
 function resolveExport(pkg: string, subpath: string): string {
-  const m = manifest(pkg)
-  const entry = m.exports[subpath]
-  const target = typeof entry === 'string' ? entry : (entry as { default: string }).default
+  const entry = manifest(pkg).exports[subpath]
+  // A subpath the manifest does not map is a package a host cannot import,
+  // which is what every caller here is asking about.
+  if (entry === undefined) throw new Error(`${pkg} exports no ${subpath}`)
+  const target = typeof entry === 'string' ? entry : entry.default
   return root(`../packages/${pkg}/${target.replace(/^\.\//, '')}`)
 }
 
@@ -61,6 +81,13 @@ describe('published manifests', () => {
 })
 
 describe('built artifacts', () => {
+  /**
+   * Every published entry point: the package, and the subpath it is reached by.
+   *
+   * Declared once and walked by both tests below, each of which labels its
+   * expectation with the entry it was reading — so a failure names the subpath,
+   * and the two agree on the list by construction rather than by inspection.
+   */
   const entries: ReadonlyArray<[string, string]> = [
     ['core', '.'],
     ['bundle', './tools/ai'],
@@ -73,13 +100,23 @@ describe('built artifacts', () => {
     ['client', './client'],
   ]
 
-  it.each(entries)('%s %s points at a file that exists', (pkg, subpath) => {
-    expect(existsSync(resolveExport(pkg, subpath))).toBe(true)
+  it('points every entry point at a file that exists', () => {
+    // A subpath that resolves nowhere is the failure a consumer meets first,
+    // and a declared export that no file backs is the same failure moved one
+    // step later.
+    for (const [pkg, subpath] of entries) {
+      expect(existsSync(resolveExport(pkg, subpath)), `${pkg} ${subpath}`).toBe(true)
+    }
   })
 
-  it.each(entries)('%s %s loads and exports something', async (pkg, subpath) => {
-    const mod = (await import(resolveExport(pkg, subpath))) as Record<string, unknown>
-    expect(Object.keys(mod).length).toBeGreaterThan(0)
+  it('loads every entry point and finds something exported', async () => {
+    // An entry that loads and exports nothing is a package that installs
+    // inert, and the import is the only way to see it: the file exists either
+    // way.
+    for (const [pkg, subpath] of entries) {
+      const mod: object = await import(resolveExport(pkg, subpath))
+      expect(Object.keys(mod).length, `${pkg} ${subpath}`).toBeGreaterThan(0)
+    }
   })
 
   it.each([
@@ -88,11 +125,7 @@ describe('built artifacts', () => {
     ['bundle', './tools/web'],
     ['bundle', './tools/meta'],
   ])('%s %s ships a loadable cordis plugin', async (pkg, subpath) => {
-    const mod = (await import(resolveExport(pkg, subpath))) as {
-      name?: string
-      inject?: readonly string[]
-      apply?: unknown
-    }
+    const mod: BuiltPlugin = await import(resolveExport(pkg, subpath))
     expect(typeof mod.name).toBe('string')
     expect(mod.inject).toContain('cloudflare')
     expect(typeof mod.apply).toBe('function')

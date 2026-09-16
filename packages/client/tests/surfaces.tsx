@@ -1,113 +1,40 @@
 /**
- * The surfaces this package contributes, as a host would assemble them.
+ * The host document every browser lane loads, and the pages it loads.
  *
- * Shared by the browser lanes so the accessibility scan and the viewport scan
- * look at the same markup. Two lanes rendering two slightly different pages
- * would be two claims about two things.
+ * Shared by the browser lanes so the accessibility scan, the viewport sweep and
+ * the layout lane look at the same markup in the same document. Lanes rendering
+ * slightly different pages would be claims about slightly different things; the
+ * props themselves live in `fixtures.tsx`, and this module is the document
+ * around them.
  */
-import { type Browser, type BrowserContext, type Page, chromium } from 'playwright'
+import type { Browser, BrowserContext, Page } from 'playwright'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { expect } from 'vitest'
-import { SessionCostChip } from '../src/SessionCostChip.tsx'
-import { SettingsCard } from '../src/SettingsCard.tsx'
-import { AccessibilityTree } from '../src/toolviews/AccessibilityTree.tsx'
 import { BrowserRender } from '../src/toolviews/BrowserRender.tsx'
 import { D1Result } from '../src/toolviews/D1Result.tsx'
 import { D1ResultToolView } from '../src/toolviews/fromToolCall.tsx'
+import { HOST_COMPOSITION, ownerCurrency, settledBlock } from './fixtures.tsx'
 
 /**
  * The stylesheet the package ships, imported rather than reconstructed.
  *
- * Re-exported because the browser lanes scan the same bytes this module
- * styles with: one stylesheet, one source of bytes, no second copy.
+ * Re-exported because the browser lanes scan the same bytes this module styles
+ * with: one stylesheet, one source of bytes, no second copy.
  */
 import css from '../src/cloudflare.css?raw'
 
 export { css }
 
-const usage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
-const settings = { apiTokenRef: 'CLOUDFLARE_API_TOKEN', accountId: '', gatewayId: '' }
-const tree = { role: 'document', name: 'Page', children: [{ role: 'heading', name: 'Title' }] }
-
-/**
- * A settled tool result carrying no projection a view can read.
- *
- * Goes through the registered view rather than the default component, because
- * the default is reached by the projection layer and reaching it the same way
- * is what makes this the card a host would actually draw. A replayed log
- * written before a tool published its projection is exactly this shape.
- */
-const unreadable = {
-  kind: 'tool-result',
-  isError: false,
-  content: [{ type: 'text', text: 'id\n1' }],
-}
-
-/**
- * Every state each surface can be rendered into from its props.
- *
- * Not one state per component: the empty, loading and failed chips and the
- * empty result each render copy no other state renders, and a scan of the
- * happy path alone never sees them.
- */
-export const STATES: ReadonlyArray<{ name: string; element: React.JSX.Element }> = [
-  { name: 'SessionCostChip', element: <SessionCostChip usage={usage} /> },
-  { name: 'SessionCostChip (empty)', element: <SessionCostChip /> },
-  { name: 'SessionCostChip (loading)', element: <SessionCostChip loading /> },
-  { name: 'SessionCostChip (failed)', element: <SessionCostChip failed /> },
-  {
-    name: 'SettingsCard',
-    element: <SettingsCard settings={settings} tokenStored onSave={() => undefined} />,
-  },
-  {
-    name: 'SettingsCard (no token stored)',
-    element: <SettingsCard settings={settings} tokenStored={false} onSave={() => undefined} />,
-  },
-  {
-    name: 'D1Result',
-    element: <D1Result sql="SELECT id, name FROM users" resultSets={[{ results: [{ id: 1, name: 'a' }] }]} />,
-  },
-  { name: 'D1Result (empty)', element: <D1Result sql="SELECT 1" resultSets={[]} /> },
-  { name: 'BrowserRender', element: <BrowserRender url="https://example.test" body="# Title" /> },
-  { name: 'AccessibilityTree', element: <AccessibilityTree url="https://example.test" tree={tree} /> },
-  {
-    name: 'AccessibilityTree (leaf)',
-    element: <AccessibilityTree url="https://example.test" tree={{ role: 'document' }} />,
-  },
-  {
-    name: 'a settled result no view could read',
-    element: <D1ResultToolView callId="call-1" toolName="cloudflare_d1_query" block={unreadable} />,
-  },
-]
-
 /**
  * The client as a host assembles it, in one React tree.
  *
- * One call, not a join of many: `useId` mints ids per render, so rendering
- * each surface separately and concatenating would restart the counter and
- * manufacture id collisions no host would ever produce.
- *
- * The composition is the real one, which is the point of scanning it. The chip
- * and the settings card are singletons — one session header, one settings tab
- * — while a tool view is rendered once per tool call, so each appears twice
- * with identical props. That repetition is what a conversation running the
- * same query twice produces, and it is what caught the tool views being
- * `region` landmarks: two cards, one name, one `landmark-unique` violation.
+ * One call, not a join of many: `useId` mints ids per render, so rendering each
+ * surface separately and concatenating would restart the counter and
+ * manufacture id collisions no host would ever produce. The composition itself
+ * — which parts are singletons and which repeat per tool call — is stated with
+ * the fixtures.
  */
-export const ASSEMBLED = renderToStaticMarkup(
-  <>
-    <SessionCostChip usage={usage} />
-    <SettingsCard settings={settings} tokenStored onSave={() => undefined} />
-    <D1Result sql="SELECT id FROM users" resultSets={[{ results: [{ id: 1 }] }]} />
-    <D1Result sql="SELECT id FROM users" resultSets={[{ results: [{ id: 1 }] }]} />
-    <BrowserRender url="https://example.test" body="# Title" />
-    <BrowserRender url="https://example.test" body="# Title" />
-    <AccessibilityTree url="https://example.test" tree={tree} />
-    <AccessibilityTree url="https://example.test" tree={tree} />
-    <D1ResultToolView callId="call-1" toolName="cloudflare_d1_query" block={unreadable} />
-    <D1ResultToolView callId="call-2" toolName="cloudflare_d1_query" block={unreadable} />
-  </>,
-)
+export const ASSEMBLED = renderToStaticMarkup(HOST_COMPOSITION)
 
 /**
  * A wide result set and a long rendered body.
@@ -141,13 +68,11 @@ export const OVERFLOWING = renderToStaticMarkup(
       body={`# Title\n${'no-spaces-in-this-line-so-it-cannot-wrap-'.repeat(8)}`}
     />
     <D1ResultToolView
-      callId="call-1"
-      toolName="cloudflare_d1_query"
-      block={{
-        kind: 'tool-result',
-        isError: false,
-        content: [{ type: 'text', text: 'no-spaces-in-this-line-so-it-cannot-wrap-'.repeat(8) }],
-      }}
+      {...ownerCurrency(
+        settledBlock(undefined, [
+          { type: 'text', text: 'no-spaces-in-this-line-so-it-cannot-wrap-'.repeat(8) },
+        ]),
+      )}
     />
   </>,
 )
@@ -156,17 +81,6 @@ export const THEMES: ReadonlyArray<{ name: string; scheme: 'light' | 'dark' }> =
   { name: 'light', scheme: 'light' },
   { name: 'dark', scheme: 'dark' },
 ]
-
-/**
- * Launch the browser both lanes drive.
- *
- * Playwright resolves the browser itself, honouring the environment's own
- * browser-path configuration; a lane that pinned an executable path would
- * bypass that resolution and drift from what CI drives.
- */
-export function launch(): Promise<Browser> {
-  return chromium.launch()
-}
 
 /**
  * What a page may declare as its own colour scheme.
@@ -179,11 +93,9 @@ export type HostScheme = 'light dark' | 'light' | 'dark' | 'normal'
 /**
  * The stylesheet a host would serve, around whatever it puts in `<main>`.
  *
- * One host for every browser lane, because two lanes rendering two slightly
- * different pages would be two claims about two things — and because the host
- * is itself under test. It supplies what a real one supplies: a colour scheme
- * declared the way pages declare one, and chrome colours read out of the
- * scheme with `light-dark()` rather than branched on, so the page cannot
+ * One host for every browser lane. It supplies what a real one supplies: a
+ * colour scheme declared the way pages declare one, and chrome colours read out
+ * of the scheme with `light-dark()` rather than branched on, so the page cannot
  * disagree with itself. The shipped stylesheet rides along, because the
  * components under scan are the ones it styles.
  */

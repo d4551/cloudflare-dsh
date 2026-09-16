@@ -38,3 +38,35 @@ export function isInteger(value: JsonValue | undefined): value is number {
 export function isStringArray(value: JsonValue | undefined): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
+
+/** Whether a value is an array whose every item is a JSON object; an empty array is one. */
+export function isObjectArray(value: JsonValue | undefined): value is Record<string, JsonValue>[] {
+  return Array.isArray(value) && value.every(isObject)
+}
+
+/**
+ * Raised when a listing endpoint answers with entries that are not records.
+ *
+ * An `apiRecords` output property promises the model records, and an endpoint
+ * that sends scalars cannot be carried by the contract it was declared under.
+ * An empty list in its place would tell the model there are none, which the
+ * endpoint never said.
+ */
+export class ApiRecordsShapeError extends TypeError {
+  override readonly name = 'ApiRecordsShapeError'
+  constructor() {
+    super('the endpoint returned a list whose entries are not records')
+  }
+}
+
+/** Read a listing endpoint's `result` as records, refusing any other shape. */
+export function apiRecordsOf(result: JsonValue): Record<string, JsonValue>[] {
+  if (!isObjectArray(result)) throw new ApiRecordsShapeError()
+  return result
+}
+
+/** Read a single-record endpoint's `result` as one record, refusing any other shape. */
+export function apiRecordOf(result: JsonValue): Record<string, JsonValue> {
+  if (!isObject(result)) throw new ApiRecordsShapeError()
+  return result
+}

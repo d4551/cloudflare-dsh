@@ -5,7 +5,9 @@
  * The wire half of the same provider — what one model call puts on the wire and
  * what comes back as chunks — is held by `ai-provider-stream.test.ts`; the
  * module this suite imports is the entry the package publishes, so the
- * re-export itself is asserted here too.
+ * re-export itself is asserted here too. The class's registration base
+ * (`LlmAdapter`) is asserted by `ai-provider-contract.test.ts`, which owns the
+ * shape the runtime registers.
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -125,13 +127,6 @@ describe('listModels', () => {
     await expect(provider.listModels('cloudflare-workers-ai')).resolves.toEqual([
       { provider: 'cloudflare-workers-ai', id: '@cf/m', name: '@cf/m' },
     ])
-  })
-})
-
-describe('provider identity', () => {
-  it('is an instance of the provider class the harness registers', () => {
-    const { provider } = makeProvider(async () => sse(TEXT, STOP))
-    expect(provider).toBeInstanceOf(CloudflareAiProvider)
   })
 })
 

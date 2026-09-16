@@ -168,7 +168,7 @@ export function apply(ctx: Context, config: MetaConfig): void {
             denyPathPrefixes: config.denyPathPrefixes,
           },
         )
-        const result = await cf.client.request<JsonValue>({ ...spec, signal: exec.signal })
+        const result = await cf.client.request({ ...spec, signal: exec.signal })
         return { result }
       },
     }),

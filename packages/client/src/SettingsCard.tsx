@@ -1,8 +1,8 @@
 /**
  * Cloudflare settings.
  *
- * The token field is write-only by design: the page is told whether a secret is
- * stored, never what it is, so a rendered settings page can never leak one.
+ * The token field is write-only: the page is told whether a secret is stored,
+ * never what it is, so a rendered settings page can never leak one.
  *
  * Accessibility notes:
  *  - every control has a programmatic label, and its hint is associated via

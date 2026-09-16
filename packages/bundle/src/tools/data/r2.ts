@@ -6,11 +6,11 @@
  * `../_shared/render.ts`, so this module stays a thin, declarative layer.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
-import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { r2BucketCreateSpec, r2BucketListSpec } from '../../specs/data.ts'
 import { cursorNote, cursorOutcome, cursorOutcomeProperties } from '../_shared/paging.ts'
+import { apiRecordOf, isObjectArray } from '../_shared/json.ts'
 import { apiRecords, listing, text } from '../_shared/render.ts'
 import type { DataToolsConfig } from './config.ts'
 
@@ -42,11 +42,15 @@ export function registerR2(ctx: Context, cf: CloudflareService, config: DataTool
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
-        const envelope = await cf.accountRequestEnvelope<{ buckets?: Record<string, JsonValue>[] }>({
+        const envelope = await cf.accountRequestEnvelope({
           ...r2BucketListSpec(args.perPage ?? config.pageSize, args.cursor),
           signal: exec.signal,
         })
-        return { buckets: envelope.result.buckets ?? [], ...cursorOutcome(envelope.result_info) }
+        // The listing result carries the page's buckets; an absent field is an
+        // empty page, and any other shape is not a bucket list at all.
+        const result = apiRecordOf(envelope.result)
+        const buckets = isObjectArray(result['buckets']) ? result['buckets'] : []
+        return { buckets, ...cursorOutcome(envelope.result_info) }
       },
     }),
   )
@@ -74,7 +78,7 @@ export function registerR2(ctx: Context, cf: CloudflareService, config: DataTool
         render: (args) => text(`Created R2 bucket ${args.name}.`),
       },
       async execute(args, exec) {
-        const bucket = await cf.accountRequest<JsonValue>({
+        const bucket = await cf.accountRequest({
           ...r2BucketCreateSpec(args.name, args.locationHint),
           signal: exec.signal,
         })

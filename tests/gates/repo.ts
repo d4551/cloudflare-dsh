@@ -11,6 +11,9 @@
 /** The JSON a configuration file parses to, typed so a scan cannot widen it. */
 export type Json = string | number | boolean | null | readonly Json[] | { readonly [key: string]: Json }
 
+/** An exact package version, the only spelling a pin can take. */
+export const EXACT_VERSION = /^\d+\.\d+\.\d+$/
+
 /** The root manifest, typed so a missing key is an error rather than `undefined`. */
 export interface PackageJson {
   readonly scripts: Readonly<Record<string, string>>

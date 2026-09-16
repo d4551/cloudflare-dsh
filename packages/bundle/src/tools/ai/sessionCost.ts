@@ -6,7 +6,6 @@
  * back the cost, cache behaviour and token volume for that exact session.
  */
 import type { CloudflareService } from '@d4551/dsh-cloudflare-core'
-import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { SESSION_METADATA_KEY } from '../../ai/headers.ts'
@@ -16,6 +15,7 @@ import {
   GATEWAY_LOG_MIN_PAGE_SIZE,
   sessionLogFilters,
 } from '../../specs/ai.ts'
+import { isObject } from '../_shared/json.ts'
 import { text } from '../_shared/render.ts'
 import { sessionOf, summariseSessionLogs } from './session.ts'
 
@@ -94,7 +94,7 @@ export function registerSessionCost(ctx: Context, cf: CloudflareService): void {
       isConcurrencySafe: () => true,
       async execute(args, exec) {
         const perPage = args.perPage ?? GATEWAY_LOG_MAX_PAGE_SIZE
-        const walk = await cf.accountListAll<Record<string, JsonValue>>(
+        const walk = await cf.accountListAll(
           {
             ...gatewayLogsSpec(
               args.gatewayId,
@@ -112,7 +112,7 @@ export function registerSessionCost(ctx: Context, cf: CloudflareService): void {
         // server ignores would return every session's logs — and the failure
         // that repair exists for is one session being billed another's cost.
         // Verifying locally makes the result correct either way.
-        const matched = walk.items.filter((row) => sessionOf(row) === args.sessionId)
+        const matched = walk.items.filter((row) => isObject(row) && sessionOf(row) === args.sessionId)
         return {
           ...summariseSessionLogs(matched),
           scanned: walk.items.length,
