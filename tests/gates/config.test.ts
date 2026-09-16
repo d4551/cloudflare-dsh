@@ -6,6 +6,7 @@
  * configuration files themselves and hold them to what the page states.
  */
 import { describe, expect, it } from 'vitest'
+import { containing, json, read, tracked } from './base.ts'
 import type {
   Json,
   KnipConfig,
@@ -15,8 +16,8 @@ import type {
   StrykerConfig,
   TsConfig,
   TsConfigBase,
-} from './support.ts'
-import { containing, json, read, sources, tracked } from './support.ts'
+} from './repo.ts'
+import { sources } from './support.ts'
 
 describe('mutation testing cannot be narrowed', () => {
   it('mutates every source extension, with no negated pattern', () => {

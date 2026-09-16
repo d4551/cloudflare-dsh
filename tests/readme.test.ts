@@ -20,8 +20,9 @@
 import { readdirSync, statSync } from 'node:fs'
 import { Visitor } from 'oxc-parser'
 import { describe, expect, it } from 'vitest'
-import { parseSource } from './gates/scan.ts'
-import { markdown, read, root } from './gates/support.ts'
+import { read, root } from './gates/base.ts'
+import { markdown } from './gates/support.ts'
+import { parseModule } from './parse.ts'
 
 /** Every `.ts`/`.tsx` file under one directory of the repository. */
 function sourcesUnder(dir: string): string[] {
@@ -47,7 +48,7 @@ const PACKAGE_SOURCES = readdirSync(root('packages')).map((pkg) => `packages/${p
  * description that quotes one cannot be counted as a registration.
  */
 export function toolsIn(file: string, text: string): string[] {
-  const source = parseSource(file, text)
+  const source = parseModule(file, text)
   const found: string[] = []
   const visitor = new Visitor({
     CallExpression: (node) => {
@@ -109,7 +110,7 @@ const named = (text: string): string[] => [...new Set(text.match(/cloudflare_[a-
  * and nowhere else is exactly the kind that goes undocumented.
  */
 export function fieldsIn(file: string, text: string): string[] {
-  const source = parseSource(file, text)
+  const source = parseModule(file, text)
   const found: string[] = []
   const visitor = new Visitor({
     CallExpression: (node) => {
@@ -135,7 +136,7 @@ export function fieldsIn(file: string, text: string): string[] {
  * having to account for it.
  */
 export function rowNameIn(file: string, text: string): string | undefined {
-  const source = parseSource(file, text)
+  const source = parseModule(file, text)
   for (const statement of source.program.body) {
     if (statement.type !== 'ExportNamedDeclaration') continue
     const declaration = statement.declaration

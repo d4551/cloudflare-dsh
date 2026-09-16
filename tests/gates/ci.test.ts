@@ -6,17 +6,16 @@
  * the purity rules the README states about the source.
  */
 import { describe, expect, it } from 'vitest'
-import type { PackageJson, StrykerConfig, StrykerRunner } from './support.ts'
-import { containing, json, matching, read, sources, tests } from './support.ts'
+import { containing, json, matching, read } from './base.ts'
+import type { PackageJson, StrykerConfig, StrykerRunner } from './repo.ts'
+import { sources, testFiles } from './support.ts'
 
 /**
- * The module that dispatches provider requests, assembled from fragments for
- * the same reason every needle here is: these files are themselves scanned,
- * and the path is tree data the gate reads, not a module it defines.
+ * Source modules whose text matches a capability pattern, in path order.
+ *
+ * A further module naming a capability is a new site for it, which is what
+ * these gates exist to notice.
  */
-const PROVIDER_MODULE = ['packages/bundle/src/ai/ad', 'apter.ts'].join('')
-
-/** Source modules whose text matches a capability pattern, in path order. */
 const usersOf = (pattern: RegExp): string[] => sources.filter((file) => pattern.test(read(file))).toSorted()
 
 /** One job's block, from its name to the next job at the same indent. */
@@ -43,14 +42,15 @@ describe('the pure/impure split holds', () => {
   })
 
   it('reaches the network from these modules and no others', () => {
-    // `client.ts` and the provider module dispatch; the two plugin entries do
-    // nothing with it but hand the global in as the default dependency. A
-    // further module naming `fetch` is a new I/O site, which is what this is
-    // here to notice. `client.ts` and `service.ts` name their injected
-    // transport by type rather than by call — the seam and the client that
-    // hands it on — so the pattern reads the seam's type as well as the call.
-    expect(usersOf(/\bfetch\s*\(|\bFetchLike\b/u)).toEqual([
-      PROVIDER_MODULE,
+    // A bare reference to the global counts as much as a call: handing `fetch`
+    // to an injected transport is the network reaching the module just as much
+    // as calling it. The pattern was once `\bfetch\s*\(`, which read the call
+    // and read right past `transmit: fetch` — the bundle's one I/O wiring — so
+    // the list it "proved" was shorter than the truth. `client.ts`,
+    // `service.ts` and `index.ts` name their injected transport by type, and
+    // the bundle's provider entry hands the global in, so all three spellings
+    // have to match.
+    expect(usersOf(/\bfetch\b|\bFetchLike\b/u)).toEqual([
       'packages/bundle/src/ai/index.ts',
       'packages/core/src/client.ts',
       'packages/core/src/index.ts',
@@ -77,7 +77,7 @@ describe('accessibility cannot be filtered', () => {
     ['rule reconfiguration', `axe.con${'figure'}`],
     ['array rule overrides', `rul${'es: ['}`],
   ])('no %s is used in any test', (_label, needle) => {
-    expect(containing(tests, needle)).toEqual([])
+    expect(containing(testFiles, needle)).toEqual([])
   })
 
   // The builder's scoping methods, matched as a call rather than as a bare
@@ -92,7 +92,7 @@ describe('accessibility cannot be filtered', () => {
     ['selector scoping', `inc${'lude'}`],
     ['builder options', `opt${'ions'}`],
   ])('calls no %s method on an axe builder', (_label, method) => {
-    expect(matching(tests, new RegExp(`(?<!\\.)\\.${method}\\(`, 'u'))).toEqual([])
+    expect(matching(testFiles, new RegExp(`(?<!\\.)\\.${method}\\(`, 'u'))).toEqual([])
   })
 
   it('scans every surface with the whole rule set', () => {

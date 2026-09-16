@@ -22,7 +22,8 @@
  * not caught here.
  */
 import { describe, expect, it } from 'vitest'
-import { markdown, read } from './support.ts'
+import { read } from './base.ts'
+import { markdown } from './support.ts'
 
 /** One fenced Mermaid block. */
 interface Diagram {

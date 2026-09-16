@@ -15,9 +15,7 @@ import { inlineCopy } from './scanners.ts'
 import { sources, testFiles } from './support.ts'
 
 /** The client components this gate holds: every `.tsx` the client package ships. */
-const components = sources.filter(
-  (file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'),
-)
+const components = sources.filter((file) => file.startsWith('packages/client/src/') && file.endsWith('.tsx'))
 
 describe('no client component carries inline copy', () => {
   it('finds the components this gate holds', () => {
