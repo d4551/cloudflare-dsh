@@ -36,7 +36,7 @@ export function nextPageQuery(
 }
 
 /** Fetches one page given a query overlay. */
-export type PageFetcher<T> = (
+export type PageFetcher<T extends JsonValue> = (
   query: Readonly<Record<string, QueryValue>>,
 ) => Promise<CloudflareEnvelope<readonly T[]>>
 
@@ -70,7 +70,7 @@ export function nextPageByLength(perPage: number): PageStepper {
  * `maxPages` is a hard stop so a server that keeps returning the same cursor
  * cannot spin forever.
  */
-export async function paginate<T>(
+export async function paginate<T extends JsonValue>(
   fetchPage: PageFetcher<T>,
   step: PageStepper,
   maxPages: number,

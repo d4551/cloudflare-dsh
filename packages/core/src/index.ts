@@ -13,7 +13,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { type CloudflareConfig, CloudflareConfig as ConfigSchema } from './config.ts'
 import type { CredentialResolver } from './credentials.ts'
-import { CloudflareService } from './service.ts'
+import { CloudflareMissingCredentialsError, CloudflareService } from './service.ts'
 
 export {
   TRANSPORT_FAILURE_STATUS,
@@ -54,12 +54,14 @@ export const Config = ConfigSchema
  * The context shape this plugin needs from the harness.
  *
  * `inject: ['credentials']` is what makes the resolver present, and Cordis
- * expresses that at runtime rather than in the type of `Context`. Spelling the
- * requirement in the parameter type is what removes the cast that used to stand
- * here: a caller that hands over a context without the resolver is refused by
- * the compiler, which is the same statement `inject` makes at runtime.
+ * expresses that at runtime rather than in the type of `Context`. Declaring the
+ * member here is what removes the cast that used to stand in `apply`: the
+ * requirement is stated once, and `apply` refuses a context that does not meet
+ * it rather than reading through an assertion.
  */
-export type HarnessContext = Context & { readonly credentials: CredentialResolver }
+export interface HarnessContext extends Context {
+  readonly credentials?: CredentialResolver
+}
 
 /**
  * Register the Cloudflare service.
@@ -73,8 +75,10 @@ export type HarnessContext = Context & { readonly credentials: CredentialResolve
  * itself ignores the return value.
  */
 export function apply(ctx: HarnessContext, config: CloudflareConfig): CloudflareService {
+  const credentials = ctx.credentials
+  if (credentials === undefined) throw new CloudflareMissingCredentialsError()
   return new CloudflareService(ctx, config, {
-    credentials: ctx.credentials,
+    credentials,
     // The platform function itself, bound as the transport: no lambda sits
     // between the seam and the global, and every test substitutes its own.
     fetch,

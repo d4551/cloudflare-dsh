@@ -33,11 +33,30 @@ export interface CloudflareAccount {
  *
  * The list endpoint's element shape is read here rather than declared at the
  * client, because this is the only place that knows what `/accounts` puts in
- * each entry.
+ * each entry. The intersection with an index-signature object is what lets this
+ * be a predicate over a parsed value: `CloudflareAccount` alone carries no
+ * index signature, so it is not itself a `JsonValue`.
  */
-function isCloudflareAccount(value: JsonValue): value is CloudflareAccount {
+function isCloudflareAccount(
+  value: JsonValue,
+): value is CloudflareAccount & { readonly [key: string]: JsonValue } {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   return typeof value['id'] === 'string' && typeof value['name'] === 'string'
+}
+
+/**
+ * Raised when the plugin is applied to a context without the credentials
+ * service it declares.
+ *
+ * Cordis supplies the resolver because `inject` names it; a direct caller that
+ * skipped the framework would otherwise get a service whose every request fails
+ * later, at credential resolution, far from the mistake that caused it.
+ */
+export class CloudflareMissingCredentialsError extends CloudflareError {
+  override readonly name = 'CloudflareMissingCredentialsError'
+  constructor() {
+    super('the credentials service is required on the context, and was not provided', 0)
+  }
 }
 
 /** Collaborators the service needs beyond its config. */

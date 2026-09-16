@@ -11,6 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { queueAckSpec, queueListSpec, queuePullSpec, queueSendSpec } from '../../specs/data.ts'
 import { EmptyBatchError } from '../_shared/batch.ts'
+import { apiRecordOf, apiRecordsOf } from '../_shared/json.ts'
 import { wholeListNote, wholeListOutcome } from '../_shared/paging.ts'
 import { apiRecords, listing, text } from '../_shared/render.ts'
 import type { DataToolsConfig } from './config.ts'
@@ -46,11 +47,12 @@ export function registerQueues(ctx: Context, cf: CloudflareService, config: Data
       },
       isConcurrencySafe: () => true,
       async execute(_args, exec) {
-        const envelope = await cf.accountRequestEnvelope<Record<string, JsonValue>[]>({
+        const envelope = await cf.accountRequestEnvelope({
           ...queueListSpec(),
           signal: exec.signal,
         })
-        return { queues: envelope.result, ...wholeListOutcome(envelope.result_info, envelope.result.length) }
+        const queues = apiRecordsOf(envelope.result)
+        return { queues, ...wholeListOutcome(envelope.result_info, queues.length) }
       },
     }),
   )
@@ -79,7 +81,7 @@ export function registerQueues(ctx: Context, cf: CloudflareService, config: Data
         render: () => text('Message queued.'),
       },
       async execute(args, exec) {
-        await cf.accountRequest<JsonValue>({ ...queueSendSpec(args.queueId, args.body), signal: exec.signal })
+        await cf.accountRequest({ ...queueSendSpec(args.queueId, args.body), signal: exec.signal })
         return { queued: true }
       },
     }),
@@ -115,7 +117,7 @@ export function registerQueues(ctx: Context, cf: CloudflareService, config: Data
         render: (_args, value) => listing(value.messages.length, 'message', value),
       },
       async execute(args, exec) {
-        const result = await cf.accountRequest<{ messages?: Record<string, JsonValue>[] }>({
+        const result = await cf.accountRequest({
           ...queuePullSpec(
             args.queueId,
             args.batchSize ?? config.queueBatchSize,
@@ -123,7 +125,12 @@ export function registerQueues(ctx: Context, cf: CloudflareService, config: Data
           ),
           signal: exec.signal,
         })
-        return { messages: result.messages ?? [] }
+        // An absent `messages` field is an empty batch, which is what the
+        // endpoint sends when the queue has nothing to give; any other shape is
+        // refused rather than read as an empty batch as well.
+        const pulled = apiRecordOf(result)
+        const messages = pulled['messages'] === undefined ? [] : apiRecordsOf(pulled['messages'])
+        return { messages }
       },
     }),
   )
@@ -156,7 +163,7 @@ export function registerQueues(ctx: Context, cf: CloudflareService, config: Data
         const acks = args.acks ?? []
         const retries = args.retries ?? []
         if (acks.length + retries.length === 0) throw new EmptyBatchError('acks or retries')
-        await cf.accountRequest<JsonValue>({
+        await cf.accountRequest({
           ...queueAckSpec(args.queueId, acks, retries),
           signal: exec.signal,
         })

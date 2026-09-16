@@ -1,12 +1,9 @@
 /**
  * The design system, as a gate: the stylesheet and the components consuming its
- * classes.
- *
- * A design system is not the sheet — it is the rule that a size comes from a
- * scale rather than being typed, that one rule has one home, that a container
- * says how its children line up, and that a control states the room a pointer
- * needs. Each is read out of the sheet, so the scale is the one this package
- * ships rather than a list kept here. Colour lives in `css.test.ts`.
+ * classes. A size comes from a scale rather than being typed, one rule has one
+ * home, a container says how its children line up, and a control states the room
+ * a pointer needs. Each rule is proven on a snippet here, then held against the
+ * sheet this package ships. Colour lives in `css.test.ts`.
  */
 import { describe, expect, it } from 'vitest'
 import { parseModule, walk } from '../parse.ts'
@@ -21,7 +18,7 @@ const STYLESHEET = 'packages/client/src/cloudflare.css'
  * The properties whose value is a size, and therefore a step on the scale. Each
  * family is one decision: `padding-block-end` is the same scale as `padding`.
  */
-const SIZE_PROPERTIES = [
+const SIZE_PROPERTIES: readonly string[] = [
   'font-size',
   'padding',
   'padding-block',
@@ -42,7 +39,7 @@ const SIZE_PROPERTIES = [
   'min-block-size',
   'max-inline-size',
   'max-block-size',
-] as const
+]
 
 /** The words a size may be written with and still name no step of the scale. */
 const NOT_A_SIZE = new Set([
@@ -57,14 +54,7 @@ const NOT_A_SIZE = new Set([
 ])
 
 /** The declarations that say how a container's children line up. */
-const ALIGNMENT = [
-  'align-items',
-  'align-self',
-  'justify-content',
-  'justify-self',
-  'place-items',
-  'place-content',
-]
+const ALIGNMENT = 'align-items align-self justify-content justify-self place-items place-content'.split(' ')
 
 /** Elements a user operates, which is what makes a rule a control's rule. */
 const CONTROL_ELEMENTS = ['button', 'input', 'select', 'textarea', 'summary']
@@ -83,16 +73,16 @@ function declaredTokens(css: string): Set<string> {
   return declared
 }
 
-/** The tokens a value resolves through, in the order they appear. */
+/** The tokens a value resolves through. */
 const tokensIn = (value: string): string[] =>
   [...value.matchAll(/var\(\s*(--cf-[a-z0-9-]+)/gu)].flatMap((match) =>
     match[1] === undefined ? [] : [match[1]],
   )
 
 /**
- * A value with every `var()` reference replaced by the fallback it names, or by
- * a space when it names none. A fallback is a literal the sheet carries, so it
- * is read with the rest of the value.
+ * A value with every `var()` reference replaced by the fallback it names, or by a
+ * space when it names none. A fallback is a literal the sheet carries, so it is
+ * read with the rest of the value.
  */
 const withoutReferences = (value: string): string =>
   value.replaceAll(/var\(\s*[^,()]+(?:,([^()]*))?\)/gu, (_match, fallback: string | undefined) =>
@@ -105,11 +95,7 @@ const offScaleWords = (value: string): string[] =>
     .split(/[\s,/]+/u)
     .filter((word) => word !== '' && !NOT_A_SIZE.has(word) && !/^\d+(?:\.\d+)?%$/u.test(word))
 
-/**
- * Every size declaration that does not come from the scale: a value carrying a
- * length the scale does not name, and a value resolving through a token the sheet
- * does not declare.
- */
+/** Every size declaration off the scale, and every token named but not declared. */
 function offScaleSizes(css: string): string[] {
   const declared = declaredTokens(css)
   const found: string[] = []
@@ -130,11 +116,7 @@ function offScaleSizes(css: string): string[] {
   return found
 }
 
-/**
- * Rules carrying the same declaration block. Two are one rule written twice, and
- * the copy that is not edited drifts. The comparison is on the declarations, so
- * a reformatted copy is still a copy.
- */
+/** Rules carrying the same declaration block: one rule written twice. */
 function duplicateBlocks(rules: readonly CssRule[]): string[] {
   const byBody = new Map<string, string[]>()
   for (const rule of rules) {
@@ -147,11 +129,7 @@ function duplicateBlocks(rules: readonly CssRule[]): string[] {
     .map(([body, selectors]) => `${selectors.join(', ')} { ${body} }`)
 }
 
-/**
- * The compounds of each selector in a list, split on the combinators outside
- * brackets: `:is(.a, .b) *` is one selector of two compounds, and `.a .b, .c` is
- * two selectors of two and one.
- */
+/** The compounds of each selector in a list, split outside brackets and parentheses. */
 function selectorsIn(selector: string): string[][] {
   const selectors: string[][] = []
   let compounds: string[] = []
@@ -180,7 +158,7 @@ function selectorsIn(selector: string): string[][] {
 }
 
 /**
- * Selectors reaching deeper than one step in: what they join, plus what they are
+ * Selectors reaching deeper than one step in: what they join plus what they are
  * nested inside, so `.a .b .c` and `a { b { c { … } } }` are measured alike.
  */
 function deepSelectors(rules: readonly CssRule[]): string[] {
@@ -193,11 +171,7 @@ function deepSelectors(rules: readonly CssRule[]): string[] {
   return found
 }
 
-/**
- * Containers that do not say how their children line up: `display: flex` and
- * `display: grid` place children by the initial value of the alignment
- * properties, so a container saying nothing is aligned by accident.
- */
+/** Containers placing children by the initial value of the alignment properties. */
 function unalignedContainers(rules: readonly CssRule[]): string[] {
   const found: string[] = []
   for (const rule of rules) {
@@ -239,9 +213,8 @@ function controlsWithoutMinimum(rules: readonly CssRule[]): string[] {
 }
 
 /**
- * Sizes a component writes into its own style prop — the one place a class
- * cannot reach, since the size sits in the component and no host can theme it.
- * React spells the properties above in camelCase.
+ * Sizes a component writes into its own style prop, where no class reaches and
+ * no host can theme them. React spells the properties above in camelCase.
  */
 function inlineSizes(name: string, text: string): string[] {
   const module = parseModule(name, text)
@@ -259,8 +232,6 @@ function inlineSizes(name: string, text: string): string[] {
       if (!SIZE_PROPERTIES.some((named) => camel(named) === property.key.name)) continue
       const set = property.value
       if (set.type !== 'Literal' || (typeof set.value !== 'string' && typeof set.value !== 'number')) continue
-      // The same test the sheet's declarations are held to: a token is a size the
-      // sheet owns, and anything else is one the component typed.
       if (offScaleWords(String(set.value)).length === 0) continue
       const at = `${name}:${module.lineAt(property.start)}`
       found.push(`${at} the style prop sets ${property.key.name} to ${String(set.value)}`)
@@ -269,6 +240,9 @@ function inlineSizes(name: string, text: string): string[] {
   })
   return found
 }
+
+/** The shipped sheet with rules added to it, so a rule can be seen reading them. */
+const withRules = (...rules: readonly string[]): string => [read(STYLESHEET), ...rules].join('\n')
 
 describe('the size scale the stylesheet declares', () => {
   it.each([
@@ -299,17 +273,17 @@ describe('the size scale the stylesheet declares', () => {
   })
 
   it.each([
-    ['a font size', 'const A = () => <b style={{ fontSize: "13px" }} />'],
-    ['a minimum block size', 'const A = () => <b style={{ minBlockSize: 24 }} />'],
+    ['a fontSize', 'const A = () => <b style={{ fontSize: "13px" }} />'],
+    ['a minBlockSize', 'const A = () => <b style={{ minBlockSize: 24 }} />'],
   ])('names %s written into a component', (_label, snippet) => {
     expect(inlineSizes('probe.tsx', snippet)).toHaveLength(1)
   })
 
-  it('leaves an inline size already drawn from the scale alone', () => {
-    expect(
-      inlineSizes('probe.tsx', 'const A = () => <b style={{ padding: "var(--cf-space-1)" }} />'),
-    ).toEqual([])
-    expect(inlineSizes('probe.tsx', 'const A = () => <b style={{ color: "red" }} />')).toEqual([])
+  it.each([
+    ['a token', 'const A = () => <b style={{ padding: "var(--cf-space-1)" }} />'],
+    ['another property', 'const A = () => <b style={{ color: "red" }} />'],
+  ])('leaves %s alone', (_label, snippet) => {
+    expect(inlineSizes('probe.tsx', snippet)).toEqual([])
   })
 
   it('reads the surfaces this gate holds', () => {
@@ -319,6 +293,10 @@ describe('the size scale the stylesheet declares', () => {
 
   it('draws every size the shipped stylesheet sets from the scale', () => {
     expect(offScaleSizes(read(STYLESHEET))).toEqual([])
+    // The same call, on the sheet's own text with one rule added to it.
+    expect(offScaleSizes(withRules('.cf-injected { padding: 4px }'))).toContain(
+      '.cf-injected { padding: 4px } is not drawn from the scale: 4px',
+    )
   })
 
   it('finds no size in any component the client ships', () => {
@@ -327,16 +305,15 @@ describe('the size scale the stylesheet declares', () => {
 })
 
 describe('the stylesheet has one home for each rule', () => {
-  it('names two rules carrying the same declarations', () => {
+  it('names two rules carrying the same declarations, and no others', () => {
     expect(duplicateBlocks(rulesOf('.a { margin: 0 }\n.b { margin: 0 }'))).toEqual(['.a, .b { margin: 0 }'])
-  })
-
-  it('leaves two rules that differ by one declaration alone', () => {
     expect(duplicateBlocks(rulesOf('.a { margin: 0 }\n.b { margin: 0 1px }'))).toEqual([])
   })
 
   it('carries no two rules with the same declarations', () => {
     expect(duplicateBlocks(rulesOf(read(STYLESHEET)))).toEqual([])
+    const injected = withRules('.cf-injected-a { margin: 0 }', '.cf-injected-b { margin: 0 }')
+    expect(duplicateBlocks(rulesOf(injected)).some((found) => found.includes('.cf-injected-a'))).toBe(true)
   })
 })
 
@@ -358,6 +335,9 @@ describe('the stylesheet reaches no deeper than one step in', () => {
 
   it('reaches no deeper in the shipped stylesheet', () => {
     expect(deepSelectors(rulesOf(read(STYLESHEET)))).toEqual([])
+    expect(
+      deepSelectors(rulesOf(withRules('.cf-injected .cf-injected .cf-injected { margin: 0 }'))),
+    ).toContain('.cf-injected .cf-injected .cf-injected reaches 3 deep')
   })
 })
 
@@ -368,20 +348,20 @@ describe('a layout container says how its children line up', () => {
     ])
   })
 
-  it('accepts a container that names its alignment', () => {
+  it('accepts a container that names its alignment, and a box that is not one', () => {
     // One labelled expectation per declaration, so a failure names the one the
     // container was aligned by.
     for (const property of ALIGNMENT) {
       expect(unalignedContainers(rulesOf(`.a { display: flex; ${property}: center }`)), property).toEqual([])
     }
-  })
-
-  it('leaves a box whose children the normal flow places alone', () => {
     expect(unalignedContainers(rulesOf('.a { display: block }'))).toEqual([])
   })
 
   it('leaves no container in the shipped stylesheet aligned by accident', () => {
     expect(unalignedContainers(rulesOf(read(STYLESHEET)))).toEqual([])
+    expect(unalignedContainers(rulesOf(withRules('.cf-injected-box { display: flex }')))).toContain(
+      '.cf-injected-box { display: flex } declares no alignment',
+    )
   })
 })
 
@@ -405,5 +385,8 @@ describe('every control states a minimum block size', () => {
 
   it('leaves every control in the shipped stylesheet with one', () => {
     expect(controlsWithoutMinimum(rulesOf(read(STYLESHEET)))).toEqual([])
+    expect(controlsWithoutMinimum(rulesOf(withRules('button.cf-injected-button { color: red }')))).toContain(
+      'button.cf-injected-button declares no min-block-size',
+    )
   })
 })

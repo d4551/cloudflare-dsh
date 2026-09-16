@@ -98,6 +98,17 @@ export type EnvelopeRead =
   | { readonly ok: false; readonly body: string }
 
 /**
+ * A Cloudflare envelope as it arrives: the declared frame, carried by a JSON
+ * object.
+ *
+ * The intersection is what lets the check below be a predicate over the parsed
+ * value at all — a `CloudflareEnvelope` alone carries no index signature, so it
+ * is not itself a `JsonValue`, and a predicate may only narrow to a type its
+ * subject already admits.
+ */
+type EnvelopeFrame = CloudflareEnvelope<JsonValue> & { readonly [key: string]: JsonValue }
+
+/**
  * Whether a parsed value is a Cloudflare envelope.
  *
  * The frame is checked member by member — `success` a boolean, `errors` a list
@@ -106,7 +117,7 @@ export type EnvelopeRead =
  * `JsonValue`, because the envelope says nothing about what an endpoint puts
  * there.
  */
-function isEnvelopeFrame(value: JsonValue): value is CloudflareEnvelope<JsonValue> {
+function isEnvelopeFrame(value: JsonValue): value is EnvelopeFrame {
   if (!isJsonObject(value)) return false
   const errors = value['errors']
   if (typeof value['success'] !== 'boolean' || !Array.isArray(errors)) return false

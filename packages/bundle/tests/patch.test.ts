@@ -42,17 +42,27 @@ function isPatchLayers(value: JsonValue): value is { insert?: PatchRow[] }[] {
   )
 }
 
+/** The insert rows the document declares, exactly as the parser handed them over. */
+function declaredRows(value: JsonValue): readonly JsonValue[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((layer) =>
+    isJsonObject(layer) && Array.isArray(layer.insert) ? layer.insert : [],
+  )
+}
+
 /**
  * The patch, parsed rather than string-matched.
  *
  * Every assertion here used to run against raw text, so a syntactically invalid
- * patch passed the whole suite while `dsh` would reject it at load. The parse
- * result is taken as its JSON value shape once, at this boundary, and every
- * assertion after it runs through the shape predicates above.
+ * patch passed the whole suite while `dsh` would reject it at load. The parser
+ * hands back untyped data, so the shape predicates above are the boundary every
+ * assertion after this line reads through, and the parsed document is kept
+ * beside the typed rows so the shape test can assert on it directly.
  */
-const parsed = parse(patch) as JsonValue
-const layers = isPatchLayers(parsed) ? parsed : []
+const document = parse(patch)
+const layers = isPatchLayers(document) ? document : []
 const rows: readonly PatchRow[] = layers.flatMap((layer) => layer.insert ?? [])
+const declared = declaredRows(document)
 const manifest = JSON.parse(
   readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
 ) as {
@@ -94,11 +104,16 @@ describe('bundle manifest', () => {
 
 describe('cordis.patch.yml', () => {
   it('is valid YAML shaped as a list of insert layers', () => {
-    expect(Array.isArray(layers)).toBe(true)
+    // Asserted on the document itself: `layers` is an empty list whenever the
+    // document is not a layer list, so an array check on it holds whatever the
+    // patch says.
+    expect(isPatchLayers(document)).toBe(true)
     expect(rows.length).toBeGreaterThan(0)
-    // Named rather than counted: a boolean collapses the failure to
-    // `false !== true` and says nothing about which row is malformed.
-    expect(rows.filter((row) => typeof row.id !== 'string' || typeof row.name !== 'string')).toEqual([])
+    // The rows the document declares, before the predicate accepted them: a row
+    // it rejected is absent from `rows`, so this check names it instead of
+    // losing it silently.
+    expect(declared.filter((row) => !isPatchRow(row))).toEqual([])
+    expect(declared).toHaveLength(rows.length)
   })
 
   it('gives every row a unique id, since a collision would silently drop one', () => {

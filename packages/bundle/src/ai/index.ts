@@ -14,7 +14,9 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import Schema from '@deepseek-ai/schemastery'
+import { isObject, isObjectArray } from '../tools/_shared/json.ts'
 import { aiModelsSearchSpec, gatewayUrlSpec } from '../specs/ai.ts'
 import { CloudflareAiProvider, type ResolvedEndpoint } from './provider.ts'
 import { seam } from '../seam.ts'
@@ -127,22 +129,6 @@ export function joinUrl(base: string, path: string): string {
   return path.startsWith('/') ? `${trimmed}${path}` : `${trimmed}/${path}`
 }
 
-/** Shape the gateway URL endpoint returns. */
-interface GatewayUrlResult {
-  readonly url?: string
-}
-
-/** One catalogue record, in the fields this plugin reads. */
-export interface CatalogueModel {
-  readonly name?: string
-  readonly description?: string
-  /**
-   * Cloudflare publishes model facts as `{ property_id, value }` pairs; the
-   * values this plugin reads arrive as strings or numbers.
-   */
-  readonly properties?: readonly { readonly property_id?: string; readonly value?: string | number }[]
-}
-
 /**
  * Turn one catalogue record into the metadata the harness can use for a call.
  *
@@ -154,19 +140,41 @@ export interface CatalogueModel {
 export function toResolvedModelInfo(
   provider: string,
   model: string,
-  record: CatalogueModel | undefined,
+  record: Record<string, JsonValue> | undefined,
 ): LlmResolvedModelInfo {
   if (record === undefined) return { provider, id: model, name: model }
-  const properties = new Map(record.properties?.map((entry) => [entry.property_id, entry.value]))
+  const properties = catalogueProperties(record['properties'])
   const contextWindow = Number(properties.get('context_window'))
+  const description = record['description']
   return {
     provider,
     id: model,
     name: model,
-    ...(record.description === undefined ? {} : { description: record.description }),
+    ...(typeof description === 'string' ? { description } : {}),
     inputModalities: properties.get('vision') === 'true' ? ['text', 'image'] : ['text'],
     ...(Number.isInteger(contextWindow) && contextWindow > 0 ? { context: { contextWindow } } : {}),
   }
+}
+
+/**
+ * The catalogue's `{ property_id, value }` pairs as a map, skipping entries
+ * whose shapes this plugin cannot read. The list is advisory: a record the
+ * plugin cannot read leaves the model's metadata bare rather than failing it.
+ */
+function catalogueProperties(value: JsonValue | undefined): Map<string, string | number> {
+  const map = new Map<string, string | number>()
+  if (!isObjectArray(value)) return map
+  for (const entry of value) {
+    const propertyId = entry['property_id']
+    const propertyValue = entry['value']
+    if (
+      typeof propertyId === 'string' &&
+      (typeof propertyValue === 'string' || typeof propertyValue === 'number')
+    ) {
+      map.set(propertyId, propertyValue)
+    }
+  }
+  return map
 }
 
 /**
@@ -177,16 +185,17 @@ export function toResolvedModelInfo(
  */
 export function toModelInfo(
   provider: string,
-  models: readonly { name?: string; description?: string }[],
+  models: readonly Record<string, JsonValue>[],
 ): LlmModelInfo[] {
   const info: LlmModelInfo[] = []
   for (const model of models) {
-    const id = model.name
-    if (id === undefined || id === '') continue
+    const id = model['name']
+    if (typeof id !== 'string' || id === '') continue
+    const description = model['description']
     info.push(
-      model.description === undefined
-        ? { provider, id, name: id }
-        : { provider, id, name: id, description: model.description },
+      typeof description === 'string'
+        ? { provider, id, name: id, description }
+        : { provider, id, name: id },
     )
   }
   return info
@@ -208,13 +217,14 @@ export function apply(ctx: Context, config: AiConfig): void {
     let url: string
     if (provider === AI_GATEWAY_PROVIDER) {
       if (config.gatewayId === '') throw new MissingGatewayError()
-      const result = await cf.accountRequest<GatewayUrlResult>({
+      const result = await cf.accountRequest({
         ...gatewayUrlSpec(config.gatewayId, config.gatewayProvider),
         signal,
       })
-      // An endpoint that answers with a null result advertises no base URL,
-      // which is the missing-gateway condition under another spelling.
-      const base = result === null ? undefined : result.url
+      // An endpoint that answers with a null result, or with an object carrying
+      // no `url`, advertises no base URL — which is the missing-gateway
+      // condition under another spelling.
+      const base = isObject(result) && typeof result['url'] === 'string' ? result['url'] : undefined
       if (base === undefined || base === '') {
         throw new MissingGatewayError()
       }
@@ -248,14 +258,17 @@ export function apply(ctx: Context, config: AiConfig): void {
     const key = `${provider} ${model}`
     const known = modelInfo.get(key)
     if (known !== undefined) return known
-    const matches = await cf.accountRequest<CatalogueModel[]>({
+    const matches = await cf.accountRequest({
       ...aiModelsSearchSpec(model, undefined, 1, CATALOGUE_LOOKUP_PAGE_SIZE),
       signal,
     })
+    // A search result that is not a list of records leaves the model unlisted,
+    // which is the state the catalogue's own "advisory" contract allows.
+    const records = isObjectArray(matches) ? matches : []
     const info = toResolvedModelInfo(
       provider,
       model,
-      matches.find((record) => record.name === model),
+      records.find((record) => record['name'] === model),
     )
     modelInfo.set(key, info)
     return info
@@ -268,12 +281,12 @@ export function apply(ctx: Context, config: AiConfig): void {
     // Every page, not the first: the catalogue reports no total, so the walk
     // stops on a short page, and a walk the page ceiling cut short is an error
     // rather than a shorter list presented as the whole.
-    const walk = await cf.accountListAll<{ name?: string; description?: string }>(
+    const walk = await cf.accountListAll(
       aiModelsSearchSpec(undefined, undefined, 1, CATALOGUE_LOOKUP_PAGE_SIZE),
       cf.pageByLength(CATALOGUE_LOOKUP_PAGE_SIZE),
     )
     if (walk.truncated) throw new CatalogueTruncatedError(walk.pages)
-    return toModelInfo(provider, walk.items)
+    return toModelInfo(provider, walk.items.filter(isObject))
   }
 
   const provider = new CloudflareAiProvider({

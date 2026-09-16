@@ -125,6 +125,9 @@ function forbiddenOptions(file: string, config: TsConfigFile): string[] {
 /** Every tsconfig git tracks, the root and the base among them. */
 const TSCONFIGS = tracked.filter((file) => /(^|\/)tsconfig[^/]*\.json$/u.test(file))
 
+/** The module the injection below is measured against, one the tree ships. */
+const CARRIER = 'packages/client/src/index.ts'
+
 describe('the React patterns React 19 moved past', () => {
   it('names each one where a module uses it', () => {
     // One labelled expectation per pattern, so a failure names the rule that
@@ -135,10 +138,24 @@ describe('the React patterns React 19 moved past', () => {
   })
 
   it('leaves each one alone where a module only writes about it', () => {
-    // The same text, commented out: a rule that matched its own name in prose
-    // would fail a module for explaining why it avoids the pattern.
+    // The same text, commented out — every line of it, so a rule cannot match
+    // what the comment marker left behind. A rule that matched its own name in
+    // prose would fail a module for explaining why it avoids the pattern.
     for (const { label, pattern, sample } of LEGACY_REACT) {
-      expect(codeUses('probe.tsx', `// ${sample}`, pattern), label).toEqual([])
+      const prose = sample
+        .split('\n')
+        .map((line) => `// ${line}`)
+        .join('\n')
+      expect(codeUses('probe.tsx', prose, pattern), label).toEqual([])
+    }
+  })
+
+  it('names each one added to a module the tree carries', () => {
+    // The call the tree scan makes below, on the shipped text of one module with
+    // the pattern added to it: a rule that stopped being evaluated fails here
+    // rather than the clean tree passing quietly.
+    for (const { label, pattern, sample } of LEGACY_REACT) {
+      expect(codeUses(CARRIER, `${read(CARRIER)}\n${sample}\n`, pattern), label).not.toEqual([])
     }
   })
 

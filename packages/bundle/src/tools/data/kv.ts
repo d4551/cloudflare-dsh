@@ -255,7 +255,7 @@ export function registerKv(ctx: Context, cf: CloudflareService, config: DataTool
         // What was written comes from the API's answer, never from the size
         // of the request.
         const outcome = kvBulkOutcome(
-          await cf.accountRequest<JsonValue>({
+          await cf.accountRequest({
             ...kvBulkPutSpec(args.namespaceId, entries),
             signal: exec.signal,
           }),
@@ -307,7 +307,7 @@ export function registerKv(ctx: Context, cf: CloudflareService, config: DataTool
         // Always the bulk endpoint, even for one key: it is the one whose answer
         // can carry the outcome.
         const outcome = kvBulkOutcome(
-          await cf.accountRequest<JsonValue>({
+          await cf.accountRequest({
             ...kvBulkDeleteSpec(args.namespaceId, keys),
             signal: exec.signal,
           }),

@@ -58,14 +58,21 @@ export const rows = (n: number): readonly D1ResultSet[] => [
   { results: Array.from({ length: n }, (_, index) => ({ id: index })) },
 ]
 
-/** One content block of a tool result. */
-export interface ContentPart {
+/**
+ * One content block of a tool result.
+ *
+ * A type alias and not an interface, for the reason every block shape in this
+ * module carries: an interface gets no implicit index signature, so a value
+ * declared as one cannot be handed over where a wire value is expected — and
+ * these are, as the content of a settled block.
+ */
+export type ContentPart = {
   readonly type: string
   readonly text?: string | undefined
 }
 
 /** A block carrying text and no type: a real host writes one, and no view can read it. */
-export interface UntypedPart {
+export type UntypedPart = {
   readonly text: string
 }
 
@@ -82,16 +89,25 @@ export type Projection =
   | readonly Projection[]
   | { readonly [key: string]: Projection }
 
-/** A settled result block, tagged the way only that arm of the block is. */
-export interface SettledBlock {
+/**
+ * A settled result block, tagged the way only that arm of the block is.
+ *
+ * A type alias for the reason `ContentPart` states: `ownerCurrency` hands this
+ * one to `ToolCallOwnerProps`, which takes wire values.
+ */
+export type SettledBlock = {
   readonly kind: 'tool-result'
   readonly isError: boolean
   readonly content: readonly BlockPart[]
   readonly meta: Projection
 }
 
-/** A call the host has not settled: a running block carries no tag at all. */
-export interface RunningBlock {
+/**
+ * A call the host has not settled: a running block carries no tag at all.
+ *
+ * A type alias for the reason above: `ownerCurrency` hands it over the same way.
+ */
+export type RunningBlock = {
   readonly callId: string
   readonly name: string
   readonly argsRaw: string

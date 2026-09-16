@@ -207,7 +207,7 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,
       async execute(args, exec) {
-        const body = await cf.accountRequest<JsonValue>({
+        const body = await cf.accountRequest({
           ...browserRenderSpec(args.format, renderOptionsFrom(args)),
           signal: exec.signal,
           timeoutMs: config.renderTimeoutMs,
@@ -340,7 +340,7 @@ export function apply(ctx: Context, config: WebToolsConfig): void {
       isConcurrencySafe: () => true,
       timeoutMs: config.renderTimeoutMs,
       async execute(args, exec) {
-        const tree = await cf.accountRequest<JsonValue>({
+        const tree = await cf.accountRequest({
           ...accessibilityTreeSpec(renderOptionsFrom(args)),
           signal: exec.signal,
           timeoutMs: config.renderTimeoutMs,

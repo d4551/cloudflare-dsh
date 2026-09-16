@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CloudflareError, CloudflareRateLimitError } from '../src/errors.ts'
-import {
-  type AttemptError,
-  type RetryPolicy,
-  backoffDelayMs,
-  nextDelayMs,
-  runWithRetry,
-  shouldRetry,
-} from '../src/retry.ts'
+import { type RetryPolicy, backoffDelayMs, nextDelayMs, runWithRetry, shouldRetry } from '../src/retry.ts'
 
 const policy: RetryPolicy = { maxRetries: 3, baseDelayMs: 100, maxDelayMs: 5000 }
 
@@ -17,7 +10,12 @@ const policy: RetryPolicy = { maxRetries: 3, baseDelayMs: 100, maxDelayMs: 5000 
  */
 type Sleep = (ms: number) => Promise<void>
 type Attempt<T> = () => Promise<T>
-const statusOf = (error: AttemptError): number => (error instanceof CloudflareError ? error.status : 0)
+
+/**
+ * The classifier the client supplies, narrowing by `instanceof` exactly as the
+ * client narrows: the reason is generic because a promise rejection is.
+ */
+const statusOf = <Reason>(error: Reason): number => (error instanceof CloudflareError ? error.status : 0)
 
 describe('shouldRetry', () => {
   it('retries a 500 while attempts remain', () => {
@@ -91,6 +89,18 @@ describe('nextDelayMs', () => {
   it('falls back to backoff for a transport failure', () => {
     expect(nextDelayMs(new TypeError('fetch failed'), 0, policy, 1)).toBe(100)
   })
+
+  it('falls back to backoff when the rejection came with a bare string', () => {
+    expect(nextDelayMs('boom', 0, policy, 1)).toBe(100)
+  })
+
+  it('falls back to backoff when the rejection came with a bare number', () => {
+    expect(nextDelayMs(42, 0, policy, 1)).toBe(100)
+  })
+
+  it('falls back to backoff when the rejection came with no reason at all', () => {
+    expect(nextDelayMs(undefined, 0, policy, 1)).toBe(100)
+  })
 })
 
 describe('runWithRetry', () => {
@@ -152,5 +162,20 @@ describe('runWithRetry', () => {
     }
     await runWithRetry(attempt, statusOf, policy, { ...deps, sleep })
     expect(sleep).toHaveBeenCalledWith(1500)
+  })
+
+  it('treats a synchronous throw as a failed attempt, budget included', async () => {
+    let calls = 0
+    const attempt = (): Promise<string> => {
+      calls += 1
+      throw new Error('thrown before any await')
+    }
+    await expect(runWithRetry(attempt, statusOf, policy, deps)).rejects.toThrow('thrown before any await')
+    expect(calls).toBe(policy.maxRetries + 1)
+  })
+
+  it('rethrows a reason that is not an error unchanged', async () => {
+    const attempt = (): Promise<string> => Promise.reject('a bare string')
+    await expect(runWithRetry(attempt, statusOf, policy, deps)).rejects.toBe('a bare string')
   })
 })
