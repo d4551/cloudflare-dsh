@@ -34,9 +34,11 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import { emptyResponse, idleTimeout, joinDetail, providerError } from './errors.ts'
 import { type GatewayHeaderOptions, buildGatewayHeaders } from './headers.ts'
+import { isJsonObject } from '@d4551/dsh-cloudflare-core'
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import { buildWireRequest } from './request.ts'
 import { SseDecoder, type SseEvent, parseJson } from './sse.ts'
-import { StreamTransducer, type WireChunk } from './transducer.ts'
+import { StreamTransducer, isWireChunk } from './transducer.ts'
 
 /** Where and how to reach the provider for one call. */
 export interface ResolvedEndpoint {
@@ -68,21 +70,27 @@ const PROVIDER_LABELS: Readonly<Record<string, string>> = {
   'cloudflare-ai-gateway': 'Cloudflare AI Gateway',
 }
 
+/** The text one member contributes to the detail line; any other JSON value contributes nothing. */
+function textMember(value: JsonValue | undefined): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
 /** Read the error detail a provider returned, tolerating any body shape. */
 export function readErrorDetail(status: number, body: string): string {
-  const read = parseJson<{
-    errors?: { code?: number; message?: string }[]
-    error?: { message?: string; code?: string; type?: string }
-  }>(body)
+  const read = parseJson(body)
   if (!read.ok) return joinDetail([`HTTP ${status}`, body])
-  const parsed = read.value
-  const envelope = parsed.errors
+  // The body parsed, so its shape is read rather than assumed: a scalar, an
+  // array, or a member of the wrong kind contributes nothing rather than
+  // reaching a property the caller typed but nobody checked.
+  const parsed: { readonly [key: string]: JsonValue } = isJsonObject(read.value) ? read.value : {}
+  const error: { readonly [key: string]: JsonValue } = isJsonObject(parsed['error']) ? parsed['error'] : {}
+  const envelope = Array.isArray(parsed['errors']) ? parsed['errors'] : []
   return joinDetail([
     `HTTP ${status}`,
-    parsed.error?.code,
-    parsed.error?.type,
-    parsed.error?.message,
-    ...(envelope === undefined ? [] : envelope.map((e) => e.message)),
+    textMember(error['code']),
+    textMember(error['type']),
+    textMember(error['message']),
+    ...envelope.map((entry) => textMember(isJsonObject(entry) ? entry['message'] : undefined)),
   ])
 }
 
@@ -256,8 +264,8 @@ export class CloudflareAiProvider extends LlmAdapter {
 
     for await (const event of events) {
       if (event.kind === 'done') break
-      const read = parseJson<WireChunk>(event.data)
-      if (!read.ok) continue
+      const read = parseJson(event.data)
+      if (!read.ok || !isWireChunk(read.value)) continue
       for (const chunk of transducer.push(read.value)) {
         if (chunk.type === 'block-start') produced = true
         yield chunk

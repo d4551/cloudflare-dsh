@@ -4,8 +4,10 @@
  * This module is the Cordis plugin entry: it registers `ctx.cloudflare` for
  * other plugins to consume via `inject: ['cloudflare']`. Alongside the entry
  * declarations it re-exports, by name, the seam surface a consumer of the
- * service needs — the client, its config schema and the service itself — so a
- * consumer can import the seam without reaching into module internals. The
+ * service needs — the client, its config schema, the service itself, and the
+ * total JSON reader every body in this workspace is parsed through, with the
+ * object guard that reads its members — so a consumer can import the seam
+ * without reaching into module internals. The
  * remaining modules publish as their own subpaths (`./errors`, `./paginate`,
  * `./request`, `./types`), so every import names the module that defines what
  * it imports and no `export *` layer sits anywhere.
@@ -26,6 +28,7 @@ export {
   type EnvelopeRead,
   type FetchLike,
 } from './client.ts'
+export { isJsonObject, type ParsedJson, parseJsonValue } from './json.ts'
 export { CloudflareConfig } from './config.ts'
 export {
   CloudflareAmbiguousAccountError,

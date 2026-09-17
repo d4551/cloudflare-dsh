@@ -44,7 +44,7 @@ export function sessionOf(entry: Record<string, JsonValue>): string | undefined 
   // No separate string guard: `JSON.parse` coerces its argument, and every
   // non-string value either fails to parse or fails the object check below, so
   // a guard would be a branch nothing could observe.
-  const parsed = parseJson<JsonValue>(String(entry.metadata))
+  const parsed = parseJson(String(entry.metadata))
   // Anything but an object — `null`, a number, a string — carries no session
   // id; the predicate also types the read.
   if (!parsed.ok || !isObject(parsed.value)) return undefined

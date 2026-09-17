@@ -30,7 +30,7 @@
     "@types/bun": "1.4.2",
     "@types/node": "22.20.3",
     "@vitest/coverage-v8": "5.0.1",
-    "knip": "6.35.1",
+    "knip": "6.36.0",
     "oxc-parser": "0.150.0",
     "oxc-transform": "0.150.0",
     "oxfmt": "0.68.0",

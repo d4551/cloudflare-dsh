@@ -21,8 +21,6 @@ import { DEFAULT_BASE_URL, assertSafeBaseUrl, buildRequest } from './request.ts'
 import { type RetryPolicy, runWithRetry } from './retry.ts'
 import type { CloudflareEnvelope, JsonValue, QueryValue, RequestSpec } from './types.ts'
 
-export { type ParsedJson, parseJsonValue } from './json.ts'
-
 /** The `fetch` shape the client needs. */
 export type FetchLike = (request: Request) => Promise<Response>
 

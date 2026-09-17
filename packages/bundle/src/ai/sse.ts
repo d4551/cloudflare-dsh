@@ -8,6 +8,16 @@
  * Only the `data:` field matters for these providers; comments, `event:` and
  * `id:` lines are ignored, as the SSE specification allows.
  */
+import { type ParsedJson as JsonRead, parseJsonValue } from '@d4551/dsh-cloudflare-core'
+
+/**
+ * Outcome of parsing text that may not be JSON.
+ *
+ * An alias of the workspace's own result type rather than a second copy of the
+ * union: a copy drifts, and this module's published surface only needs to name
+ * what it returns.
+ */
+export type ParsedJson<T> = JsonRead<T>
 
 /** Terminal payload OpenAI-compatible providers send to close a stream. */
 export const SSE_DONE = '[DONE]'
@@ -71,21 +81,16 @@ export function decodeLine(line: string): SseEvent | undefined {
   return { kind: 'data', data }
 }
 
-/** Outcome of parsing text that may not be JSON. */
-export type ParsedJson<T> = { readonly ok: true; readonly value: T } | { readonly ok: false }
-
 /**
  * Parse text as JSON without throwing.
  *
- * Returns a tagged result rather than `undefined`, so "this was not JSON" is
- * a state the caller has to handle explicitly: a malformed SSE frame is
- * skipped rather than aborting an otherwise good stream, and a log entry
- * whose metadata is not JSON carries no session rather than failing a sum.
+ * The implementation is the workspace's one total JSON reader:
+ * `parseJsonValue` proves the text is a single well-formed document before the
+ * platform parser runs, so the parse cannot throw and nothing needs a `catch`,
+ * and the value is built from the grammar rather than asserted into a type
+ * argument the caller supplied. The name is bound rather than the body
+ * rewritten, so the stream reader, the log reader and the package's published
+ * surface all reach that one reader without a second implementation sitting
+ * behind them.
  */
-export function parseJson<T>(data: string): ParsedJson<T> {
-  try {
-    return { ok: true, value: JSON.parse(data) as T }
-  } catch {
-    return { ok: false }
-  }
-}
+export const parseJson = parseJsonValue

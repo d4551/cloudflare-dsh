@@ -16,6 +16,8 @@
  */
 import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
+import { isJsonObject } from '@d4551/dsh-cloudflare-core'
 import { CONTENT_FILTER_CODE, PROVIDER_ERROR_CODE } from './errors.ts'
 
 /** One streamed tool call, as OpenAI-compatible providers send it. */
@@ -52,6 +54,98 @@ export interface WireUsage {
 export interface WireChunk {
   readonly choices?: readonly WireChoice[]
   readonly usage?: WireUsage | null
+}
+
+/** Whether a member is absent, or satisfies the test when it is present. */
+function optional(value: JsonValue | undefined, test: (item: JsonValue) => boolean): boolean {
+  return value === undefined || test(value)
+}
+
+/** Whether a value is a string, or an explicit `null`, which the wire uses. */
+function isNullableString(value: JsonValue): boolean {
+  return typeof value === 'string' || value === null
+}
+
+/** Whether a value is an array whose every member satisfies the test. */
+function everyMember(value: JsonValue, test: (item: JsonValue) => boolean): boolean {
+  return Array.isArray(value) && value.every(test)
+}
+
+/** Whether a value is a count as the providers report it. */
+function isCount(item: JsonValue): boolean {
+  return typeof item === 'number'
+}
+
+/** Whether a usage detail record carries the named count. */
+function isUsageDetail(item: JsonValue, key: string): boolean {
+  return isJsonObject(item) && optional(item[key], isCount)
+}
+
+/** Whether a value is one streamed tool call. `index` is the one required member. */
+function isWireToolCallDelta(value: JsonValue): boolean {
+  if (!isJsonObject(value)) return false
+  return (
+    typeof value['index'] === 'number' &&
+    optional(value['id'], (item) => typeof item === 'string') &&
+    optional(value['type'], (item) => typeof item === 'string') &&
+    optional(
+      value['function'],
+      (member) =>
+        isJsonObject(member) &&
+        optional(member['name'], (item) => typeof item === 'string') &&
+        optional(member['arguments'], (item) => typeof item === 'string'),
+    )
+  )
+}
+
+/** Whether a value is token accounting as the providers report it. */
+function isWireUsage(value: JsonValue): boolean {
+  if (!isJsonObject(value)) return false
+  return (
+    optional(value['prompt_tokens'], isCount) &&
+    optional(value['completion_tokens'], isCount) &&
+    optional(value['total_tokens'], isCount) &&
+    optional(value['prompt_tokens_details'], (item) => isUsageDetail(item, 'cached_tokens')) &&
+    optional(value['completion_tokens_details'], (item) => isUsageDetail(item, 'reasoning_tokens'))
+  )
+}
+
+/** Whether a value is one choice's delta payload. */
+function isWireDelta(value: JsonValue): boolean {
+  if (!isJsonObject(value)) return false
+  return (
+    optional(value['content'], isNullableString) &&
+    optional(value['reasoning_content'], isNullableString) &&
+    optional(value['tool_calls'], (calls) => everyMember(calls, isWireToolCallDelta))
+  )
+}
+
+/** Whether a value is one streamed choice. */
+function isWireChoice(value: JsonValue): boolean {
+  return (
+    isJsonObject(value) &&
+    optional(value['delta'], isWireDelta) &&
+    optional(value['finish_reason'], isNullableString)
+  )
+}
+
+/**
+ * Whether a parsed value is one of the streaming chunks these providers send.
+ *
+ * This is the boundary the stream reads untrusted provider bytes across, so it
+ * is where the chunk shape is *established* rather than asserted: every member
+ * the transducer goes on to read is checked here, one level at a time, and a
+ * payload that is not a chunk is skipped rather than fed in under a type the
+ * caller chose. The intersection with an index-signature object is what lets
+ * this be a predicate over a parsed value at all — `WireChunk` alone carries no
+ * index signature, so it is not itself a `JsonValue`.
+ */
+export function isWireChunk(value: JsonValue): value is WireChunk & { readonly [key: string]: JsonValue } {
+  if (!isJsonObject(value)) return false
+  return (
+    optional(value['choices'], (choices) => everyMember(choices, isWireChoice)) &&
+    optional(value['usage'], (usage) => usage === null || isWireUsage(usage))
+  )
 }
 
 /**

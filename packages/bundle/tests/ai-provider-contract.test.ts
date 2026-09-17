@@ -6,8 +6,9 @@
  * assert what the provider does; this suite asserts the registered shape
  * itself: that the class really extends the runtime base `LlmAdapter`, and
  * that the error-detail reader the package publishes tolerates every body
- * shape a failed provider response can arrive in — including the two
- * composite shapes the single-shape cases do not cover.
+ * shape a failed provider response can arrive in — the composite shapes the
+ * single-shape cases do not cover, and the shapes that are JSON but carry no
+ * detail at all.
  */
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
@@ -35,5 +36,17 @@ describe('readErrorDetail composite bodies', () => {
 
   it('reports the status alone for an envelope whose entries carry no message', () => {
     expect(readErrorDetail(400, JSON.stringify({ errors: [{ code: 1 }] }))).toBe('HTTP 400')
+  })
+})
+
+describe('readErrorDetail bodies that carry no readable detail', () => {
+  it.each([
+    ['a JSON scalar', '12'],
+    ['a JSON array', '[1,2]'],
+    ['an error member that is not an object', JSON.stringify({ error: 'nope' })],
+    ['an envelope that is not an array', JSON.stringify({ errors: 'boom' })],
+    ['an envelope entry that is not an object', JSON.stringify({ errors: ['boom'] })],
+  ])('reports the status alone for %s', (_label, body) => {
+    expect(readErrorDetail(400, body)).toBe('HTTP 400')
   })
 })

@@ -178,10 +178,14 @@ describe('stream', () => {
     expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
   })
 
-  it('skips a malformed frame and continues the stream', async () => {
-    const { provider } = makeProvider(
-      async () => new Response(`data: {oops\n\n${TEXT_TURN}`, { status: 200 }),
-    )
+  // The boundary in both directions: a frame that is not JSON, and a frame
+  // that parses as JSON but is not a chunk the transducer may read, are both
+  // skipped rather than fed in and trusted.
+  it.each([
+    ['a malformed frame', 'data: {oops\n\n'],
+    ['a frame that is JSON but not a chunk', 'data: "not a chunk"\n\n'],
+  ])('skips %s and continues the stream', async (_label, frame) => {
+    const { provider } = makeProvider(async () => new Response(`${frame}${TEXT_TURN}`, { status: 200 }))
     const chunks = await collect(provider.stream(options()))
     expect(chunks.some((c) => c.type === 'text-delta')).toBe(true)
   })
