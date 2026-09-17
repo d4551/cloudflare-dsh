@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { byCursor, json, makeClient, ok } from './support/client-fixture.ts'
 
+/** A mid-walk server error, built fresh per call: a walk now retries, so a
+ * fixed queue of responses would run out and fail for the wrong reason. */
+const failure = (): Response =>
+  json(
+    {
+      success: false,
+      errors: [{ code: 2, message: 'mid' }],
+      messages: [],
+      result: null,
+    },
+    { status: 500 },
+  )
+
 describe('CloudflareClient.list', () => {
   it('walks pages via the cursor', async () => {
     const pages = [json(ok(['a'], { cursor: 'c1' })), json(ok(['b'], { cursor: '' }))]
     let i = 0
-    const { client, requests } = makeClient(async () => pages[i++]!)
+    const { client, requests } = makeClient(async () => pages[i++]!, {
+      baseUrl: 'https://api.test/client/v4',
+    })
     await expect(client.listAll({ method: 'GET', path: '/x' }, byCursor)).resolves.toEqual({
       items: ['a', 'b'],
       truncated: false,
@@ -37,18 +52,6 @@ describe('CloudflareClient.list', () => {
   })
 
   it('propagates an error mid-walk once the retry budget is spent', async () => {
-    // A fresh Response per call: a walk now retries, so a fixed queue of two
-    // would run out and fail for the wrong reason.
-    const failure = (): Response =>
-      json(
-        {
-          success: false,
-          errors: [{ code: 2, message: 'mid' }],
-          messages: [],
-          result: null,
-        },
-        { status: 500 },
-      )
     let call = 0
     const { client } = makeClient(async () => (call++ === 0 ? json(ok(['a'], { cursor: 'c1' })) : failure()))
     await expect(client.listAll({ method: 'GET', path: '/x' }, byCursor)).rejects.toThrow('[2] mid')

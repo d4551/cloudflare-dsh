@@ -17,7 +17,7 @@ import { apply as contribute } from '../src/index.ts'
 import type { SlotComponent, SlotEffect, SlotRegistration } from '../src/index.ts'
 
 /** One recorded contribution, flattened so a test can read either kind's fields. */
-export interface Contribution {
+interface Contribution {
   readonly name: string
   readonly id?: string
   readonly key?: string

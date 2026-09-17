@@ -45,9 +45,7 @@ function isPatchLayers(value: JsonValue): value is { insert?: PatchRow[] }[] {
 /** The insert rows the document declares, exactly as the parser handed them over. */
 function declaredRows(value: JsonValue): readonly JsonValue[] {
   if (!Array.isArray(value)) return []
-  return value.flatMap((layer) =>
-    isJsonObject(layer) && Array.isArray(layer.insert) ? layer.insert : [],
-  )
+  return value.flatMap((layer) => (isJsonObject(layer) && Array.isArray(layer.insert) ? layer.insert : []))
 }
 
 /**

@@ -1,19 +1,15 @@
-<div align="center">
-
 # cloudflare-dsh
 
 **Cloudflare tools, an AI Gateway model provider, and MCP passthrough for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
 [![CI](https://github.com/d4551/cloudflare-dsh/actions/workflows/ci.yml/badge.svg)](https://github.com/d4551/cloudflare-dsh/actions/workflows/ci.yml)
-[![Mutation score](https://img.shields.io/badge/mutation-100%25-brightgreen)](#quality)
+[![Mutation score](https://img.shields.io/badge/mutation-blocked-red)](#quality)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#quality)
 [![Accessibility](https://img.shields.io/badge/axe-0%20violations-brightgreen)](#accessibility)
 [![WCAG](https://img.shields.io/badge/WCAG-2.2%20AA-blue)](#accessibility)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)](tsconfig.base.json)
-[![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933)](package.json)
+[![Node](https://img.shields.io/badge/node-%5E22.20.3%20%7C%7C%20%3E%3D24.0.0-339933)](package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-
-</div>
 
 ---
 
@@ -53,8 +49,8 @@ package declaring `dsh.bundle.patch`, which contributes a layer of rows to a
 profile's plugin tree. One row provides a service (`ctx.cloudflare`); the others
 consume it to register tools and one `LlmAdapter`.
 
-The adapter is what makes session-level cost attribution possible: DSH passes
-`sessionId` on every `GenerateOptions`, the adapter maps it into the
+The provider is what makes session-level cost attribution possible: DSH passes
+`sessionId` on every `GenerateOptions`, the provider maps it into the
 `cf-aig-metadata` header, and AI Gateway then reports usage and cost keyed by
 that value. The correlation is exact, not inferred from timestamps.
 
@@ -175,7 +171,7 @@ graph TD
         tdata["tools/data — 13 tools"]
         tweb["tools/web — 3 tools"]
         tmeta["tools/meta — 2 tools"]
-        adapter["ai — CloudflareAiAdapter"]
+        provider["ai — CloudflareAiProvider"]
     end
 
     subgraph clientpkg["@d4551/dsh-cloudflare-client"]
@@ -188,13 +184,13 @@ graph TD
     creds -.->|"resolve per operation"| service
     tai & tdata & tweb & tmeta -->|"inject: cloudflare"| service
     tai & tdata & tweb & tmeta -->|register| tools
-    adapter -->|"inject: cloudflare"| service
-    adapter -->|registerAdapter| llm
+    provider -->|"inject: cloudflare"| service
+    provider -->|registerAdapter| llm
     ui -->|register| slots
     agent --> tools
     agent --> llm
     client --> cf
-    adapter --> gw
+    provider --> gw
 ```
 
 ### The capability seam
@@ -214,8 +210,8 @@ In `packages/core`, exactly one module dispatches a request: `client.ts`. The
 service supplies the default `fetch` and nothing else there touches the network.
 Everything else — path building, scope resolution, query serialization, error
 mapping, pagination stepping, retry policy — is a pure function. The same is
-true of the adapter: `transducer.ts` holds the entire streaming contract as a
-state machine with no clock, no network and no randomness, and `adapter.ts` is
+true of the provider: `transducer.ts` holds the entire streaming contract as a
+state machine with no clock, no network and no randomness, and `provider.ts` is
 a thin shell around it.
 
 This is not stylistic. It is what makes a 100% mutation score reachable
@@ -300,13 +296,13 @@ inference is not cut off by the 30 s client default.
 
 ## How a model call flows
 
-The adapter's job is to turn one HTTP response into the harness's `StreamChunk`
+The provider's job is to turn one HTTP response into the harness's `StreamChunk`
 sequence, honouring the ordering guarantees the harness depends on.
 
 ```mermaid
 sequenceDiagram
     participant L as ctx.llm
-    participant AD as CloudflareAiAdapter
+    participant AD as CloudflareAiProvider
     participant EP as Endpoint resolver
     participant GW as AI Gateway / Workers AI
     participant TR as StreamTransducer
@@ -357,7 +353,7 @@ stateDiagram-v2
 | Nothing follows `finish`                               | A `finished` flag makes every later `push`/`end` a no-op                                                                                                                                                                              |
 | Block indices allocated in first-seen order and reused | One allocator, one map keyed by wire index                                                                                                                                                                                            |
 | Tool-call `arguments` stay raw JSON strings            | Fragments accumulate as `argumentsDelta`, re-joined at `block-end`, never parsed                                                                                                                                                      |
-| One adapter call is one provider attempt               | No internal retry — the harness owns retry policy                                                                                                                                                                                     |
+| One provider call is one attempt                       | No internal retry — the harness owns retry policy                                                                                                                                                                                     |
 | `options.signal` is honoured                           | Forwarded to `fetch` unconditionally (`null` is the documented "no signal")                                                                                                                                                           |
 | A quiet stream fails as a timeout                      | Every read races the configurable idle budget                                                                                                                                                                                         |
 | Unsupported options fail loudly                        | Rejected before any request is issued                                                                                                                                                                                                 |
@@ -390,10 +386,10 @@ graph LR
 real agent turns.
 
 > [!IMPORTANT]
-> The declarative path (`presets/pi-ai.yaml`, using the `llm-pi-ai` adapter DSH
+> The declarative path (`presets/pi-ai.yaml`, using the `llm-pi-ai` plugin DSH
 > already ships) works on day one and costs nothing to adopt — but it cannot set
 > `cf-aig-*` headers, so it gets no session correlation. That is the concrete
-> reason this bundle ships a real adapter rather than only a preset.
+> reason this bundle ships a real provider rather than only a preset.
 
 ---
 
@@ -491,7 +487,7 @@ surfaced raw:
 | Any option the wire format cannot express | `UNSUPPORTED_OPTION`      |
 | Anything else from the provider           | `PROVIDER_ERROR`          |
 
-Two adapter hooks keep the harness defaults, deliberately: `providerRetryPolicy`,
+Two provider hooks keep the harness defaults, deliberately: `providerRetryPolicy`,
 because Cloudflare publishes no route-owned retry policy beyond the
 `retry-after` a rate-limit failure already carries, and `imageRequestPricing`,
 because Cloudflare prices vision input per token, not per image.
@@ -619,14 +615,14 @@ deliberately not a landmark: a tool view is rendered once per tool call, so a
 conversation that runs one query twice would otherwise put two identically
 named landmarks on the page.
 
-A tool view is registered as an **adapter**, not as the component itself. The
+A tool view is registered as an **owner-facing view**, not as the card itself. The
 slot hands over the call's owner currency — `callId`, `toolName`, and the
 running-or-settled block — not the tool's result, so a component whose props are
 a query and its rows receives none of what it declares. The structured value
 reaches the client through `output.presentationMeta`: each tool projects the
 fields its view needs, the harness persists that projection with the session
 log, and it arrives as the settled block's `meta` on live and replay paths
-alike. The adapter validates that projection and renders the component, or falls
+alike. The view validates that projection and renders the component, or falls
 back to the result text when a replayed log carries a shape it does not
 recognise — as a captioned card that scrolls its own overflow and is reachable
 by keyboard, since that fallback is a tool view like any other.
@@ -813,7 +809,7 @@ collects both lanes and fails when a name below is not among them:
 | Content reflows at every width laid out, with only a table and a rendered body scrolling (SC 1.4.10)     | `reflow > lays the assembled client out at 320 (reflow, 400% zoom) without scrolling the page sideways`, `reflow > lays the assembled client out at 390 (phone) without scrolling the page sideways`, `reflow > lays the assembled client out at 430 (large phone) without scrolling the page sideways`, `reflow > lays the assembled client out at 768 (tablet portrait) without scrolling the page sideways`, `reflow > lays the assembled client out at 1024 (tablet landscape) without scrolling the page sideways`, `reflow > lays the assembled client out at 1280 (desktop) without scrolling the page sideways`, `reflow > lays the assembled client out at 1920 (wide desktop) without scrolling the page sideways`, `reflow > keeps content that cannot reflow inside its own scroller at 320 (reflow, 400% zoom)`, `reflow > keeps content that cannot reflow inside its own scroller at 390 (phone)`, `reflow > keeps content that cannot reflow inside its own scroller at 430 (large phone)`, `reflow > keeps content that cannot reflow inside its own scroller at 768 (tablet portrait)`, `reflow > keeps content that cannot reflow inside its own scroller at 1024 (tablet landscape)`, `reflow > keeps content that cannot reflow inside its own scroller at 1280 (desktop)`, `reflow > keeps content that cannot reflow inside its own scroller at 1920 (wide desktop)` |
 | Every control clears 24x24 CSS pixels, and 44x44 wherever the pointer is coarse (SC 2.5.8)               | `target size > gives every control at least 24px with a fine pointer at 320 (reflow, 400% zoom)`, `target size > gives every control at least 24px with a fine pointer at 390 (phone)`, `target size > gives every control at least 24px with a fine pointer at 430 (large phone)`, `target size > gives every control at least 24px with a fine pointer at 768 (tablet portrait)`, `target size > gives every control at least 24px with a fine pointer at 1024 (tablet landscape)`, `target size > gives every control at least 24px with a fine pointer at 1280 (desktop)`, `target size > gives every control at least 24px with a fine pointer at 1920 (wide desktop)`, `target size > gives every control at least 44px with a coarse pointer at 320 (reflow, 400% zoom)`, `target size > gives every control at least 44px with a coarse pointer at 390 (phone)`, `target size > gives every control at least 44px with a coarse pointer at 430 (large phone)`, `target size > gives every control at least 44px with a coarse pointer at 768 (tablet portrait)`, `target size > gives every control at least 44px with a coarse pointer at 1024 (tablet landscape)`, `target size > gives every control at least 44px with a coarse pointer at 1280 (desktop)`, `target size > gives every control at least 44px with a coarse pointer at 1920 (wide desktop)`                      |
 | Nothing is clipped under the text-spacing overrides, at every width laid out (SC 1.4.12)                 | `text spacing > loses no content under the text-spacing overrides at 320 (reflow, 400% zoom)`, `text spacing > loses no content under the text-spacing overrides at 390 (phone)`, `text spacing > loses no content under the text-spacing overrides at 430 (large phone)`, `text spacing > loses no content under the text-spacing overrides at 768 (tablet portrait)`, `text spacing > loses no content under the text-spacing overrides at 1024 (tablet landscape)`, `text spacing > loses no content under the text-spacing overrides at 1280 (desktop)`, `text spacing > loses no content under the text-spacing overrides at 1920 (wide desktop)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| These fragments take the host’s colour scheme, not the system’s, wherever the two disagree (SC 1.4.3)    | `colour scheme > resolves 'light' where the host declares "'light dark'" and the system prefers 'light'`, `colour scheme > resolves 'dark' where the host declares "'light dark'" and the system prefers 'dark'`, `colour scheme > resolves 'light' where the host declares "'light'" and the system prefers 'light'`, `colour scheme > resolves 'light' where the host declares "'light'" and the system prefers 'dark'`, `colour scheme > resolves 'dark' where the host declares "'dark'" and the system prefers 'light'`, `colour scheme > resolves 'dark' where the host declares "'dark'" and the system prefers 'dark'`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| These fragments take the host’s colour scheme, not the system’s, wherever the two disagree (SC 1.4.3)    | `colour scheme > resolves light with a deferring page on a light system`, `colour scheme > resolves dark with a deferring page on a dark system`, `colour scheme > resolves light with a light page on a light system`, `colour scheme > resolves light with a light page on a dark system`, `colour scheme > resolves dark with a dark page on a light system`, `colour scheme > resolves dark with a dark page on a dark system`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Below the engine floor the surfaces fall back to the host’s colours with the accent buttons still filled | `without light-dark() > degrades to the host’s own colours, and keeps the accent buttons legible`, `without light-dark() > still resolves every colour on an engine that has it`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Every class the stylesheet styles is rendered by a surface the lanes scan                                | `the surfaces this lane scans > renders every class the shipped stylesheet styles`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
@@ -901,17 +897,17 @@ change with the Node major, and doubling either buys a longer wait rather than
 a stronger signal. `test:invariants` asserts that split, so the sentence and
 the workflow cannot drift apart.
 
-| Gate               | Bar                                                                                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `typecheck`        | `tsc` strict, zero errors                                                                                                                                 |
-| `lint`             | `oxlint --deny-warnings`                                                                                                                                  |
-| `format:check`     | `oxfmt --check` — one canonical style, no per-file overrides, nothing outside `.gitignore` excluded                                                       |
-| `test:invariants`  | The gate configuration itself is asserted, so a threshold cannot be quietly lowered, and every count and diagram on this page is checked against the tree |
-| `test:coverage`    | 100% lines, branches, functions, statements                                                                                                               |
-| `test:dist`        | The built artifacts load the way a consumer resolves them                                                                                                 |
-| `test:a11y`        | Real Chromium, both colour schemes, seven viewports; zero axe violations and nothing left for review, no rule filtering                                   |
-| `stryker`          | 100% mutation score, no file exclusions                                                                                                                   |
-| `knip` / `publint` | No unused code or dependencies; packages are publishable                                                                                                  |
+| Gate               | Bar                                                                                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typecheck`        | `tsc` strict, zero errors                                                                                                                                                             |
+| `lint`             | `oxlint --deny-warnings`                                                                                                                                                              |
+| `format:check`     | `oxfmt --check` — one canonical style, no per-file overrides, nothing outside `.gitignore` excluded                                                                                   |
+| `test:invariants`  | The gate configuration itself is asserted, so a threshold cannot be quietly lowered, and every count and diagram on this page is checked against the tree                             |
+| `test:coverage`    | 100% lines, branches, functions, statements                                                                                                                                           |
+| `test:dist`        | The built artifacts load the way a consumer resolves them                                                                                                                             |
+| `test:a11y`        | Real Chromium, both colour schemes, seven viewports; zero axe violations and nothing left for review, no rule filtering                                                               |
+| `stryker`          | Thresholds 100/100/100 with no file exclusions — **cannot execute on TypeScript 7**, which exports no `ts.parseConfigFileTextToJson` for its preprocessor to call; see the note below |
+| `knip` / `publint` | No unused code or dependencies; packages are publishable                                                                                                                              |
 
 Three toolchain notes for contributors, each a pin with a reason rather than a
 version left behind:
@@ -919,20 +915,22 @@ version left behind:
 - Tests run on Vitest under Node rather than `bun test`, because Stryker has no
   official Bun runner and DSH executes plugins on Node. Bun is the package
   manager and script runner.
-- Vitest is pinned to 4.x. On Vitest 5 the Stryker vitest runner's per-test
-  filter matches nothing and every covered mutant reports as surviving
+- Vitest is pinned to 5.x and the pin is asserted, so a caret cannot appear
+  without a gate going red. It was pinned to 4.x for a reason that has not gone
+  away: on Vitest 5 the Stryker vitest runner's per-test filter matches nothing
+  and every covered mutant reports as surviving
   ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)),
-  which would leave the mutation gate green and meaningless. The pin is
-  asserted, so a caret cannot appear without a gate going red. Unpin once that
-  is fixed.
-- TypeScript is on 6.x, not 7. TypeScript 7 is the native compiler and ships no
-  programmatic API — its `lib/` holds `tsc.js` and nothing else — and every
-  gate on this page that reads a syntax tree is built on that API: the escape-
-  hatch scan, the superseded-doc scan, the inline-copy scan, and the README's
-  tool, field and slot discovery. A stable API is expected in 7.1. The tree is
-  ready for it otherwise: `baseUrl` is gone, since it stops functioning in 7,
-  and `ignoreDeprecations` is banned — silencing a deprecation is a suppression
-  comment in configuration form.
+  which would leave the mutation gate green and meaningless. The floor is 5 now,
+  so that hazard is live rather than deferred, and the mutation gate is where it
+  surfaces — named below rather than assumed away.
+- TypeScript is on 7.x. It is the native compiler and ships no programmatic
+  API — its `lib/` holds `tsc.js` and nothing else — so every gate on this page
+  that reads a syntax tree parses with oxc instead, as `tests/parse.ts` states,
+  and Stryker cannot run against it at all: its TypeScript preprocessor calls
+  `ts.parseConfigFileTextToJson`, which 7 does not export. A stable API is
+  expected in 7.1. The tree is ready for it otherwise: `baseUrl` is gone, since
+  it stops functioning in 7, and `ignoreDeprecations` is banned — silencing a
+  deprecation is a suppression comment in configuration form.
 
 ## Development
 
@@ -966,7 +964,7 @@ packages/
             config, credentials, errors, paginate, request, retry, scope are pure
   bundle/   cloudflare-dsh               — the bundle
     src/seam.ts reaching ctx.cloudflare, in one place rather than five
-    src/ai/     adapter, transducer, sse, headers, request, errors
+    src/ai/     provider, transducer, sse, headers, request, errors
     src/tools/  ai, data, web, meta
     src/tools/_shared/  json, render, paging, batch — what every tool group shares
     src/specs/  request specifications, separated from tool wiring

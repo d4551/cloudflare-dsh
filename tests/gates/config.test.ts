@@ -16,7 +16,6 @@ import {
   type KnipConfig,
   type PackageJson,
   type StrykerConfig,
-  type StrykerRunner,
   type TsConfig,
   type TsConfigBase,
 } from './repo.ts'
@@ -118,10 +117,12 @@ describe('the types describe the runtime the manifests require', () => {
     // API surface `tsc` checks against. Types older than the floor check
     // against an API the manifest does not demand, and newer ones against APIs
     // that floor does not have. They are one number, so the gate reads it once
-    // and requires the other to match rather than pinning both.
+    // and requires the other to match rather than pinning both — and the match
+    // is the bare version, because `versions.test.ts` holds every dependency
+    // in every manifest to an exact pin, a caret there being a range.
     const floor = /\^(\d+\.\d+\.\d+)/u.exec(json<PackageJson>('package.json').engines.node)?.[1]
     expect(floor).toMatch(EXACT_VERSION)
-    expect(json<PackageJson>('package.json').devDependencies['@types/node']).toBe(`^${String(floor)}`)
+    expect(json<PackageJson>('package.json').devDependencies['@types/node']).toBe(String(floor))
   })
 })
 

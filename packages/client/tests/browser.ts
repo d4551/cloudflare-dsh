@@ -42,12 +42,12 @@ export function browserLane(): Lane {
 }
 
 /**
- * Launch the browser both lanes drive.
+ * Launch the browser every lane drives.
  *
  * Playwright resolves the browser itself, honouring the environment's own
  * browser-path configuration; a lane that pinned an executable path would
  * bypass that resolution and drift from what CI drives.
  */
-export function launch(): Promise<Browser> {
+function launch(): Promise<Browser> {
   return chromium.launch()
 }

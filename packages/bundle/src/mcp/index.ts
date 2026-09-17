@@ -19,6 +19,11 @@ export interface CloudflareMcpServer {
   readonly summary: string
 }
 
+/** One hosted server, as Cloudflare publishes it. */
+function hosted(serverName: string, url: string, summary: string): CloudflareMcpServer {
+  return { serverName, url, summary }
+}
+
 /**
  * The hosted servers Cloudflare publishes.
  *
@@ -31,11 +36,6 @@ export interface CloudflareMcpServer {
  * this list names servers as Cloudflare publishes them rather than as the
  * product is called this quarter.
  */
-/** One hosted server, as Cloudflare publishes it. */
-function hosted(serverName: string, url: string, summary: string): CloudflareMcpServer {
-  return { serverName, url, summary }
-}
-
 export const CLOUDFLARE_MCP_SERVERS: readonly CloudflareMcpServer[] = [
   hosted(
     'cloudflare-code-mode',

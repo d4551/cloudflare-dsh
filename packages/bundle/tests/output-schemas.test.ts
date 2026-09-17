@@ -1,4 +1,5 @@
-import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { Context } from '@deepseek-ai/cordis'
+import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
 import * as aiTools from '../src/tools/ai/index.ts'
 import * as dataTools from '../src/tools/data/index.ts'
@@ -52,28 +53,66 @@ describe('every tool declares a typed output object', () => {
   })
 })
 
-describe('the registry refuses a value the declared output does not admit', () => {
-  // The schema is not documentation: the registry validates every returned
-  // value against it, so an API response of the wrong shape becomes a tool
-  // error the model can read instead of a malformed value it cannot.
-  it('a model catalogue of scalars is an invalid output, not a value', async () => {
+describe('a tool refuses an endpoint answer its output cannot carry', () => {
+  // The list tools read their endpoint's result through a runtime guard, so a
+  // malformed answer is refused with the endpoint named as its source: the
+  // model reads who sent it, not just that it was wrong.
+  it('a model catalogue of scalars is refused as an endpoint shape failure', async () => {
     const h = makeHarness(aiTools, async () => envelope([1]))
     await expect(h.execute('cloudflare_ai_models_search', {})).resolves.toMatchObject({
       isError: true,
-      error: {
-        message:
-          'tool "cloudflare_ai_models_search" returned invalid output: "value.models[0]" must be an object',
-        info: { name: 'ToolOutputError', code: 'INVALID_TOOL_OUTPUT' },
-      },
+      error: { message: 'the endpoint returned a list whose entries are not records' },
     })
   })
 
-  it('a queue pull whose messages are not a list is an invalid output, not a value', async () => {
+  it('a queue pull whose messages are not a list is refused the same way', async () => {
     const h = makeHarness(dataTools, async () => envelope({ messages: 'x' }))
     await expect(h.execute('cloudflare_queue_pull', { queueId: 'q' })).resolves.toMatchObject({
       isError: true,
+      error: { message: 'the endpoint returned a list whose entries are not records' },
+    })
+  })
+})
+
+describe('the registry refuses a value the declared output does not admit', () => {
+  // The schema is not documentation: the registry validates every returned
+  // value against it. The probe below is a tool whose execute returns a
+  // fraction where its schema declares an integer — a value the compiler
+  // admits and the contract does not — so the registry's own gate is what
+  // answers it.
+  const probePlugin = {
+    Config: (): Record<string, never> => ({}),
+    apply(ctx: Context): void {
+      ctx.tools.register(
+        defineTool({
+          name: 'probe_output',
+          description: 'Probe for the registry output gate: its execute returns a fraction for an integer.',
+          parameters: {},
+          output: {
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              description: 'A count.',
+              properties: {
+                n: { type: 'integer', required: true, description: 'How many.' },
+              },
+            },
+            render: () => [],
+          },
+          async execute() {
+            return { n: 2.5 }
+          },
+        }),
+      )
+    },
+  }
+
+  it('a fraction where the schema declares an integer is an invalid output, not a value', async () => {
+    const h = makeHarness(probePlugin, unreachable)
+    await expect(h.execute('probe_output', {})).resolves.toMatchObject({
+      isError: true,
       error: {
-        message: 'tool "cloudflare_queue_pull" returned invalid output: "value.messages" must be an array',
+        message: 'tool "probe_output" returned invalid output: "value.n" must be an integer',
         info: { name: 'ToolOutputError', code: 'INVALID_TOOL_OUTPUT' },
       },
     })

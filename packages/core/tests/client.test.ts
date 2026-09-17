@@ -5,6 +5,14 @@ import type { CredentialResolver } from '../src/credentials.ts'
 import { CloudflareAuthError, CloudflareError, CloudflareNotFoundError } from '../src/errors.ts'
 import { flakyTransport, honouring, json, makeClient, ok, REF, RETRY } from './support/client-fixture.ts'
 
+/** A transport that answers after a real delay, past the shortest budgets. */
+const slow = async (): Promise<Response> => {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 40)
+  })
+  return json({ success: true, errors: [], messages: [], result: 'late' })
+}
+
 describe('CloudflareClient.request', () => {
   it('exposes the credential reference it authenticates with', () => {
     const { client } = makeClient(async () => json(ok(null)))
@@ -23,7 +31,9 @@ describe('CloudflareClient.request', () => {
   })
 
   it('builds the URL from base, path and query', async () => {
-    const { client, requests } = makeClient(async () => json(ok(null)))
+    const { client, requests } = makeClient(async () => json(ok(null)), {
+      baseUrl: 'https://api.test/client/v4',
+    })
     await client.request({
       method: 'GET',
       path: '/accounts',
@@ -73,12 +83,6 @@ describe('CloudflareClient.request', () => {
   })
 
   it('a per-request budget may exceed the client default, which is what a long-running tool needs', async () => {
-    const slow = async (): Promise<Response> => {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 40)
-      })
-      return json({ success: true, errors: [], messages: [], result: 'late' })
-    }
     const { client } = makeClient(slow, { requestTimeoutMs: 10 })
     await expect(client.request({ method: 'GET', path: '/x', timeoutMs: 500 })).resolves.toBe('late')
   })

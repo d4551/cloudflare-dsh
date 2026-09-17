@@ -9,19 +9,12 @@
  * its own media feature, on the same terms as the pointer emulation the
  * target-size lane performs.
  */
-import type { Browser, Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
-import { ASSEMBLED, launch, open } from './surfaces.tsx'
+import type { Page } from 'playwright'
+import { describe, expect, it, onTestFinished } from 'vitest'
+import { browserLane } from './browser.ts'
+import { ASSEMBLED, open } from './surfaces.tsx'
 
-let browser: Browser
-
-beforeAll(async () => {
-  browser = await launch()
-}, 60_000)
-
-afterAll(async () => {
-  await browser?.close()
-})
+const lane = browserLane()
 
 /** The declared foreground token, as the stylesheet declares it in the light scheme. */
 const FG_LIGHT = 'rgb(22, 24, 29)'
@@ -99,7 +92,7 @@ describe('resize text', () => {
 
   for (const viewport of WIDTHS) {
     it(`doubles every face and loses no content or function at 200% text at ${viewport.name}`, async () => {
-      const { page, context } = await open(browser, ASSEMBLED, {
+      const { page, context } = await open(lane.browser, ASSEMBLED, {
         scheme: 'light',
         viewport: { width: viewport.width, height: viewport.height },
       })
@@ -117,7 +110,7 @@ describe('reduced motion', () => {
   // file's text; this measures what a reader who asks the system for reduced
   // motion is actually given.
   it('runs no transition and no animation under prefers-reduced-motion: reduce', async () => {
-    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'light' })
+    const { page, context } = await open(lane.browser, ASSEMBLED, { scheme: 'light' })
     onTestFinished(() => context.close())
     await page.emulateMedia({ reducedMotion: 'reduce' })
     expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true)
@@ -145,7 +138,7 @@ describe('reduced transparency', () => {
   // the way the browser itself receives it: the CDP media-emulation feature
   // the method wraps.
   it('keeps every background fully opaque under prefers-reduced-transparency: reduce', async () => {
-    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'light' })
+    const { page, context } = await open(lane.browser, ASSEMBLED, { scheme: 'light' })
     onTestFinished(() => context.close())
     const session = await page.context().newCDPSession(page)
     await session.send('Emulation.setEmulatedMedia', {
@@ -170,7 +163,7 @@ describe('increased contrast', () => {
   // lane computes from the file, so the design answers `prefers-contrast:
   // more` by standing still; this pins that standing still.
   it('changes no declared colour under prefers-contrast: more', async () => {
-    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'light' })
+    const { page, context } = await open(lane.browser, ASSEMBLED, { scheme: 'light' })
     onTestFinished(() => context.close())
     await page.emulateMedia({ contrast: 'more' })
     expect(await page.evaluate(() => matchMedia('(prefers-contrast: more)').matches)).toBe(true)

@@ -322,13 +322,15 @@ const PARAGRAPH = 'margin-block-end:2em'
 async function applyTextSpacing(page: Page): Promise<void> {
   await page.evaluate(
     (overrides) => {
-      const apply = (node: HTMLElement, declaration: string): void => {
-        const separator = declaration.indexOf(':')
-        node.style.setProperty(declaration.slice(0, separator), declaration.slice(separator + 1))
-      }
+      // The declaration is split and set inline: the whole body is serialised
+      // into the page, where no helper declared outside it would exist.
       for (const node of document.querySelectorAll<HTMLElement>('main *')) {
-        for (const declaration of overrides.spacing) apply(node, declaration)
-        if (node.tagName === 'P') apply(node, overrides.paragraph)
+        const declarations =
+          node.tagName === 'P' ? [...overrides.spacing, overrides.paragraph] : overrides.spacing
+        for (const declaration of declarations) {
+          const separator = declaration.indexOf(':')
+          node.style.setProperty(declaration.slice(0, separator), declaration.slice(separator + 1))
+        }
       }
     },
     { spacing: SPACING, paragraph: PARAGRAPH },
@@ -346,10 +348,18 @@ describe('text spacing', () => {
       await applyTextSpacing(page)
       // Read back as ratios against the face's own size, which is what the
       // criterion states and what a pinned pixel value would only approximate.
+      // Each ratio is asserted with `toBeCloseTo` rather than exact equality:
+      // the browser reports the computed length rounded to the pixel, so the
+      // division carries binary rounding at the sixteenth decimal — 1.56px
+      // over a 13px face is 0.12000000000000001, and an exact equality would
+      // be a claim about binary floating-point rather than about the page.
+      // The bound is half of 1e-10: `toBeCloseTo` compares against
+      // `10^-precision / 2`, so a precision of 10 admits a difference below
+      // 5e-11 — ten orders below any drift worth naming.
       const applied = await page.evaluate(() => {
         const figure = document.querySelector('.cf-chip__figure')
         const hint = document.querySelector('.cf-hint')
-        if (figure === null || hint === null) return null
+        if (figure === null || hint === null) throw new Error('the text-spacing probe is not on the page')
         const style = getComputedStyle(figure)
         const size = Number.parseFloat(style.fontSize)
         const paragraph = getComputedStyle(hint)
@@ -360,12 +370,10 @@ describe('text spacing', () => {
           paragraph: Number.parseFloat(paragraph.marginBlockEnd) / Number.parseFloat(paragraph.fontSize),
         }
       })
-      expect(applied).toEqual({
-        lineHeight: 1.5,
-        letterSpacing: 0.12,
-        wordSpacing: 0.16,
-        paragraph: 2,
-      })
+      expect(applied.lineHeight, 'line height as a ratio of the face').toBeCloseTo(1.5, 10)
+      expect(applied.letterSpacing, 'letter spacing as a ratio of the face').toBeCloseTo(0.12, 10)
+      expect(applied.wordSpacing, 'word spacing as a ratio of the face').toBeCloseTo(0.16, 10)
+      expect(applied.paragraph, 'paragraph spacing as a ratio of the face').toBeCloseTo(2, 10)
       const clipped = await page.evaluate(() =>
         [...document.querySelectorAll<HTMLElement>('main *')]
           .filter((node) => {

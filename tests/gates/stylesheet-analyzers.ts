@@ -14,7 +14,7 @@
  */
 
 /** A colour literal, assembled so this module carries no raw one. */
-export const hex = (digits: string): string => `#${digits}`
+const hex = (digits: string): string => `#${digits}`
 
 /** White, black, and the accent and border greys the fixtures resolve. */
 export const WHITE = hex('ffffff')
@@ -23,6 +23,41 @@ export const ACCENT = hex('0b5cab')
 export const BORDER = hex('b9bdc4')
 export const BORDER_DARK = hex('6f757e')
 
+/** An `rgb()` literal, in the space-separated or the comma-separated form. */
+const RGB = /rgb\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*\)/u
+
+/** A colour written as a literal, either form the sheet writes one in. */
+const COLOUR = String.raw`(?:rgb\(\s*[\d.]+[\s,]+[\d.]+[\s,]+[\d.]+\s*\)|#[0-9a-f]{6})`
+
+/** A `light-dark()` pair of two literals, the form the tokens carry. */
+const PAIR = new RegExp(`light-dark\\(\\s*(${COLOUR})\\s*,\\s*(${COLOUR})\\s*\\)`, 'u')
+
+/**
+ * The `#rrggbb` form of an `rgb()` literal.
+ *
+ * The sheet writes its colours as `rgb()` literals, and the arithmetic below
+ * works in `#rrggbb`, so this is the one place the two forms meet: three
+ * channels, each a finite number in 0..255, rendered as two hex digits.
+ */
+function rgbToHex(literal: string): string | undefined {
+  const match = RGB.exec(literal)
+  const channels = [match?.[1], match?.[2], match?.[3]].map((raw) => {
+    const value = Number.parseFloat(raw ?? '')
+    return raw !== undefined && Number.isFinite(value) && value >= 0 && value <= 255 ? value : undefined
+  })
+  const [red, green, blue] = channels
+  if (red === undefined || green === undefined || blue === undefined) return undefined
+  return hex([red, green, blue].map((one) => Math.round(one).toString(16).padStart(2, '0')).join(''))
+}
+
+/** The colour a value spells as a literal, wherever in the value it sits. */
+function literalColour(value: string): string | undefined {
+  const hash = /#[0-9a-f]{6}/u.exec(value)?.[0]
+  if (hash !== undefined) return hash
+  const rgb = RGB.exec(value)?.[0]
+  return rgb === undefined ? undefined : rgbToHex(rgb)
+}
+
 /**
  * Relative luminance of an `#rrggbb` colour, per WCAG 2.
  *
@@ -30,7 +65,7 @@ export const BORDER_DARK = hex('6f757e')
  * gates is that no tool in the stack computes non-text contrast, so there is
  * nothing to import.
  */
-export function luminance(colour: string): number {
+function luminance(colour: string): number {
   const channels = [1, 3, 5]
     .map((at) => Number.parseInt(colour.slice(at, at + 2), 16) / 255)
     .map((value) => (value <= 0.039_28 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
@@ -38,7 +73,7 @@ export function luminance(colour: string): number {
 }
 
 /** Contrast ratio between two `#rrggbb` colours, from 1 to 21. */
-export function contrastRatio(first: string, second: string): number {
+function contrastRatio(first: string, second: string): number {
   const [low, high] = [luminance(first), luminance(second)].toSorted((a, b) => a - b)
   return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05)
 }
@@ -79,8 +114,8 @@ export const declaration = (body: string, property: string): string | undefined 
   new RegExp(`(?:^|;)\\s*${property}\\s*:([^;]*)`, 'u').exec(body)?.[1]?.trim()
 
 /** The `--cf-*` token a value resolves through, if it names one. */
-export const tokenIn = (value: string | undefined): string | undefined =>
-  value === undefined ? undefined : /var\(\s*(--cf-[a-z-]+)/u.exec(value)?.[1]
+const tokenIn = (value: string | undefined): string | undefined =>
+  value === undefined ? undefined : /var\(\s*(--cf-[a-z0-9-]+)/u.exec(value)?.[1]
 
 /**
  * The colour a declaration puts on screen, whether it names a token or not.
@@ -97,7 +132,7 @@ export const colourOf = (
 ): string | undefined => {
   if (value === undefined) return undefined
   const token = tokenIn(value)
-  return token === undefined ? /#[0-9a-f]{6}/u.exec(value)?.[0] : tokens[token]
+  return token === undefined ? literalColour(value) : tokens[token]
 }
 
 /**
@@ -106,17 +141,27 @@ export const colourOf = (
  * A token is declared once and carries both schemes in a `light-dark()` pair,
  * so the scheme picks the argument: first for light, second for dark. A
  * declaration inside a `prefers-color-scheme: dark` block still counts for the
- * dark scheme only, so either spelling is read correctly.
+ * dark scheme only, so either spelling is read correctly. A pair this reader
+ * cannot split resolves to no colour rather than to whichever literal happens
+ * to sit in the declaration first.
  */
 export function tokensOf(rules: readonly CssRule[], dark: boolean): Record<string, string> {
   const values: Record<string, string> = {}
   for (const rule of rules) {
     const inDark = rule.media.some((query) => query.includes('prefers-color-scheme: dark'))
     if (inDark && !dark) continue
-    for (const [, name, declaration_] of rule.body.matchAll(/(--cf-[a-z-]+)\s*:([^;]*)/gu)) {
+    for (const [, name, declaration_] of rule.body.matchAll(/(--cf-[a-z0-9-]+)\s*:([^;]*)/gu)) {
       if (name === undefined || declaration_ === undefined) continue
-      const pair = /light-dark\(\s*(#[0-9a-f]{6})\s*,\s*(#[0-9a-f]{6})\s*\)/u.exec(declaration_)
-      const chosen = pair === null ? /#[0-9a-f]{6}/u.exec(declaration_)?.[0] : pair[dark ? 2 : 1]
+      const pair = PAIR.exec(declaration_)
+      // A declaration spelling `light-dark()` that does not match `PAIR` is a
+      // pair this reader cannot split: an alpha channel, a 3-digit hex, a
+      // nested function. Reading the whole declaration instead returns
+      // whichever literal appears first in it, so the light scheme would take
+      // the dark colour from a pair whose light side is unreadable. The token
+      // is left unresolved, and `colourOf` reads an unresolved token as a
+      // declaration that places no colour.
+      if (pair === null && declaration_.includes('light-dark(')) continue
+      const chosen = pair === null ? literalColour(declaration_) : literalColour(pair[dark ? 2 : 1] ?? '')
       if (chosen !== undefined) values[name] = chosen
     }
   }
@@ -127,7 +172,7 @@ export function tokensOf(rules: readonly CssRule[], dark: boolean): Record<strin
 export const selectorOf = (rule: CssRule): string => rule.selector.replaceAll(/\s+/gu, ' ')
 
 /** Properties whose colour is a boundary rather than text (SC 1.4.11). */
-export const NON_TEXT_PROPERTIES = ['border', 'border-block-end', 'outline'] as const
+const NON_TEXT_PROPERTIES = ['border', 'border-block-end', 'outline'] as const
 
 /** One pair of colours the stylesheet puts together, and the ratio it needs. */
 export interface ContrastPair {
@@ -175,11 +220,12 @@ export function contrastPairs(css: string): ContrastPair[] {
  * Foreground declarations the analyzer cannot resolve to a colour.
  *
  * The claim is that every rule in the stylesheet is read. That claim holds
- * only while every colour is readable by the analyzer above: a literal, an
- * `rgb()` or a named colour would resolve to nothing and be skipped in
- * silence, so the "every" would rest on a habit. Keywords that place no colour
- * are excused by name, which is a closed set rather than a pattern that has to
- * guess.
+ * only while every colour is readable by the analyzer above: an `hwb()`, a
+ * named colour, or a colour written in a form nobody declared would resolve to
+ * nothing and be skipped in silence. The sheet writes its colours as `#rrggbb`
+ * or `rgb()` literals, both of which resolve, and the keywords that place no
+ * colour are excused by name, which is a closed set rather than a pattern that
+ * has to guess.
  */
 export function unreadableColours(css: string): string[] {
   const rules = rulesOf(css)

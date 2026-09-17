@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TRANSPORT_FAILURE_STATUS, readEnvelope, statusOfError } from '../src/client.ts'
-import { CloudflareAuthError, CloudflareError, CloudflareNotFoundError, isRetryableStatus } from '../src/errors.ts'
+import { CloudflareAuthError, CloudflareError, isRetryableStatus } from '../src/errors.ts'
 import { json, makeClient, ok, REF } from './support/client-fixture.ts'
 
 describe('statusOfError', () => {

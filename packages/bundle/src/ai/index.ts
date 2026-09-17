@@ -183,19 +183,14 @@ function catalogueProperties(value: JsonValue | undefined): Map<string, string |
  * The harness treats this list as advisory, so an unlisted model must still be
  * accepted at request time; nothing here rejects anything.
  */
-export function toModelInfo(
-  provider: string,
-  models: readonly Record<string, JsonValue>[],
-): LlmModelInfo[] {
+export function toModelInfo(provider: string, models: readonly Record<string, JsonValue>[]): LlmModelInfo[] {
   const info: LlmModelInfo[] = []
   for (const model of models) {
     const id = model['name']
     if (typeof id !== 'string' || id === '') continue
     const description = model['description']
     info.push(
-      typeof description === 'string'
-        ? { provider, id, name: id, description }
-        : { provider, id, name: id },
+      typeof description === 'string' ? { provider, id, name: id, description } : { provider, id, name: id },
     )
   }
   return info

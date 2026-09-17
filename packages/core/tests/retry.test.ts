@@ -17,6 +17,9 @@ type Attempt<T> = () => Promise<T>
  */
 const statusOf = <Reason>(error: Reason): number => (error instanceof CloudflareError ? error.status : 0)
 
+/** An attempt whose rejection is not an Error object. */
+const rejectsBareString = (): Promise<string> => Promise.reject('a bare string')
+
 describe('shouldRetry', () => {
   it('retries a 500 while attempts remain', () => {
     expect(shouldRetry(500, 0, policy)).toBe(true)
@@ -165,17 +168,19 @@ describe('runWithRetry', () => {
   })
 
   it('treats a synchronous throw as a failed attempt, budget included', async () => {
+    // The throw carries a retryable status, so the classifier spends the full
+    // budget on it: a call that fails before any await is one failed attempt
+    // in the same chain as every rejection.
     let calls = 0
     const attempt = (): Promise<string> => {
       calls += 1
-      throw new Error('thrown before any await')
+      throw new CloudflareError('thrown before any await', 500)
     }
     await expect(runWithRetry(attempt, statusOf, policy, deps)).rejects.toThrow('thrown before any await')
     expect(calls).toBe(policy.maxRetries + 1)
   })
 
   it('rethrows a reason that is not an error unchanged', async () => {
-    const attempt = (): Promise<string> => Promise.reject('a bare string')
-    await expect(runWithRetry(attempt, statusOf, policy, deps)).rejects.toBe('a bare string')
+    await expect(runWithRetry(rejectsBareString, statusOf, policy, deps)).rejects.toBe('a bare string')
   })
 })

@@ -16,7 +16,7 @@
 import { type CredentialResolver, requireCredential } from './credentials.ts'
 import { CloudflareError, classifyFailure } from './errors.ts'
 import { isJsonObject, parseJsonValue } from './json.ts'
-import { paginate, type NextPageQuery, type PageStepper, type PageWalk } from './paginate.ts'
+import { paginate, type PageStepper, type PageWalk } from './paginate.ts'
 import { DEFAULT_BASE_URL, assertSafeBaseUrl, buildRequest } from './request.ts'
 import { type RetryPolicy, runWithRetry } from './retry.ts'
 import type { CloudflareEnvelope, JsonValue, QueryValue, RequestSpec } from './types.ts'

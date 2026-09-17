@@ -125,8 +125,14 @@ function forbiddenOptions(file: string, config: TsConfigFile): string[] {
 /** Every tsconfig git tracks, the root and the base among them. */
 const TSCONFIGS = tracked.filter((file) => /(^|\/)tsconfig[^/]*\.json$/u.test(file))
 
-/** The module the injection below is measured against, one the tree ships. */
-const CARRIER = 'packages/client/src/index.ts'
+/**
+ * The module the injection below is measured against, one the tree ships.
+ *
+ * A component module, because the React patterns above are written in JSX and
+ * the parser reads JSX only in `.tsx`: the carrier has to be a module the
+ * samples can be appended to and still parsed as the language they arrive in.
+ */
+const CARRIER = 'packages/client/src/SessionCostChip.tsx'
 
 describe('the React patterns React 19 moved past', () => {
   it('names each one where a module uses it', () => {

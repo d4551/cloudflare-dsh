@@ -155,7 +155,7 @@ function recogniseValue(text: string, start: number, depth: number): Cursor {
  * document followed by an error page, is not the document the caller asked for
  * and must not be read as one.
  */
-export function isJsonDocument(text: string): boolean {
+function isJsonDocument(text: string): boolean {
   const end = recogniseValue(text, skipWhitespace(text, 0), 0)
   return end !== undefined && skipWhitespace(text, end) === text.length
 }

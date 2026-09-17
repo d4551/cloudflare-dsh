@@ -13,7 +13,6 @@
  * and a base64 PDF in the session log would be a blob nothing can consume;
  * PDF capture is therefore not offered.
  */
-import type { JsonValue } from '@d4551/dsh-cloudflare-core/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentId, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'

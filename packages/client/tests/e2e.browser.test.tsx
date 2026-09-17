@@ -12,15 +12,15 @@
  * from the source it claims to exercise.
  */
 import { rolldown } from 'rolldown'
-import type { Browser, BrowserContext, Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
-import { hostPage, hostStyles, launch } from './surfaces.tsx'
+import type { BrowserContext, Page } from 'playwright'
+import { beforeAll, describe, expect, it, onTestFinished } from 'vitest'
+import { browserLane } from './browser.ts'
+import { hostPage, hostStyles } from './surfaces.tsx'
 
-let browser: Browser
+const lane = browserLane()
 let script: string
 
 beforeAll(async () => {
-  browser = await launch()
   const build = await rolldown({
     input: new URL('./e2e-entry.tsx', import.meta.url).pathname,
     platform: 'browser',
@@ -33,10 +33,6 @@ beforeAll(async () => {
   await build.close()
 }, 180_000)
 
-afterAll(async () => {
-  await browser?.close()
-})
-
 /**
  * Mount the client into a page and wait for React to commit.
  *
@@ -47,7 +43,7 @@ afterAll(async () => {
  * failing assertion cannot leak it into the next test.
  */
 async function mount(): Promise<{ page: Page; context: BrowserContext }> {
-  const context = await browser.newContext({ colorScheme: 'light' })
+  const context = await lane.browser.newContext({ colorScheme: 'light' })
   onTestFinished(() => context.close())
   const page = await context.newPage()
   // The same host document and stylesheet every other browser lane loads, so

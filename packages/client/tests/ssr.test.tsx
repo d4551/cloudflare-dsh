@@ -85,7 +85,10 @@ function expectCleanMarkup(markup: string, what: string): void {
   expect(carried, `${what} rendered a value that was never set`).toEqual([])
   const { declared, referenced } = idsIn(markup)
   expect(new Set(declared).size, `${what} declares an id twice`).toBe(declared.length)
-  expect(referenced.filter((id) => !declared.includes(id)), `${what} points at an unknown id`).toEqual([])
+  expect(
+    referenced.filter((id) => !declared.includes(id)),
+    `${what} points at an unknown id`,
+  ).toEqual([])
 }
 
 /** The browser globals a component must not need in order to render. */
@@ -221,6 +224,11 @@ describe('the client as a host assembles it', () => {
   const assembled = renderToStaticMarkup(HOST_COMPOSITION)
 
   it('renders once, cleanly, with no id declared twice across the whole page', () => {
+    // The headline claim of the test name is asserted through the same
+    // primitive the helper reads, so the page's id uniqueness is seen here
+    // directly and not only through a helper that also checks it.
+    const { declared } = idsIn(assembled)
+    expect(new Set(declared).size, 'the assembled client declares an id twice').toBe(declared.length)
     expectCleanMarkup(assembled, 'the assembled client')
   })
 

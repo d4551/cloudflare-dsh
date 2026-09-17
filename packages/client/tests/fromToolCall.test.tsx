@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
+import type { ComponentType } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ToolCallOwnerProps } from '../src/toolviews/fromToolCall.tsx'
+import type { WireValue } from '../src/wire.ts'
 import { expectNoViolations } from './axe.ts'
 import {
   AccessibilityTreeToolView,
@@ -15,8 +17,17 @@ import {
 
 afterEach(cleanup)
 
-/** A settled block as the host hands it over, carrying one tool's projection. */
-const settled = (meta: unknown, content: unknown[] = []) => ({
+/**
+ * A settled block as the host hands it over, carrying one tool's projection.
+ *
+ * The parameters are wire values, not `unknown`: the views read their block
+ * through the wire contract, and a fixture typed wider than that contract
+ * could not be handed to them at all. Every malformed example below is still
+ * malformed — `7` among the content blocks is as unreadable here as it was —
+ * but it is a wire value that is malformed, which is exactly what the guards
+ * are written to refuse.
+ */
+const settled = (meta: WireValue, content: readonly WireValue[] = []) => ({
   kind: 'tool-result',
   callId: 'c1',
   isError: false,
@@ -28,7 +39,23 @@ const settled = (meta: unknown, content: unknown[] = []) => ({
 const running = { callId: 'c1', name: 'cloudflare_d1_query', argsRaw: '{}' }
 
 /** The owner currency the slot supplies, with the block under test. */
-const owner = (block: unknown) => ({ callId: 'c1', toolName: 't', block })
+const owner = (block: WireValue) => ({ callId: 'c1', toolName: 't', block })
+
+/** The owner currency, spelled once so the helper below names what it takes. */
+type OwnerCurrency = ReturnType<typeof owner>
+
+/**
+ * Renders `View` over a settled block whose projection is `meta` and whose
+ * result text is `raw`, and returns the fallback's text.
+ *
+ * Every view falls back the same way when its projection guard refuses, so
+ * the fallback is mounted here once rather than copied into each view's
+ * malformed-projection table.
+ */
+const fallbackText = (View: ComponentType<OwnerCurrency>, meta: WireValue): string | undefined => {
+  const { container } = render(<View {...owner(settled(meta, [{ type: 'text', text: 'raw' }]))} />)
+  return container.querySelector('.cf-toolview__raw')?.textContent ?? undefined
+}
 
 describe('the host contract these views are modelled on', () => {
   // The published declarations cannot be imported — `ToolCallViewProps` is not
@@ -168,10 +195,7 @@ describe('D1ResultToolView', () => {
     ['the query is not a string', { sql: 7, resultSets: [] }],
     ['the rows are not a list', { sql: 'SELECT 1', resultSets: 'rows' }],
   ])('falls back to the result text when %s', (_label, meta) => {
-    const { container } = render(
-      <D1ResultToolView {...owner(settled(meta, [{ type: 'text', text: 'raw' }]))} />,
-    )
-    expect(container.querySelector('.cf-toolview__raw')?.textContent).toBe('raw')
+    expect(fallbackText(D1ResultToolView, meta)).toBe('raw')
   })
 
   it('renders nothing while the call is still running', () => {
@@ -222,10 +246,7 @@ describe('BrowserRenderToolView', () => {
     ['the url is not a string', { url: 7, body: '# Title' }],
     ['the body is not a string, which the view cannot render', { url: 'https://x.test', body: 7 }],
   ])('falls back to the result text when %s', (_label, meta) => {
-    const { container } = render(
-      <BrowserRenderToolView {...owner(settled(meta, [{ type: 'text', text: 'raw' }]))} />,
-    )
-    expect(container.querySelector('.cf-toolview__raw')?.textContent).toBe('raw')
+    expect(fallbackText(BrowserRenderToolView, meta)).toBe('raw')
   })
 })
 
@@ -245,10 +266,7 @@ describe('AccessibilityTreeToolView', () => {
     ['the url is not a string', { url: 7, tree: { role: 'document' } }],
     ['the tree is not an object', { url: 'https://x.test', tree: 'flat' }],
   ])('falls back to the result text when %s', (_label, meta) => {
-    const { container } = render(
-      <AccessibilityTreeToolView {...owner(settled(meta, [{ type: 'text', text: 'raw' }]))} />,
-    )
-    expect(container.querySelector('.cf-toolview__raw')?.textContent).toBe('raw')
+    expect(fallbackText(AccessibilityTreeToolView, meta)).toBe('raw')
   })
 })
 

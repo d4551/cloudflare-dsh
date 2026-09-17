@@ -52,7 +52,7 @@ export function isObjectArray(value: JsonValue | undefined): value is Record<str
  * An empty list in its place would tell the model there are none, which the
  * endpoint never said.
  */
-export class ApiRecordsShapeError extends TypeError {
+class ApiRecordsShapeError extends TypeError {
   override readonly name = 'ApiRecordsShapeError'
   constructor() {
     super('the endpoint returned a list whose entries are not records')

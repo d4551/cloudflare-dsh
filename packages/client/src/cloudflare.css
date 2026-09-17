@@ -3,6 +3,9 @@
  *
  * Colours come from CSS custom properties so the host's theme wins where it
  * defines them, with fallbacks that are self-sufficient when it does not.
+ * Sizes come from the scale declared beside them: every length a surface draws
+ * is a named step, so a spacing decision is made once in one place rather than
+ * typed wherever it happens to be needed.
  *
  * These surfaces animate nothing: no transition, no animation, no keyframes.
  * That is a rule the invariants lane enforces rather than a coincidence, and it
@@ -12,23 +15,22 @@
  * either. It guarded nothing. Introduce motion and the gate fails, which is the
  * point at which a reduced-motion story has to be written.
  *
- * Every colour here comes from `light-dark()`, which is the engine floor these
- * surfaces are written against: Chrome and Edge 123, Firefox 120, Safari 17.5,
- * Baseline since May 2024. Below it the function does not parse, so each token
- * is invalid where it is substituted. The browser lane measures what that
- * leaves rather than describing it — it renames the function, which rewrites
- * the feature query below along with the tokens — and what it finds is text
- * inheriting the host's colour and every background falling away, which is the
- * right degradation for a fragment sitting in someone else's page. The accent
- * buttons are the exception the feature query exists for.
+ * Every colour here comes from `light-dark()`, the engine floor these surfaces
+ * are written against: Chrome and Edge 123, Firefox 120, Safari 17.5, Baseline
+ * since May 2024. Below it the function does not parse, so each token is
+ * invalid where it is substituted. The browser lane renames the function —
+ * which rewrites the feature query below along with the tokens — and reads
+ * what the surfaces then compute: text inheriting the host's colour, every
+ * background falling away, and no card drawn of their own. The accent buttons
+ * are the case the feature query answers for.
  *
- * Two lanes check those fallbacks, because one cannot reach both criteria.
- * The Chromium lane runs axe over every surface in both colour schemes, which
- * covers text contrast (SC 1.4.3) on the copy actually rendered — under jsdom
- * that rule runs and comes back undecided. axe has no rule for non-text
- * contrast, so borders and focus rings (SC 1.4.11) are computed straight from
- * this file by the invariants lane, which reads every rule here and every
- * token below and fails on a pair beneath its ratio.
+ * Two lanes check those fallbacks, each reaching a criterion the other has no
+ * view of. The Chromium lane runs axe over every surface in both colour
+ * schemes, which covers text contrast (SC 1.4.3) on the copy actually rendered
+ * — under jsdom that rule runs and comes back undecided. axe has no rule for
+ * non-text contrast, so borders and focus rings (SC 1.4.11) are computed
+ * straight from this file by the invariants lane, which reads every rule here
+ * and every token below and fails on a pair beneath its ratio.
  */
 
 /* One declaration per token carrying both schemes, rather than the whole block
@@ -41,21 +43,42 @@
    this file did — is an override: it discards the host's choice and answers to
    the operating system alone. Measured in Chromium, that rendered dark text on
    a light host page, and light text on a dark one, whenever the host's declared
-   scheme and the operating system disagreed; the host could not correct it from
-   outside, and axe never saw it because no fixture disagreed. A host that wants
-   more than a scheme sets the `--dsh-*` tokens below, which win over both. */
+   scheme and the operating system disagreed; the host had no way to correct it
+   from outside, and axe never saw it because no fixture disagreed. A host that
+   wants more than a scheme sets the `--dsh-*` tokens below, which win over
+   both.
+
+   The size scale is declared on the same roots for the same reason these are
+   fragments: a custom property set on the host's root would reach markup this
+   package does not own. It carries no `--dsh-*` chain because a host restyles
+   these surfaces through the colours above; the scale is the layout's own, and
+   it is named so that one spacing decision is made once. */
 .cf-chip,
 .cf-settings,
 .cf-d1,
 .cf-render,
 .cf-axtree,
 .cf-toolview {
-  --cf-fg: var(--dsh-fg, light-dark(#16181d, #f2f3f5));
-  --cf-bg: var(--dsh-bg, light-dark(#ffffff, #16181d));
-  --cf-muted: var(--dsh-fg-muted, light-dark(#55595f, #b3b8c0));
-  --cf-border: var(--dsh-border, light-dark(#82878f, #6f757e));
-  --cf-accent: var(--dsh-accent, light-dark(#0b5cab, #7db4ff));
-  --cf-danger: var(--dsh-danger, light-dark(#a3131c, #ff9ba1));
+  --cf-fg: var(--dsh-fg, light-dark(rgb(22 24 29), rgb(242 243 245)));
+  --cf-bg: var(--dsh-bg, light-dark(rgb(255 255 255), rgb(22 24 29)));
+  --cf-muted: var(--dsh-fg-muted, light-dark(rgb(85 89 95), rgb(179 184 192)));
+  --cf-border: var(--dsh-border, light-dark(rgb(130 135 143), rgb(111 117 126)));
+  --cf-accent: var(--dsh-accent, light-dark(rgb(11 92 171), rgb(125 180 255)));
+  --cf-danger: var(--dsh-danger, light-dark(rgb(163 19 28), rgb(255 155 161)));
+
+  --cf-space-1: 0.125rem;
+  --cf-space-2: 0.25rem;
+  --cf-space-3: 0.5rem;
+  --cf-space-4: 1rem;
+  --cf-text-sm: 0.8125rem;
+  --cf-text-md: 0.875rem;
+  --cf-radius: 4px;
+  --cf-target: 24px;
+  --cf-target-coarse: 44px;
+  --cf-measure-card: 78ch;
+  --cf-measure-prose: 66ch;
+  --cf-scroll-box: 24rem;
+  --cf-detail-columns: auto auto;
 
   color: var(--cf-fg);
   background: var(--cf-bg);
@@ -75,9 +98,9 @@
 .cf-chip {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--cf-space-3);
   align-items: center;
-  padding: 0.25rem 0.5rem;
+  padding: var(--cf-space-2) var(--cf-space-3);
 }
 
 /* The live region carries the same row layout the chip used to, so moving the
@@ -85,64 +108,67 @@
 .cf-chip__live {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--cf-space-3);
   align-items: center;
 }
 
 .cf-chip__figure,
 .cf-chip__status {
-  font-size: 0.8125rem;
+  font-size: var(--cf-text-sm);
 }
 
-.cf-chip__status {
+/* The muted colour is one decision for the three places a line is quieter
+   than its surroundings: the chip's status, a term in the detail, and a table
+   that came back with no rows. */
+.cf-chip__status,
+.cf-chip__detail dt,
+.cf-d1__empty {
   color: var(--cf-muted);
 }
 
-/* 24x24 is the floor SC 2.5.8 sets for any pointer. A finger is not any
-   pointer: Apple's HIG asks for 44pt and Material for 48dp, so a coarse
-   pointer gets 44 (below). */
+/* 24x24 is the floor SC 2.5.8 sets for any pointer. A finger needs more than
+   that floor: Apple's HIG asks for 44pt and Material for 48dp, so the media
+   block gives a coarse pointer 44. */
 .cf-chip__toggle,
 .cf-settings button {
-  min-block-size: 24px;
-  min-inline-size: 24px;
-  padding: 0.25rem 0.5rem;
+  min-block-size: var(--cf-target);
+  min-inline-size: var(--cf-target);
+  padding: var(--cf-space-2) var(--cf-space-3);
   color: var(--cf-bg);
   background: var(--cf-accent);
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--cf-radius);
   cursor: pointer;
 }
 
 /* The one consequence below the engine floor that is not benign.
-   A token that fails to parse takes its whole declaration with it, and an
-   earlier declaration does not stand in — the cascade already discarded it, and
-   the winner only becomes invalid later, at computed-value time. So a fallback
-   has to be a separate rule behind a feature query, and it has to be written in
-   literals, since a token is the thing that is missing. These are the values
-   the tokens resolve to in the light scheme, and the same feature query is what
-   the browser lane flips to measure the degradation. */
-@supports not (color: light-dark(#000000, #ffffff)) {
+   A token that fails to parse takes its whole declaration with it: the cascade
+   has already discarded the earlier declaration, and the winner becomes
+   invalid at computed-value time. So the fallback is a separate rule behind a
+   feature query, written in literals, since a token is exactly what an engine
+   below the floor has no value for. These are the values the tokens resolve to
+   in the light scheme, and the browser lane flips the same feature query to
+   read what the surfaces compute there. */
+@supports not (color: light-dark(rgb(0 0 0), rgb(255 255 255))) {
   .cf-chip__toggle,
   .cf-settings button {
-    color: #ffffff;
-    background: #0b5cab;
+    color: rgb(255 255 255);
+    background: rgb(11 92 171);
   }
 }
 
 /* `:not([hidden])`, because a class setting `display` outranks the user agent's
    `[hidden] { display: none }` — the collapsed detail was on screen the whole
    time, with `hidden` set and a jsdom test asserting the attribute rather than
-   what it does. */
+   what it does. The rows align on the text baseline, which is what makes a
+   term and its definition read as one line rather than two boxes. */
 .cf-chip__detail:not([hidden]) {
   display: grid;
-  grid-template-columns: auto auto;
-  gap: 0.125rem 0.5rem;
+  grid-template-columns: var(--cf-detail-columns);
+  align-items: baseline;
+  gap: var(--cf-space-1) var(--cf-space-3);
   margin: 0;
-  font-size: 0.8125rem;
-}
-
-.cf-chip__detail dt {
-  color: var(--cf-muted);
+  font-size: var(--cf-text-sm);
 }
 
 /* A measure, not a width. Below this the card is fluid and fills whatever the
@@ -150,21 +176,21 @@
    text field stops being a metre wide. `ch` because the limit is about how far
    the eye travels, not about a device. */
 .cf-settings {
-  padding: 1rem;
-  max-inline-size: 78ch;
+  padding: var(--cf-space-4);
+  max-inline-size: var(--cf-measure-card);
 }
 
 .cf-settings p {
-  max-inline-size: 66ch;
+  max-inline-size: var(--cf-measure-prose);
 }
 
 .cf-field {
-  margin-block-end: 1rem;
+  margin-block-end: var(--cf-space-4);
 }
 
 .cf-field label {
   display: block;
-  margin-block-end: 0.25rem;
+  margin-block-end: var(--cf-space-2);
   font-weight: 600;
 }
 
@@ -176,35 +202,43 @@
 .cf-field input {
   font: inherit;
   inline-size: 100%;
-  min-block-size: 24px;
-  padding: 0.25rem 0.5rem;
+  min-block-size: var(--cf-target);
+  padding: var(--cf-space-2) var(--cf-space-3);
   color: var(--cf-fg);
   background: var(--cf-bg);
   border: 1px solid var(--cf-border);
-  border-radius: 4px;
+  border-radius: var(--cf-radius);
 }
 
 .cf-hint {
-  margin: 0.25rem 0 0;
-  font-size: 0.8125rem;
+  margin: var(--cf-space-2) 0 0;
+  font-size: var(--cf-text-sm);
   color: var(--cf-muted);
 }
 
 .cf-error {
-  margin: 0.25rem 0 0;
-  font-size: 0.8125rem;
+  margin: var(--cf-space-2) 0 0;
+  font-size: var(--cf-text-sm);
   color: var(--cf-danger);
 }
 
+/* A message that announced once and was cleared leaves an empty live region
+   behind; it should not hold a gap in the layout. The zero margins are the
+   user agent's own on the scroll boxes and the raw bodies — one rule, because
+   they are one decision taken once. */
 .cf-error:empty,
-.cf-saved:empty {
+.cf-saved:empty,
+.cf-d1,
+.cf-axtree,
+.cf-render__body,
+.cf-toolview__raw {
   margin: 0;
 }
 
 .cf-saved {
   display: block;
-  margin: 0.5rem 0 0;
-  font-size: 0.8125rem;
+  margin: var(--cf-space-3) 0 0;
+  font-size: var(--cf-text-sm);
   color: var(--cf-muted);
 }
 
@@ -236,15 +270,15 @@
 }
 
 .cf-d1 caption {
-  padding-block-end: 0.5rem;
-  font-size: 0.8125rem;
+  padding-block-end: var(--cf-space-3);
+  font-size: var(--cf-text-sm);
   color: var(--cf-muted);
   text-align: start;
 }
 
 .cf-d1 th,
 .cf-d1 td {
-  padding: 0.25rem 0.5rem;
+  padding: var(--cf-space-2) var(--cf-space-3);
   border: 1px solid var(--cf-border);
   text-align: start;
 }
@@ -253,19 +287,10 @@
   font-weight: 600;
 }
 
-.cf-d1__empty {
-  color: var(--cf-muted);
-}
-
 .cf-render__caption,
 .cf-toolview__caption,
 .cf-axtree {
-  font-size: 0.875rem;
-}
-
-.cf-d1,
-.cf-axtree {
-  margin: 0;
+  font-size: var(--cf-text-md);
 }
 
 /* The two cards that scroll their own overflow: a rendered page, and a settled
@@ -274,12 +299,12 @@
    with no focus stop, which no fixture rendered and so no lane ever laid out. */
 .cf-render,
 .cf-toolview {
-  max-block-size: 24rem;
+  max-block-size: var(--cf-scroll-box);
   overflow: auto;
   margin: 0;
-  padding: 0.5rem;
+  padding: var(--cf-space-3);
   border: 1px solid var(--cf-border);
-  border-radius: 4px;
+  border-radius: var(--cf-radius);
 }
 
 /* The caption names the focus stop, so it stays put while the body scrolls
@@ -291,22 +316,17 @@
   background: var(--cf-bg);
 }
 
-.cf-render__body,
-.cf-toolview__raw {
-  margin: 0;
-}
-
 /* A touch pointer has no hover and no pixel precision, so every control it can
    reach is given a finger-sized target rather than the conformance minimum. */
 @media (pointer: coarse) {
   .cf-chip__toggle,
   .cf-settings button,
   .cf-field input {
-    min-block-size: 44px;
+    min-block-size: var(--cf-target-coarse);
   }
 
   .cf-chip__toggle,
   .cf-settings button {
-    min-inline-size: 44px;
+    min-inline-size: var(--cf-target-coarse);
   }
 }

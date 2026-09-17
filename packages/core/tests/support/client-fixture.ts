@@ -17,9 +17,6 @@ export const REF = 'CLOUDFLARE_API_TOKEN'
 /** The retry policy every fixture client runs under. */
 export const RETRY: RetryPolicy = { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 10 }
 
-/** The request spec the boundary suites issue. */
-export const SPEC = { method: 'GET', path: '/accounts/a1/things' } as const
-
 /** Per-test overrides for the fixture client. */
 export interface ClientOverrides {
   readonly maxPages: number

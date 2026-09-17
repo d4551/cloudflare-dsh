@@ -112,9 +112,15 @@ describe('built artifacts', () => {
   it('loads every entry point and finds something exported', async () => {
     // An entry that loads and exports nothing is a package that installs
     // inert, and the import is the only way to see it: the file exists either
-    // way.
-    for (const [pkg, subpath] of entries) {
-      const mod: object = await import(resolveExport(pkg, subpath))
+    // way. The imports run concurrently — each entry resolves on its own, and
+    // awaiting them one at a time only makes the suite wait in sequence.
+    const loaded = await Promise.all(
+      entries.map(async ([pkg, subpath]) => {
+        const mod: object = await import(resolveExport(pkg, subpath))
+        return { pkg, subpath, mod }
+      }),
+    )
+    for (const { pkg, subpath, mod } of loaded) {
       expect(Object.keys(mod).length, `${pkg} ${subpath}`).toBeGreaterThan(0)
     }
   })

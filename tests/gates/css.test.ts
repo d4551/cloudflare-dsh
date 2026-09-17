@@ -23,9 +23,34 @@ import {
   unreadableColours,
 } from './stylesheet-analyzers.ts'
 
+/** Selectors that declare `color-scheme`, which these should never do. */
+const declares = (css: string): string[] =>
+  rulesOf(css)
+    .filter((rule) => declaration(rule.body, 'color-scheme') !== undefined)
+    .map((rule) => rule.selector)
+
 describe('every colour the stylesheet paints is one the analyzer can read', () => {
   it('names a colour it cannot resolve', () => {
-    expect(unreadableColours('.a { color: rgb(1, 2, 3) }')).toEqual(['.a { color: rgb(1, 2, 3) }'])
+    expect(unreadableColours('.a { color: hwb(194 0% 0%) }')).toEqual(['.a { color: hwb(194 0% 0%) }'])
+  })
+
+  it('refuses a light-dark() pair whose sides it cannot split', () => {
+    // The light side carries an alpha channel, so neither side matches the
+    // reader and the pair cannot be split. Reading the whole declaration
+    // instead returns whichever literal happens to sit in it — here the dark
+    // one — so the rule below would be measured against a colour this scheme
+    // never paints, and a pair that fails could clear its ratio. An unresolved
+    // token names the declaration instead, which is the answer that is true.
+    const css = `.a { --cf-ink: light-dark(rgb(0 0 0 / 0.5), ${WHITE}) } .b { color: var(--cf-ink) }`
+    expect(unreadableColours(css)).toEqual(['.b { color: var(--cf-ink) }'])
+  })
+
+  it('reads an rgb() literal, in either form and inside a shorthand', () => {
+    // The sheet writes its colours as `rgb()` literals, so the reader that
+    // claims to read every rule has to read that form: the space-separated
+    // modern one, the comma-separated one, and each inside a `border`
+    // shorthand, which is where a boundary colour is written.
+    expect(unreadableColours('.a { color: rgb(22 24 29); border: 1px solid rgb(130, 135, 143) }')).toEqual([])
   })
 
   it('excuses the keywords that place no colour', () => {
@@ -42,12 +67,6 @@ describe('every colour the stylesheet paints is one the analyzer can read', () =
 })
 
 describe('the stylesheet declares no colour scheme of its own', () => {
-  /** Selectors that declare `color-scheme`, which these should never do. */
-  const declares = (css: string): string[] =>
-    rulesOf(css)
-      .filter((rule) => declaration(rule.body, 'color-scheme') !== undefined)
-      .map((rule) => rule.selector)
-
   it('finds one where a rule declares one', () => {
     expect(declares('.a { color-scheme: light dark }\n.b { color: red }')).toEqual(['.a'])
   })
@@ -79,6 +98,17 @@ describe('every colour pair the stylesheet ships clears its ratio', () => {
     expect(contrastPairs(PROBE).filter((pair) => pair.where.startsWith('.a'))).toEqual([
       { where: `.a [light] text ${BLACK} on ${WHITE}`, ratio: 21, minimum: 4.5 },
       { where: `.a [dark] text ${WHITE} on ${BLACK}`, ratio: 21, minimum: 4.5 },
+    ])
+  })
+
+  it('pairs an rgb() literal with the background it sits on', () => {
+    // The arithmetic works in `#rrggbb`, so an `rgb()` literal has to arrive
+    // there: the pair below is the same 21:1 pair the hex spelling makes,
+    // named in the form the arithmetic resolved it to.
+    const css = '.d { color: rgb(0 0 0); background: rgb(255 255 255) }'
+    expect(contrastPairs(css).map((pair) => pair.where)).toEqual([
+      `.d [light] text ${BLACK} on ${WHITE}`,
+      `.d [dark] text ${BLACK} on ${WHITE}`,
     ])
   })
 

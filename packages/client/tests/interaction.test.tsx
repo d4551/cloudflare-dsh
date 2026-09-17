@@ -161,11 +161,11 @@ describe('the session cost chip, activated', () => {
     ])
 
     fireEvent.click(toggle)
-    expect([toggle.getAttribute('aria-expanded'), detail?.hasAttribute('hidden'), toggle.textContent]).toEqual([
-      'false',
-      true,
-      'Show detail',
-    ])
+    expect([
+      toggle.getAttribute('aria-expanded'),
+      detail?.hasAttribute('hidden'),
+      toggle.textContent,
+    ]).toEqual(['false', true, 'Show detail'])
   })
 
   it('leaves the figures it was opened with untouched by the toggle', () => {

@@ -27,7 +27,7 @@ import {
 } from '../src/toolviews/fromToolCall.tsx'
 
 /** A session's gateway usage, as `cloudflare_aigateway_session_cost` returns it. */
-export const USAGE: SessionUsage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
+const USAGE: SessionUsage = { requests: 4, cost: 0.0125, tokensIn: 120, tokensOut: 40, cached: 1 }
 
 /** The settings a host hands the card, holding the reference a reader would keep. */
 export const SETTINGS: CloudflareSettings = {
@@ -37,14 +37,14 @@ export const SETTINGS: CloudflareSettings = {
 }
 
 /** An accessibility tree one level deep, so nesting is rendered rather than described. */
-export const TREE: AxNode = {
+const TREE: AxNode = {
   role: 'document',
   name: 'Page',
   children: [{ role: 'heading', name: 'Title' }],
 }
 
 /** Two rows across two columns, the shape a query's view is read from. */
-export const ROWS: readonly D1ResultSet[] = [
+const ROWS: readonly D1ResultSet[] = [
   {
     results: [
       { id: 1, name: 'a' },
@@ -54,7 +54,7 @@ export const ROWS: readonly D1ResultSet[] = [
 ]
 
 /** `n` rows, so the render cap can be approached from either side of it. */
-export const rows = (n: number): readonly D1ResultSet[] => [
+const rows = (n: number): readonly D1ResultSet[] => [
   { results: Array.from({ length: n }, (_, index) => ({ id: index })) },
 ]
 
@@ -66,13 +66,13 @@ export const rows = (n: number): readonly D1ResultSet[] => [
  * declared as one cannot be handed over where a wire value is expected — and
  * these are, as the content of a settled block.
  */
-export type ContentPart = {
+type ContentPart = {
   readonly type: string
   readonly text?: string | undefined
 }
 
 /** A block carrying text and no type: a real host writes one, and no view can read it. */
-export type UntypedPart = {
+type UntypedPart = {
   readonly text: string
 }
 
@@ -121,7 +121,7 @@ export const settledBlock = (
 ): SettledBlock => ({ kind: 'tool-result', isError, content, meta })
 
 /** A call still running, as `ToolCallBlock` carries one. */
-export const runningBlock = (): RunningBlock => ({
+const runningBlock = (): RunningBlock => ({
   callId: 'call-1',
   name: 'cloudflare_d1_query',
   argsRaw: '{}',
@@ -140,7 +140,7 @@ export const ownerCurrency = (
  * exactly this: a result carrying text and no shape, which is the one path the
  * plain-text card is reached through.
  */
-export const UNREADABLE: SettledBlock = settledBlock(undefined, [{ type: 'text', text: 'id\n1' }])
+const UNREADABLE: SettledBlock = settledBlock(undefined, [{ type: 'text', text: 'id\n1' }])
 
 /** The chip showing a session's usage, the state its toggle is reached from. */
 export const CHIP_WITH_USAGE = <SessionCostChip usage={USAGE} />

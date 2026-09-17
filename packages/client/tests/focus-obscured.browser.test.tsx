@@ -15,19 +15,12 @@
  * for cleanup when the test finishes, so a failing assertion cannot leak it
  * into the next test.
  */
-import type { Browser, Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
-import { ASSEMBLED, launch, open } from './surfaces.tsx'
+import type { Page } from 'playwright'
+import { describe, expect, it, onTestFinished } from 'vitest'
+import { browserLane } from './browser.ts'
+import { ASSEMBLED, open } from './surfaces.tsx'
 
-let browser: Browser
-
-beforeAll(async () => {
-  browser = await launch()
-}, 60_000)
-
-afterAll(async () => {
-  await browser?.close()
-})
+const lane = browserLane()
 
 /**
  * One focus stop whose centre is covered, described so a failure names it.
@@ -72,7 +65,7 @@ async function walk(
 
 describe('focus not obscured', () => {
   it('keeps every focus stop visible at its centre after it is tabbed to', async () => {
-    const { page, context } = await open(browser, ASSEMBLED, { scheme: 'light' })
+    const { page, context } = await open(lane.browser, ASSEMBLED, { scheme: 'light' })
     onTestFinished(() => context.close())
     // The same twelve stops the accessibility lane's keyboard walk counts:
     // four fields and a submit in the settings card, the chip's toggle, and
