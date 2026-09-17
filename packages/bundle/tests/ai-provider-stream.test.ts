@@ -263,6 +263,19 @@ describe('stream', () => {
     expect(cancelled()).toBe(true)
   })
 
+  // The third case the release contract has to get right, and the one that
+  // separates releasing a connection from cancelling one: a body the provider
+  // closed on its own is drained, not abandoned, and reading it to the end must
+  // not report a cancellation. A provider that cancelled on every completion
+  // would pass both cases above while telling every upstream the turn was cut.
+  it('does not cancel a body the provider closed on its own', async () => {
+    const { response, cancelled } = trackedBody(TEXT_TURN, true)
+    const { provider } = makeProvider(async () => response)
+    const chunks = await collect(provider.stream(options()))
+    expect(chunks).toEqual(EXPECTED_TEXT_TURN)
+    expect(cancelled()).toBe(false)
+  })
+
   // One provider call is one attempt: retry policy belongs to the harness,
   // and retrying here would double-charge and double-log.
   it('never retries internally', async () => {

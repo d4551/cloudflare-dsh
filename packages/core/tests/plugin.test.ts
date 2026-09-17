@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { FetchLike } from '../src/client.ts'
 import * as plugin from '../src/index.ts'
 import { CloudflareService } from '../src/service.ts'
@@ -90,14 +90,16 @@ describe('plugin lifecycle', () => {
         }),
     )
     vi.stubGlobal('fetch', globalFetch)
-    try {
-      const ctx = harnessContext((ref) => (ref === 'CF_WIRED' ? 'wired-token' : undefined))
-      await ctx.plugin(plugin, { apiTokenRef: 'CF_WIRED', accountId: 'a1' })
-      await ctx.cloudflare.accountRequest({ method: 'GET', path: '/x' })
-      expect(globalFetch.mock.calls[0]?.[0].headers.get('authorization')).toBe('Bearer wired-token')
-    } finally {
+    // Restored by the runner when this test finishes, whichever way it ends, so
+    // a failing assertion cannot leak a stubbed global into the next test — the
+    // guarantee a `try`/`finally` was carrying, owned by the framework instead.
+    onTestFinished(() => {
       vi.unstubAllGlobals()
-    }
+    })
+    const ctx = harnessContext((ref) => (ref === 'CF_WIRED' ? 'wired-token' : undefined))
+    await ctx.plugin(plugin, { apiTokenRef: 'CF_WIRED', accountId: 'a1' })
+    await ctx.cloudflare.accountRequest({ method: 'GET', path: '/x' })
+    expect(globalFetch.mock.calls[0]?.[0].headers.get('authorization')).toBe('Bearer wired-token')
   })
 
   it('does not activate before its credentials dependency exists', async () => {

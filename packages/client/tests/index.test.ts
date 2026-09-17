@@ -9,7 +9,7 @@ interface Entry {
   readonly key?: string
   readonly order?: number
   readonly label?: string
-  readonly component: unknown
+  readonly component: client.SlotComponent
 }
 
 /**
@@ -27,7 +27,7 @@ function harness() {
   const releases: (() => void)[] = []
   const ctx = new Context()
   ctx.provide('slots', {
-    register(registration: client.SlotRegistration, component: unknown) {
+    register(registration: client.SlotRegistration, component: client.SlotComponent) {
       const entry: Entry = { ...registration, component }
       registered.push(entry)
       return () => {
@@ -96,8 +96,8 @@ describe('registration', () => {
     })
   })
 
-  // The adapter, not the presentational component: the slot hands over the
-  // call's owner currency, and only the adapter turns that into props.
+  // The owner-facing view, not the presentational component: the slot hands
+  // over the call's owner currency, and only the view turns that into props.
   it.each([
     ['cloudflare_d1_query', client.D1ResultToolView],
     ['cloudflare_browser_render', client.BrowserRenderToolView],
@@ -132,7 +132,7 @@ describe('registration', () => {
     expect(registered).toHaveLength(6)
   })
 
-  it('maps each tool view entry to the adapter that gives it props', () => {
+  it('maps each tool view entry to the view that gives it props', () => {
     expect(client.TOOL_VIEWS.map((v) => v.component)).toEqual([
       client.D1ResultToolView,
       client.BrowserRenderToolView,
